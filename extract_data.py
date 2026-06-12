@@ -284,79 +284,71 @@ souris1-j2-45gy     0,2       ...       0,4
         ...
 souris5-j11-80gy    0,1       ...       0,3
 """ 
+# Correspondances pétri → (dose, souris valides)
+config = {
+    'jour2': {
+        'petri1': ('0gy',      ['souris1', 'souris2', 'souris3']),
+        'petri2': ('45gy',     ['souris1', 'souris2']),
+        'petri3': ('45gy + P', ['souris1', 'souris2']),
+        'petri4': ('60gy',     ['souris4', 'souris5']),
+        'petri5': ('80gy',     ['souris4', 'souris5']),
+    },
+    'jour4': {
+        'petri1': ('60gy',     ['souris4', 'souris5']),
+        'petri2': ('80gy',     ['souris4', 'souris5']),
+        'petri3': ('0gy',      ['souris1', 'souris2', 'souris3']),
+        'petri4': ('45gy + P', ['souris1', 'souris2', 'souris3']),
+        'petri5': ('45gy',     ['souris1', 'souris2']),
+    },
+    'jour_8': {
+        'petri1': ('0gy',      ['souris1', 'souris2', 'souris3']),
+        'petri2': ('45gy',     ['souris1', 'souris2', 'souris3']),
+        'petri3': ('45gy + P', ['souris1', 'souris2']),  # souris1.1 et 2.1 gérés séparément
+        'petri4': ('60gy',     ['souris4', 'souris5']),
+        'petri5': ('80gy',     ['souris4', 'souris5']),
+    },
+    'jour_11': {
+        'petri1': ('0gy',      ['souris1', 'souris2', 'souris3']),
+        'petri2': ('45gy',     ['souris1', 'souris2', 'souris3']),
+        'petri3': ('60gy',     ['souris4', 'souris5']),
+        'petri4': ('80gy',     ['souris4', 'souris5']),
+    },
+}
+
+lecteurs = {
+    'jour2':  lecteur_fichier_j2,
+    'jour4':  lecteur_fichier_j4,
+    'jour_8': lecteur_fichier_j8_j11,
+    'jour_11':lecteur_fichier_j8_j11,
+}
+
 spectres = []
 etiquettes = []
 
-dose_j2_j8 = ['0gy', '45gy', '45gy + P', '60gy', '80gy']
-dose_j4 = ['60gy', '80gy', '0gy', '45gy + P', '45gy' ]
-dose_j11 = ['0gy', '45gy', '60gy', '80gy']
-liste_souris = ['souris1', 'souris2', 'souris3', 'souris4', 'souris5']
-liste_petri = ['petri1', 'petri2', 'petri3', 'petri4', 'petri5']
-liste_jour = ['jour2', 'jour4', 'jour_8', 'jour_11']
-
-for souris in liste_souris:
-    for petri in liste_petri:
-        idx_petri = liste_petri.index(petri)  # ← calcule une fois, réutilise partout
-        
-        for jour in liste_jour:
-            if jour == 'jour2':
-                liste_fichiers = lecteur_fichier_j2(jour, petri, souris)
-                if not liste_fichiers:
-                    #print(f"Aucun fichier : {souris}, {petri}, {jour}")
-                    continue
-                w, i = traiter_acquisitions_et_verre(liste_fichiers)
-                dose = dose_j2_j8[idx_petri]
-
-            elif jour == 'jour4':
-                liste_fichiers = lecteur_fichier_j4(jour, petri, souris)
-                if not liste_fichiers:
-                    #print(f"Aucun fichier : {souris}, {petri}, {jour}")
-                    continue
-                w, i = traiter_acquisitions_et_verre(liste_fichiers)  # ← liste_fichiers manquait
-                dose = dose_j4[idx_petri]
-
-            elif jour == 'jour_8':
-                # SOURIS 1.1 ET 2.1!!
-                liste_fichiers = lecteur_fichier_j8_j11(jour, petri, souris)
-                if not liste_fichiers:
-                    #print(f"Aucun fichier : {souris}, {petri}, {jour}")
-                    continue
-                w, i = traiter_acquisitions_et_verre(liste_fichiers)
-                dose = dose_j2_j8[idx_petri]
-
-            elif jour == 'jour_11':
-                if idx_petri >= len(dose_j11):   # ← protège contre petri5 qui n'existe pas en j11
-                    continue
-                liste_fichiers = lecteur_fichier_j8_j11(jour, petri, souris)
-                if not liste_fichiers:
-                    #print(f"Aucun fichier : {souris}, {petri}, {jour}")
-                    continue
-                w, i = traiter_acquisitions_et_verre(liste_fichiers)
-                dose = dose_j11[idx_petri]
-
-            # vérification NaN/Inf — même logique pour tous les jours
+for jour, petris in config.items():
+    for petri, (dose, souris_valides) in petris.items():
+        for souris in souris_valides:
+            liste_fichiers = lecteurs[jour](jour, petri, souris)
+            if not liste_fichiers:
+                continue
+            w, i = traiter_acquisitions_et_verre(liste_fichiers)
             if w is None or i is None:
                 continue
             if not np.isfinite(i).all():
-                print(f"NaN/Inf détectés : {souris}, {petri}, {jour} — spectre ignoré")
+                print(f"NaN/Inf : {souris}, {petri}, {jour} — ignoré")
                 continue
-
             spectres.append(i)
-            etiquettes.append(f"{souris}-{jour}-{dose}")  # ← propre et cohérent
+            etiquettes.append(f"{souris}-{jour}-{dose}")
 
-w_j8_p3s1_1, i_j8p3s1_1 = traiter_acquisitions_et_verre(lecteur_fichier_j8_j11('jour_8', 'petri3', 'souris1.1'))
-spectres.append(i_j8p3s1_1)
-etiquettes.append('souris1_1-j8-45gy + P')
-w_j8_p3s1_2, i_j8p3s1_2 = traiter_acquisitions_et_verre(lecteur_fichier_j8_j11('jour_8', 'petri3', 'souris2.1'))
-spectres.append(i_j8p3s1_2)
-etiquettes.append('souris2_1-j8-45gy + P')
+# Cas spéciaux souris1.1 et souris2.1 (j8, petri3)
+for souris_sp in ['souris1.1', 'souris2.1']:
+    souris_label = souris_sp.replace('.', '_')
+    liste_fichiers = lecteur_fichier_j8_j11('jour_8', 'petri3', souris_sp)
+    if liste_fichiers:
+        w, i = traiter_acquisitions_et_verre(liste_fichiers)
+        if i is not None and np.isfinite(i).all():
+            spectres.append(i)
+            etiquettes.append(f"{souris_label}-jour_8-45gy + P")
 
 X = np.array(spectres)
-print(f"Matrice X construite : {X.shape}")
-quantité = 0
-for i in etiquettes:
-    if 'souris3' in i:
-        print(i)
-        quantité += 1
-print(quantité)
-
+print(f"Matrice X : {X.shape}")
