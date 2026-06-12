@@ -164,7 +164,7 @@ def traiter_acquisitions(liste_fichiers, wn_min=500, wn_max=3025,
     # retrait de la fluorescence
     if retirer_fluorescence:
         intensite_sans_fluorescence = corriger_fluorescence(spectre_moyen, min_bubble_widths=50, fit_order=1)
-        
+
     return wn_ref, intensite_sans_fluorescence
 
 
@@ -172,7 +172,7 @@ def traiter_acquisitions(liste_fichiers, wn_min=500, wn_max=3025,
 
 
 # ────────────────────────────────────────────────────────────────────────
-# 6. RETRAITS DU VERRE + CORRECTION DE FLUORESCENCE + CENTRAGE DES DONNÉES
+# 6. RETRAITS DU VERRE + CENTRAGE DES DONNÉES
 # ────────────────────────────────────────────────────────────────────────
 
 
@@ -187,6 +187,7 @@ def traiter_acquisitions_et_verre(liste_fichiers, wn_min=500, wn_max=3025, retir
     Centrage des données en soustrayant la moyenne.
     Retourne (wavenumbers, spectre_centré).
     """
+    
     wn, i = traiter_acquisitions(liste_fichiers, wn_min, wn_max, retirer_cosmiques)
     wn_verre, i_verre = traiter_acquisitions(liste_fichiers_verre, wn_min, wn_max, retirer_cosmiques)
     intensite_SV = soustraire_verre(wn, i, wn_verre, i_verre)
@@ -315,6 +316,7 @@ for souris in liste_souris:
                 dose = dose_j4[idx_petri]
 
             elif jour == 'jour_8':
+                # SOURIS 1.1 ET 2.1!!
                 liste_fichiers = lecteur_fichier_j8_j11(jour, petri, souris)
                 if not liste_fichiers:
                     #print(f"Aucun fichier : {souris}, {petri}, {jour}")
@@ -341,6 +343,13 @@ for souris in liste_souris:
 
             spectres.append(i)
             etiquettes.append(f"{souris}-{jour}-{dose}")  # ← propre et cohérent
+
+w_j8_p3s1_1, i_j8p3s1_1 = traiter_acquisitions_et_verre(lecteur_fichier_j8_j11('jour_8', 'petri3', 'souris1.1'))
+spectres.append(i_j8p3s1_1)
+etiquettes.append('souris1_1-j8-45gy + P')
+w_j8_p3s1_2, i_j8p3s1_2 = traiter_acquisitions_et_verre(lecteur_fichier_j8_j11('jour_8', 'petri3', 'souris2.1'))
+spectres.append(i_j8p3s1_2)
+etiquettes.append('souris2_1-j8-45gy + P')
 
 X = np.array(spectres)
 print(f"Matrice X construite : {X.shape}")
