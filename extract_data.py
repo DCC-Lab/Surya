@@ -11,7 +11,7 @@ import numpy as np
 # 1. LECTURE ET TRONCATURE
 # ─────────────────────────────────────────────
 
-def lire_spectre(chemin_fichier, wn_min=500, wn_max=3025):
+def formater_donnees(chemin_fichier, wn_min=500, wn_max=3025):
     data = []
     integration = 1.0  # valeur par défaut si non trouvée
     
@@ -32,13 +32,13 @@ def lire_spectre(chemin_fichier, wn_min=500, wn_max=3025):
                 continue
 
     if len(data) == 0:
-        print(f"Fichier vide ou mal formaté : {chemin_fichier}")
+        #print(f"Fichier vide ou mal formaté : {chemin_fichier}")
         return None, None
 
     data = np.array(data)
     
     if data.ndim != 2:
-        print(f"Format inattendu : {chemin_fichier}")
+        #print(f"Format inattendu : {chemin_fichier}")
         return None, None
 
     wn = data[:, 0]
@@ -126,7 +126,7 @@ def corriger_fluorescence(intensite, min_bubble_widths=50, fit_order=1):
 
 
 def traiter_acquisitions(liste_fichiers, wn_min=500, wn_max=3025,
-                          retirer_cosmiques=True):
+                          retirer_cosmiques=True, retirer_fluorescence=True):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
     Retourne (wavenumbers, spectre_somme).
@@ -135,11 +135,11 @@ def traiter_acquisitions(liste_fichiers, wn_min=500, wn_max=3025,
     wn_ref = None
 
     if not liste_fichiers:  # ← vérifie si la liste est vide
-        print("Aucun fichier à traiter!")
+        #print("Aucun fichier à traiter!")
         return None, None
 
     for fichier in liste_fichiers:
-        wn, intensite = lire_spectre(fichier, wn_min, wn_max)
+        wn, intensite = formater_donnees(fichier, wn_min, wn_max)
 
         if wn is None:  # ← saute les fichiers mal formatés
             continue
@@ -147,7 +147,7 @@ def traiter_acquisitions(liste_fichiers, wn_min=500, wn_max=3025,
         if wn_ref is None:
             wn_ref = wn
         
-        # Étape 2 : retrait des rayons cosmiques
+        # retrait des rayons cosmiques
         if retirer_cosmiques:
             intensite = retirer_rayons_cosmiques(intensite)
 
@@ -155,12 +155,21 @@ def traiter_acquisitions(liste_fichiers, wn_min=500, wn_max=3025,
         if len(wn) != len(wn_ref):
             intensite = np.interp(wn_ref, wn, intensite)
 
+        # ajout à la liste des spectres
         spectres.append(intensite)
-
-    # Étape 4 : somme des acquisitions
+    
+    # Moyennage des acquisitions : on a maintenant 1 spectre pour les 20 ou 30 acquisitions
     spectre_moyen = np.mean(spectres, axis=0)
 
-    return wn_ref, spectre_moyen
+    # retrait de la fluorescence
+    if retirer_fluorescence:
+        intensite_sans_fluorescence = corriger_fluorescence(spectre_moyen, min_bubble_widths=50, fit_order=1)
+        
+    return wn_ref, intensite_sans_fluorescence
+
+
+
+
 
 # ────────────────────────────────────────────────────────────────────────
 # 6. RETRAITS DU VERRE + CORRECTION DE FLUORESCENCE + CENTRAGE DES DONNÉES
@@ -204,7 +213,7 @@ def lecteur_fichier_j8_j11(jour, petri, souris):
         
         # Si le dossier n'existe pas, on le saute sans buguer
         if not os.path.exists(dossier):
-            print(f"Dossier absent, ignoré : {dossier}")
+            #print(f"Dossier absent, ignoré : {dossier}")
             continue
         
         # Chercher les fichiers .txt dans ce dossier
@@ -250,14 +259,13 @@ def lecteur_fichier_j4(jour, petri, souris):
     '''
     dossier_petri = os.path.join(racine2, jour, "raman", petri)
 
+    if not os.path.exists(dossier_petri):
+        #print(f"Dossier absent : {dossier_petri}")
+        return []   # ← retourne liste vide mais l'appelant continue
 
     # cherche tous les fichiers qui commencent par le nom de la souris
     pattern = os.path.join(dossier_petri, f"{souris}*.txt")
     fichiers = sorted(glob.glob(pattern))
-
-    if not os.path.exists(dossier_petri):
-        print(f"Dossier absent : {dossier_petri}")
-        return []
 
     return fichiers
 
@@ -287,25 +295,59 @@ liste_jour = ['jour2', 'jour4', 'jour_8', 'jour_11']
 
 for souris in liste_souris:
     for petri in liste_petri:
+        idx_petri = liste_petri.index(petri)  # ← calcule une fois, réutilise partout
+        
         for jour in liste_jour:
             if jour == 'jour2':
-                w, i = traiter_acquisitions_et_verre(lecteur_fichier_j2(jour, petri, souris))
-                spectres.append(i)
-                etiquettes.append(f"{souris}-{jour}-{dose_j2_j8[liste_petri.index(petri)]}")
-            if jour == 'jour4':
-                w, i = traiter_acquisitions_et_verre(lecteur_fichier_j4(jour, petri, souris))
-                spectres.append(i)
-                etiquettes.append(f"{souris}-{jour}-{dose_j4[liste_petri.index(petri)]}")
-                print(dose_j4.index(petri))
-            if jour == 'jour_8':
-                w, i = traiter_acquisitions_et_verre(lecteur_fichier_j8_j11(jour, petri, souris))
-                spectres.append(i)
-                etiquettes.append(f"{souris}-{jour}-{dose_j2_j8[liste_petri.index(petri)]}")
-            if jour == 'jour_11':
-                # si on est a petri 5, ca va juste continue donc l'indice de petri5 ne va 
-                # pas être chier avec dose_j11
-                w, i = traiter_acquisitions_et_verre(lecteur_fichier_j8_j11(jour, petri, souris))
-                spectres.append(i)
-                etiquettes.append(f"{souris}-{jour}-{dose_j11[liste_petri.index(petri)]}")
+                liste_fichiers = lecteur_fichier_j2(jour, petri, souris)
+                if not liste_fichiers:
+                    #print(f"Aucun fichier : {souris}, {petri}, {jour}")
+                    continue
+                w, i = traiter_acquisitions_et_verre(liste_fichiers)
+                dose = dose_j2_j8[idx_petri]
+
+            elif jour == 'jour4':
+                liste_fichiers = lecteur_fichier_j4(jour, petri, souris)
+                if not liste_fichiers:
+                    #print(f"Aucun fichier : {souris}, {petri}, {jour}")
+                    continue
+                w, i = traiter_acquisitions_et_verre(liste_fichiers)  # ← liste_fichiers manquait
+                dose = dose_j4[idx_petri]
+
+            elif jour == 'jour_8':
+                liste_fichiers = lecteur_fichier_j8_j11(jour, petri, souris)
+                if not liste_fichiers:
+                    #print(f"Aucun fichier : {souris}, {petri}, {jour}")
+                    continue
+                w, i = traiter_acquisitions_et_verre(liste_fichiers)
+                dose = dose_j2_j8[idx_petri]
+
+            elif jour == 'jour_11':
+                if idx_petri >= len(dose_j11):   # ← protège contre petri5 qui n'existe pas en j11
+                    continue
+                liste_fichiers = lecteur_fichier_j8_j11(jour, petri, souris)
+                if not liste_fichiers:
+                    #print(f"Aucun fichier : {souris}, {petri}, {jour}")
+                    continue
+                w, i = traiter_acquisitions_et_verre(liste_fichiers)
+                dose = dose_j11[idx_petri]
+
+            # vérification NaN/Inf — même logique pour tous les jours
+            if w is None or i is None:
+                continue
+            if not np.isfinite(i).all():
+                print(f"NaN/Inf détectés : {souris}, {petri}, {jour} — spectre ignoré")
+                continue
+
+            spectres.append(i)
+            etiquettes.append(f"{souris}-{jour}-{dose}")  # ← propre et cohérent
 
 X = np.array(spectres)
+print(f"Matrice X construite : {X.shape}")
+quantité = 0
+for i in etiquettes:
+    if 'souris3' in i:
+        print(i)
+        quantité += 1
+print(quantité)
+
