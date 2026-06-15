@@ -25,7 +25,7 @@ def formater_donnees(chemin_fichier, wn_min=500, wn_max=3025):
             if 'Integration Time' in ligne:
                 valeur_str = ligne.split(':')[-1].strip().replace(',', '.')
                 integration = float(valeur_str)
-                print(f"temps d'intégration : {integration}")
+                #print(f"temps d'intégration : {integration} pour {chemin_fichier}")
                 continue
             try:
                 valeurs = [float(x) for x in ligne.replace(',', '.').split()]
@@ -179,8 +179,8 @@ def traiter_acquisitions(liste_fichiers, wn_min=500, wn_max=3025,
 # ────────────────────────────────────────────────────────────────────────
 
 
-dossier = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya\jour_2\spectre du verre"
-liste_fichiers_verre =  sorted(glob.glob(os.path.join(dossier, "*.txt")))
+dossier_verre = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya\jour_2\spectre du verre"
+liste_fichiers_verre =  sorted(glob.glob(os.path.join(dossier_verre, "*.txt")))
 
 
 def traiter_acquisitions_j8_j11(liste_fichiers, wn_min=500, wn_max=3025, retirer_cosmiques=True):
@@ -201,8 +201,8 @@ def traiter_acquisitions_j8_j11(liste_fichiers, wn_min=500, wn_max=3025, retirer
 # 6. RETRAITS DE LA GELLOSE + CENTRAGE DES DONNÉES: JOUR 2 ET 4
 # ────────────────────────────────────────────────────────────────────────
 
-dossier = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya\spectre_gellose"
-liste_fichier_verre = sorted(glob.glob(os.path.join(dossier, "*.txt")))
+dossier_gellose = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya\spectre_gellose"
+liste_fichiers_gellose = sorted(glob.glob(os.path.join(dossier_gellose, "*.txt")))
 
 def traiter_acquisitions_j2_j4(liste_fichiers, wn_min=500, wn_max=3025, retirer_cosmiques=True):
     """
@@ -212,7 +212,21 @@ def traiter_acquisitions_j2_j4(liste_fichiers, wn_min=500, wn_max=3025, retirer_
     Retourne (wavenumbers, spectre_centré).
     """
     wn, i = traiter_acquisitions(liste_fichiers, wn_min, wn_max, retirer_cosmiques)
-    wn_gellose, i_gellose = traiter_acquisitions(liste_fichiers_verre, wn_min, wn_max, retirer_cosmiques)
+    wn_gellose, i_gellose = traiter_acquisitions(liste_fichiers_gellose, wn_min, wn_max, retirer_cosmiques)
+    # ── Vérification avant soustraction ──────────────────────────────────────
+    if wn is None or i is None:
+        print("❌ Échantillon : None")
+        return None, None
+    if wn_gellose is None or i_gellose is None:
+        print("❌ Gellose : None")
+        return None, None
+    if not np.isfinite(i).all():
+        print(f"❌ NaN/Inf dans l'échantillon : {np.sum(~np.isfinite(i))} points")
+        return None, None
+    if not np.isfinite(i_gellose).all():
+        print(f"❌ NaN/Inf dans la gellose : {np.sum(~np.isfinite(i_gellose))} points")
+        return None, None
+    # ─────────────────────────────────────────────────────────────────────────
     intensite_SG = soustraire_spectre(wn, i, wn_gellose, i_gellose)
     intensité_SG_SF = corriger_fluorescence(intensite_SG, min_bubble_widths=50, fit_order=1)
     return wn, intensité_SG_SF - np.mean(intensité_SG_SF)
@@ -282,7 +296,7 @@ def lecteur_fichier_j4(jour, petri, souris):
     dossier_petri = os.path.join(racine2, jour, "raman", petri)
 
     if not os.path.exists(dossier_petri):
-        #print(f"Dossier absent : {dossier_petri}")
+        print(f"Dossier absent : {dossier_petri}")
         return []   # ← retourne liste vide mais l'appelant continue
 
     # cherche tous les fichiers qui commencent par le nom de la souris
@@ -298,35 +312,34 @@ w_j2s5p4, i_j2s5p4 = traiter_acquisitions_j2_j4(lecteur_fichier_j2('jour2', 'pet
 w_j4s4p1, i_j4s4p1 = traiter_acquisitions_j2_j4(lecteur_fichier_j4('jour4', 'petri1', 'souris4')) #petri1 = 60gy
 w_j4s5p1, i_j4s5p1 = traiter_acquisitions_j2_j4(lecteur_fichier_j4('jour4', 'petri1', 'souris5'))
 
-w_j8s4p4, i_j8s4p4 = traiter_acquisitions_j8_j11(lecteur_fichier_j8_j11('jour8', 'petri4', 'souris4')) #petri4 = 60gy
-w_j8s5p4, i_j8s5p4 = traiter_acquisitions_j8_j11(lecteur_fichier_j8_j11('jour8', 'petri4', 'souris5'))
+w_j8s4p4, i_j8s4p4 = traiter_acquisitions_j8_j11(lecteur_fichier_j8_j11('jour_8', 'petri4', 'souris4')) #petri4 = 60gy
+w_j8s5p4, i_j8s5p4 = traiter_acquisitions_j8_j11(lecteur_fichier_j8_j11('jour_8', 'petri4', 'souris5'))
 
-w_j11s4p3, i_j11s4p3 = traiter_acquisitions_j8_j11(lecteur_fichier_j8_j11('jour11', 'petri3', 'souris4')) #petri3 = 60gy
-w_j11s5p3, i_j11s5p3 = traiter_acquisitions_j8_j11(lecteur_fichier_j8_j11('jour11', 'petri3', 'souris5'))
-
-
+w_j11s4p3, i_j11s4p3 = traiter_acquisitions_j8_j11(lecteur_fichier_j8_j11('jour_11', 'petri3', 'souris4')) #petri3 = 60gy
+w_j11s5p3, i_j11s5p3 = traiter_acquisitions_j8_j11(lecteur_fichier_j8_j11('jour_11', 'petri3', 'souris5'))
 
 
 
 
-fig, axes = plt.subplots(1, 1, figsize=(10, 10))  # ← syntaxe correcte
-
-ax1 = axes[0, 0]   # ← pas des listes, des vrais axes
-ax2 = axes[1, 0]
 
 
-ax1.plot(w_j2s4p4, i_j2s4p4, label='souris4')
-ax1.plot(w_j4s4p1, i_j4s4p1, label='souris4')
-ax1.plot(w_j8s4p4, i_j8s4p4, label='souris4')
-ax1.plot(w_j11s4p3, i_j11s4p3, label='souris4')
+fig, axes = plt.subplots(2, 1, figsize=(10, 10))  # ← syntaxe correcte
+
+ax1 = axes[0]   # ← pas des listes, des vrais axes
+ax2 = axes[1]
+
+
+ax1.plot(w_j2s4p4, i_j2s4p4, 'b-', label='jour 2')
+ax1.plot(w_j4s4p1, i_j4s4p1, 'r-', label='jour 4')
+ax1.plot(w_j8s4p4, i_j8s4p4, 'g-', label='jour 8')
+ax1.plot(w_j11s4p3, i_j11s4p3, 'c-', label='jour 11')
 ax1.set_title('Spectre raman souris 4 irradiée 60 Gy')
-
-ax2.plot(w_j2s5p4, i_j2s5p4, label='souris5')
-ax2.plot(w_j4s5p1, i_j4s5p1, label='souris5')
-ax2.plot(w_j8s5p4, i_j8s5p4, label='souris5')
-ax2.plot(w_j11s5p3, i_j11s5p3, label='souris5')
+ax2.plot(w_j2s5p4, i_j2s5p4, 'b-', label='jour 2')
+ax2.plot(w_j4s5p1, i_j4s5p1, 'r-', label='jour 4')
+ax2.plot(w_j8s5p4, i_j8s5p4, 'g-', label='jour 8')
+ax2.plot(w_j11s5p3, i_j11s5p3, 'c-', label='jour 11')
 ax2.set_title('Spectre raman souris 5 irradiée 60 Gy')
-
+plt.legend()
 plt.tight_layout()
 plt.show()
 

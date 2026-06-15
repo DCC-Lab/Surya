@@ -30,6 +30,13 @@ config = {
         'petri4': ('60gy',     ['souris4', 'souris5']),
         'petri5': ('80gy',     ['souris4']),
     },
+    'jour4': {
+        'petri1': ('60gy',     ['souris4ou5', 'souris5ou4']),
+        'petri2': ('80gy',     ['souris4', 'souris5']),
+        'petri3': ('0gy',      ['souris1', 'souris2', 'souris3']),
+        'petri4': ('45gy + P', ['souris1', 'souris2', 'souris3']),
+        'petri5': ('45gy',     ['souris1', 'souris2']),
+    },
     'jour_8': {
         'petri1': ('0gy',      ['souris1', 'souris2', 'souris3']),
         'petri2': ('45gy',     ['souris1', 'souris2', 'souris3']),
@@ -63,8 +70,11 @@ for jour, petris in config.items():
                 continue
             if jour == 'jour2' or jour == 'jour4':
                 w, i = traiter_acquisitions_j2_j4(liste_fichiers)
-            if jour == 'jour_8' or jour == 'jour_11':
+            elif jour == 'jour_8' or jour == 'jour_11':
                 w, i = traiter_acquisitions_j8_j11(liste_fichiers)
+            else:
+                print(f"⚠️ Jour inconnu : {jour}")
+                continue          # ← évite le NameError
             if w is None or i is None:
                 continue
             if not np.isfinite(i).all():
@@ -122,55 +132,53 @@ doses  = [e.split('-')[-1] for e in etiquettes]
 souris = [e.split('-')[0]  for e in etiquettes]
 jours  = [e.split('-')[1]  for e in etiquettes]
 
-# ── 3. Plot ───────────────────────────────────────────────────────────────────
-#fig, axes = plt.subplots(1, 2, figsize=(16, 7))
+#3── 3. Plot ───────────────────────────────────────────────────────────────────
+fig, axes = plt.subplots(1, 2, figsize=(16, 7))
+for ax, (pc_x, pc_y) in zip(axes, [(0, 1), (0, 2)]):
+    for idx in range(len(etiquettes)):
+        dose = doses[idx]
+        color = color_map[dose]
 
-#for ax, (pc_x, pc_y) in zip(axes, [(0, 1), (0, 2)]):
-#    for idx in range(len(etiquettes)):
-#        dose = doses[idx]
-#        color = color_map[dose]
-#
-#        ax.scatter(
-#            X_reduced[idx, pc_x],
-#            X_reduced[idx, pc_y],
-#            color=color,
-#            s=60,
-#        )
-#
-#        ax.annotate(
-#            f"{souris[idx]}\n({jours[idx]})",
-#            xy=(X_reduced[idx, pc_x], X_reduced[idx, pc_y]),
-#            xytext=(5, 5),
-#            textcoords='offset points',
-#            fontsize=6,
-#            color=color,
-#        )
-#
-#    ax.set_xlabel(f"PC{pc_x+1} ({pca.explained_variance_ratio_[pc_x]:.1%})")
-#    ax.set_ylabel(f"PC{pc_y+1} ({pca.explained_variance_ratio_[pc_y]:.1%})")
-#    ax.axhline(0, color='grey', lw=0.5)
-#    ax.axvline(0, color='grey', lw=0.5)
+        ax.scatter(
+            X_reduced[idx, pc_x],
+            X_reduced[idx, pc_y],
+            color=color,
+            s=60,
+        )
 
+        ax.annotate(
+            f"{souris[idx]}\n({jours[idx]})",
+            xy=(X_reduced[idx, pc_x], X_reduced[idx, pc_y]),
+            xytext=(5, 5),
+            textcoords='offset points',
+            fontsize=6,
+            color=color,
+        )
+
+    ax.set_xlabel(f"PC{pc_x+1} ({pca.explained_variance_ratio_[pc_x]:.1%})")
+    ax.set_ylabel(f"PC{pc_y+1} ({pca.explained_variance_ratio_[pc_y]:.1%})")
+    ax.axhline(0, color='grey', lw=0.5)
+    ax.axvline(0, color='grey', lw=0.5)
 # ── 4. Légende ────────────────────────────────────────────────────────────────
-#handles = [mpatches.Patch(color=c, label=d) for d, c in color_map.items()]
-#axes[1].legend(handles=handles, title="Dose", bbox_to_anchor=(1.05, 1))
-#
-#plt.suptitle("PCA — Score plots")
-#plt.tight_layout()
-#plt.show()
+handles = [mpatches.Patch(color=c, label=d) for d, c in color_map.items()]
+axes[1].legend(handlesss=handles, title="Dose", bbox_to_anchor=(1.05, 1))
 
-# ── 5. Loadings PC1 selon longueur d'onde ────────────────────────────────────
-plt.close('all')
-
-
-
-fig2, ax = plt.subplots(figsize=(10, 4))
-
-ax.plot(w, pca.components_[0], color='blue')   # components_[0] = PC1
-ax.set_xlabel("Longueur d'onde (nm)")
-ax.set_ylabel("Loading")
-ax.set_title(f"PC1 loading ({pca.explained_variance_ratio_[0]:.1%} de variance)")
-ax.axhline(0, color='grey', lw=0.5)
-
+plt.suptitle("PCA — Score plots")
 plt.tight_layout()
 plt.show()
+
+# ── 5. Loadings PC1 selon longueur d'onde ────────────────────────────────────
+#plt.close('all')
+
+
+
+#fig2, ax = plt.subplots(figsize=(10, 4))
+
+#ax.plot(w, pca.components_[0], color='blue')   # components_[0] = PC1
+#ax.set_xlabel("Longueur d'onde (nm)")
+#ax.set_ylabel("Loading")
+#ax.set_title(f"PC1 loading ({pca.explained_variance_ratio_[0]:.1%} de variance)")
+#ax.axhline(0, color='grey', lw=0.5)
+
+#plt.tight_layout()
+#plt.show()
