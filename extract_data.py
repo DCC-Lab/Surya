@@ -25,6 +25,7 @@ def formater_donnees(chemin_fichier, wn_min=500, wn_max=3025):
             if 'Integration Time' in ligne:
                 valeur_str = ligne.split(':')[-1].strip().replace(',', '.')
                 integration = float(valeur_str)
+                print(f"temps d'intégration : {integration} pour {chemin_fichier}")
                 continue
             try:
                 valeurs = [float(x) for x in ligne.replace(',', '.').split()]
@@ -76,25 +77,25 @@ def retirer_rayons_cosmiques(intensite, seuil=10.0, fenetre=5):
     return intensite_corr
 
 # ─────────────────────────────────────────────
-# 3. CORRECTION DU SPECTRE DU VERRE
+# 3. SOUSTRACTION DE SPECTRE NOCIFS
 # ─────────────────────────────────────────────
 
 
-def soustraire_verre(wn_echantillon, intensite_echantillon, 
-                     wn_verre, intensite_verre):
+def soustraire_spectre(wn_echantillon, intensite_echantillon, 
+                     wn_nocif, intensite_nocif):
     """
     Soustrait la contribution du verre en trouvant le meilleur coefficient.
     Utilise NNLS pour que le coefficient soit toujours positif.
     """
     # Interpoler le verre sur la même grille que l'échantillon
-    verre_interp = np.interp(wn_echantillon, wn_verre, intensite_verre)
+    nocif_interp = np.interp(wn_echantillon, wn_nocif, intensite_nocif)
     
     # Trouver le coefficient α optimal (NNLS = non-negative least squares)
-    A = verre_interp.reshape(-1, 1)
+    A = nocif_interp.reshape(-1, 1)
     alpha, _ = nnls(A, intensite_echantillon)
     
     # Soustraire
-    intensite_corrigee = intensite_echantillon - alpha * verre_interp
+    intensite_corrigee = intensite_echantillon - alpha * nocif_interp
     
     return intensite_corrigee
 
@@ -174,15 +175,15 @@ def traiter_acquisitions(liste_fichiers, wn_min=500, wn_max=3025,
 
 
 # ────────────────────────────────────────────────────────────────────────
-# 6. RETRAITS DU VERRE + CENTRAGE DES DONNÉES
+# 6. RETRAITS DU VERRE + CENTRAGE DES DONNÉES: JOUR 8 ET 11
 # ────────────────────────────────────────────────────────────────────────
 
 
-dossier = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya\jour_2\spectre du verre"
-liste_fichiers_verre =  sorted(glob.glob(os.path.join(dossier, "*.txt")))
+dossier_verre = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya\jour_2\spectre du verre"
+liste_fichiers_verre =  sorted(glob.glob(os.path.join(dossier_verre, "*.txt")))
 
 
-def traiter_acquisitions_et_verre(liste_fichiers, wn_min=500, wn_max=3025, retirer_cosmiques=True):
+def traiter_acquisitions_j8_j11(liste_fichiers, wn_min=500, wn_max=3025, retirer_cosmiques=True):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
     Soustrait le spectre du verre et corrige la fluorescence.
@@ -192,11 +193,43 @@ def traiter_acquisitions_et_verre(liste_fichiers, wn_min=500, wn_max=3025, retir
     
     wn, i = traiter_acquisitions(liste_fichiers, wn_min, wn_max, retirer_cosmiques)
     wn_verre, i_verre = traiter_acquisitions(liste_fichiers_verre, wn_min, wn_max, retirer_cosmiques)
-    intensite_SV = soustraire_verre(wn, i, wn_verre, i_verre)
+    intensite_SV = soustraire_spectre(wn, i, wn_verre, i_verre)
     intensité_SV_SF = corriger_fluorescence(intensite_SV, min_bubble_widths=50, fit_order=1)
     return wn, intensité_SV_SF - np.mean(intensité_SV_SF)
 
+# ────────────────────────────────────────────────────────────────────────
+# 6. RETRAITS DE LA GELLOSE + CENTRAGE DES DONNÉES: JOUR 2 ET 4
+# ────────────────────────────────────────────────────────────────────────
 
+dossier_gellose = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya\spectre_gellose"
+liste_fichiers_gellose = sorted(glob.glob(os.path.join(dossier_gellose, "*.txt")))
+
+def traiter_acquisitions_j2_j4(liste_fichiers, wn_min=500, wn_max=3025, retirer_cosmiques=True):
+    """
+    Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
+    Soustrait le spectre de la gellose et corrige la fluorescence.
+    Centrage des données en soustrayant la moyenne.
+    Retourne (wavenumbers, spectre_centré).
+    """
+    wn, i = traiter_acquisitions(liste_fichiers, wn_min, wn_max, retirer_cosmiques)
+    wn_gellose, i_gellose = traiter_acquisitions(liste_fichiers_gellose, wn_min, wn_max, retirer_cosmiques)
+    # ── Vérification avant soustraction ──────────────────────────────────────
+    if wn is None or i is None:
+        print("❌ Échantillon : None")
+        return None, None
+    if wn_gellose is None or i_gellose is None:
+        print("❌ Gellose : None")
+        return None, None
+    if not np.isfinite(i).all():
+        print(f"❌ NaN/Inf dans l'échantillon : {np.sum(~np.isfinite(i))} points")
+        return None, None
+    if not np.isfinite(i_gellose).all():
+        print(f"❌ NaN/Inf dans la gellose : {np.sum(~np.isfinite(i_gellose))} points")
+        return None, None
+    # ─────────────────────────────────────────────────────────────────────────
+    intensite_SG = soustraire_spectre(wn, i, wn_gellose, i_gellose)
+    intensité_SG_SF = corriger_fluorescence(intensite_SG, min_bubble_widths=50, fit_order=1)
+    return wn, intensité_SG_SF - np.mean(intensité_SG_SF)
 
 # ─────────────────────────────────────────────
 # OBTENTEUR DE FICHIERS J2, J4, J8, J11
@@ -263,7 +296,7 @@ def lecteur_fichier_j4(jour, petri, souris):
     dossier_petri = os.path.join(racine2, jour, "raman", petri)
 
     if not os.path.exists(dossier_petri):
-        #print(f"Dossier absent : {dossier_petri}")
+        print(f"Dossier absent : {dossier_petri}")
         return []   # ← retourne liste vide mais l'appelant continue
 
     # cherche tous les fichiers qui commencent par le nom de la souris
@@ -271,3 +304,5 @@ def lecteur_fichier_j4(jour, petri, souris):
     fichiers = sorted(glob.glob(pattern))
 
     return fichiers
+
+w, i = traiter_acquisitions_j2_j4(lecteur_fichier_j4("jour4", "petri1", "souris4ou5"), wn_min=500, wn_max=3025, retirer_cosmiques=True)

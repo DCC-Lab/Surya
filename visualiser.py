@@ -1,4 +1,3 @@
-import matplotlib.pyplot as plt
 import numpy as np
 import os
 from orpl.baseline_removal import bubblefill
@@ -26,6 +25,7 @@ def formater_donnees(chemin_fichier, wn_min=500, wn_max=3025):
             if 'Integration Time' in ligne:
                 valeur_str = ligne.split(':')[-1].strip().replace(',', '.')
                 integration = float(valeur_str)
+                print(f"temps d'intégration : {integration}")
                 continue
             try:
                 valeurs = [float(x) for x in ligne.replace(',', '.').split()]
@@ -77,25 +77,25 @@ def retirer_rayons_cosmiques(intensite, seuil=10.0, fenetre=5):
     return intensite_corr
 
 # ─────────────────────────────────────────────
-# 3. CORRECTION DU SPECTRE DU VERRE
+# 3. SOUSTRACTION DE SPECTRE NOCIFS
 # ─────────────────────────────────────────────
 
 
-def soustraire_verre(wn_echantillon, intensite_echantillon, 
-                     wn_verre, intensite_verre):
+def soustraire_spectre(wn_echantillon, intensite_echantillon, 
+                     wn_nocif, intensite_nocif):
     """
     Soustrait la contribution du verre en trouvant le meilleur coefficient.
     Utilise NNLS pour que le coefficient soit toujours positif.
     """
     # Interpoler le verre sur la même grille que l'échantillon
-    verre_interp = np.interp(wn_echantillon, wn_verre, intensite_verre)
+    nocif_interp = np.interp(wn_echantillon, wn_nocif, intensite_nocif)
     
     # Trouver le coefficient α optimal (NNLS = non-negative least squares)
-    A = verre_interp.reshape(-1, 1)
+    A = nocif_interp.reshape(-1, 1)
     alpha, _ = nnls(A, intensite_echantillon)
     
     # Soustraire
-    intensite_corrigee = intensite_echantillon - alpha * verre_interp
+    intensite_corrigee = intensite_echantillon - alpha * nocif_interp
     
     return intensite_corrigee
 
@@ -175,7 +175,7 @@ def traiter_acquisitions(liste_fichiers, wn_min=500, wn_max=3025,
 
 
 # ────────────────────────────────────────────────────────────────────────
-# 6. RETRAITS DU VERRE + CENTRAGE DES DONNÉES
+# 6. RETRAITS DU VERRE + CENTRAGE DES DONNÉES: JOUR 8 ET 11
 # ────────────────────────────────────────────────────────────────────────
 
 
@@ -183,7 +183,7 @@ dossier = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_
 liste_fichiers_verre =  sorted(glob.glob(os.path.join(dossier, "*.txt")))
 
 
-def traiter_acquisitions_et_verre(liste_fichiers, wn_min=500, wn_max=3025, retirer_cosmiques=True):
+def traiter_acquisitions_j8_j11(liste_fichiers, wn_min=500, wn_max=3025, retirer_cosmiques=True):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
     Soustrait le spectre du verre et corrige la fluorescence.
@@ -193,9 +193,59 @@ def traiter_acquisitions_et_verre(liste_fichiers, wn_min=500, wn_max=3025, retir
     
     wn, i = traiter_acquisitions(liste_fichiers, wn_min, wn_max, retirer_cosmiques)
     wn_verre, i_verre = traiter_acquisitions(liste_fichiers_verre, wn_min, wn_max, retirer_cosmiques)
-    intensite_SV = soustraire_verre(wn, i, wn_verre, i_verre)
+    intensite_SV = soustraire_spectre(wn, i, wn_verre, i_verre)
     intensité_SV_SF = corriger_fluorescence(intensite_SV, min_bubble_widths=50, fit_order=1)
     return wn, intensité_SV_SF - np.mean(intensité_SV_SF)
+
+# ────────────────────────────────────────────────────────────────────────
+# 6. RETRAITS DE LA GELLOSE + CENTRAGE DES DONNÉES: JOUR 2 ET 4
+# ────────────────────────────────────────────────────────────────────────
+
+dossier = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya\spectre_gellose"
+liste_fichier_verre = sorted(glob.glob(os.path.join(dossier, "*.txt")))
+
+def traiter_acquisitions_j2_j4(liste_fichiers, wn_min=500, wn_max=3025, retirer_cosmiques=True):
+    """
+    Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
+    Soustrait le spectre de la gellose et corrige la fluorescence.
+    Centrage des données en soustrayant la moyenne.
+    Retourne (wavenumbers, spectre_centré).
+    """
+    wn, i = traiter_acquisitions(liste_fichiers, wn_min, wn_max, retirer_cosmiques)
+    wn_gellose, i_gellose = traiter_acquisitions(liste_fichiers_verre, wn_min, wn_max, retirer_cosmiques)
+    intensite_SG = soustraire_spectre(wn, i, wn_gellose, i_gellose)
+    intensité_SG_SF = corriger_fluorescence(intensite_SG, min_bubble_widths=50, fit_order=1)
+    return wn, intensité_SG_SF - np.mean(intensité_SG_SF)
+
+# ─────────────────────────────────────────────
+# OBTENTEUR DE FICHIERS J2, J4, J8, J11
+# ─────────────────────────────────────────────
+
+#J8, J11
+
+racine1 = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya"
+
+def lecteur_fichier_j8_j11(jour, petri, souris):
+    
+    fichiers = []
+
+    for i in range(1, 4):
+        zone = f"zone{i}"
+        dossier = os.path.join(racine1, jour, "Raman", petri, souris, zone)
+        
+        # Si le dossier n'existe pas, on le saute sans buguer
+        if not os.path.exists(dossier):
+            #print(f"Dossier absent, ignoré : {dossier}")
+            continue
+        
+        # Chercher les fichiers .txt dans ce dossier
+        fichiers_zone = glob.glob(os.path.join(dossier, "*.txt"))
+        fichiers.extend(fichiers_zone)
+
+    fichiers = sorted(fichiers)
+    return fichiers
+
+#J2
 
 racine2 = r"\\cafeine3.crulrg.ulaval.ca\Goliath\Goliath\labdata\dcclab\surya"
 
@@ -242,40 +292,42 @@ def lecteur_fichier_j4(jour, petri, souris):
     return fichiers
 
 
-w_j4s4p1, i_j4s4p1 = traiter_acquisitions_et_verre(lecteur_fichier_j4('jour4', 'petri1', 'souris4')) #petri1 = 60gy
-w_j4s5p1, i_j4s5p1 = traiter_acquisitions_et_verre(lecteur_fichier_j4('jour4', 'petri1', 'souris5'))
-w_j4s4p2, i_j4s4p2 = traiter_acquisitions_et_verre(lecteur_fichier_j4('jour4', 'petri2', 'souris4')) #petri2 = 80gy
-w_j4s5p2, i_j4s5p2 = traiter_acquisitions_et_verre(lecteur_fichier_j4('jour4', 'petri2', 'souris5'))
+w_j2s4p4, i_j2s4p4 = traiter_acquisitions_j2_j4(lecteur_fichier_j2('jour2', 'petri4', 'souris4')) #petri4 = 60gy
+w_j2s5p4, i_j2s5p4 = traiter_acquisitions_j2_j4(lecteur_fichier_j2('jour2', 'petri4', 'souris5'))
+
+w_j4s4p1, i_j4s4p1 = traiter_acquisitions_j2_j4(lecteur_fichier_j4('jour4', 'petri1', 'souris4')) #petri1 = 60gy
+w_j4s5p1, i_j4s5p1 = traiter_acquisitions_j2_j4(lecteur_fichier_j4('jour4', 'petri1', 'souris5'))
+
+w_j8s4p4, i_j8s4p4 = traiter_acquisitions_j8_j11(lecteur_fichier_j8_j11('jour8', 'petri4', 'souris4')) #petri4 = 60gy
+w_j8s5p4, i_j8s5p4 = traiter_acquisitions_j8_j11(lecteur_fichier_j8_j11('jour8', 'petri4', 'souris5'))
+
+w_j11s4p3, i_j11s4p3 = traiter_acquisitions_j8_j11(lecteur_fichier_j8_j11('jour11', 'petri3', 'souris4')) #petri3 = 60gy
+w_j11s5p3, i_j11s5p3 = traiter_acquisitions_j8_j11(lecteur_fichier_j8_j11('jour11', 'petri3', 'souris5'))
 
 
-w_j2s4p4, i_j2s4p4 = traiter_acquisitions_et_verre(lecteur_fichier_j2('jour2', 'petri4', 'souris4')) #petri4 = 60gy
-w_j2s5p4, i_j2s5p4 = traiter_acquisitions_et_verre(lecteur_fichier_j2('jour2', 'petri4', 'souris5'))
-w_j2s4p5, i_j2s4p5 = traiter_acquisitions_et_verre(lecteur_fichier_j2('jour2', 'petri5', 'souris4')) #petri5 = 80 gy
-w_j2s5p5, i_j2s5p5 = traiter_acquisitions_et_verre(lecteur_fichier_j2('jour2', 'petri5', 'souris5'))
 
-pythonfig, axes = plt.subplots(2, 2, figsize=(10, 10))  # ← syntaxe correcte
+
+
+
+fig, axes = plt.subplots(1, 1, figsize=(10, 10))  # ← syntaxe correcte
 
 ax1 = axes[0, 0]   # ← pas des listes, des vrais axes
 ax2 = axes[1, 0]
-ax3 = axes[0, 1]
-ax4 = axes[1, 1]
 
-ax1.plot(w_j4s4p1, i_j4s4p1,'b-', label='jour4')
-ax1.plot(w_j2s4p4, i_j2s4p4,'r-', label='jour2')
-ax1.set_title('Jour 4 et jour 2, souris 4')
-ax1.legend()
-ax2.plot(w_j4s5p1, i_j4s5p1,'b-', label='jour4')
-ax2.plot(w_j2s5p4, i_j2s5p4,'r-', label='jour2')
-ax2.set_title('Jour 4 et jour 2, souris 5')
-ax2.legend()
-ax3.plot(w_j4s4p2, i_j4s4p2,'b-', label='jour4')
-ax3.plot(w_j2s4p5, i_j2s4p5,'r-', label='jour2')
-ax3.set_title('Jour 4 et jour 2, souris 4')
-ax3.legend()
-ax4.plot(w_j4s5p2, i_j4s5p2,'b-', label='jour4')
-ax4.plot(w_j2s5p5, i_j2s5p5,'r-', label='jour2')
-ax4.set_title('Jour 4 et jour 2, souris 5')
-ax4.legend()
+
+ax1.plot(w_j2s4p4, i_j2s4p4, label='souris4')
+ax1.plot(w_j4s4p1, i_j4s4p1, label='souris4')
+ax1.plot(w_j8s4p4, i_j8s4p4, label='souris4')
+ax1.plot(w_j11s4p3, i_j11s4p3, label='souris4')
+ax1.set_title('Spectre raman souris 4 irradiée 60 Gy')
+
+ax2.plot(w_j2s5p4, i_j2s5p4, label='souris5')
+ax2.plot(w_j4s5p1, i_j4s5p1, label='souris5')
+ax2.plot(w_j8s5p4, i_j8s5p4, label='souris5')
+ax2.plot(w_j11s5p3, i_j11s5p3, label='souris5')
+ax2.set_title('Spectre raman souris 5 irradiée 60 Gy')
+
 plt.tight_layout()
-plt.suptitle('Comparaison des spectres du jour 4 et jour 2, pour les souris 4 et 5')
 plt.show()
+
+
