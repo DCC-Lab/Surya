@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import os
 from orpl.baseline_removal import bubblefill
@@ -196,38 +197,6 @@ def traiter_acquisitions_et_verre(liste_fichiers, wn_min=500, wn_max=3025, retir
     intensité_SV_SF = corriger_fluorescence(intensite_SV, min_bubble_widths=50, fit_order=1)
     return wn, intensité_SV_SF - np.mean(intensité_SV_SF)
 
-
-
-# ─────────────────────────────────────────────
-# OBTENTEUR DE FICHIERS J2, J4, J8, J11
-# ─────────────────────────────────────────────
-
-#J8, J11
-
-racine1 = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya"
-
-def lecteur_fichier_j8_j11(jour, petri, souris):
-    
-    fichiers = []
-
-    for i in range(1, 4):
-        zone = f"zone{i}"
-        dossier = os.path.join(racine1, jour, "Raman", petri, souris, zone)
-        
-        # Si le dossier n'existe pas, on le saute sans buguer
-        if not os.path.exists(dossier):
-            #print(f"Dossier absent, ignoré : {dossier}")
-            continue
-        
-        # Chercher les fichiers .txt dans ce dossier
-        fichiers_zone = glob.glob(os.path.join(dossier, "*.txt"))
-        fichiers.extend(fichiers_zone)
-
-    fichiers = sorted(fichiers)
-    return fichiers
-
-#J2
-
 racine2 = r"\\cafeine3.crulrg.ulaval.ca\Goliath\Goliath\labdata\dcclab\surya"
 
 def lecteur_fichier_j2(jour, petri, souris):
@@ -271,3 +240,42 @@ def lecteur_fichier_j4(jour, petri, souris):
     fichiers = sorted(glob.glob(pattern))
 
     return fichiers
+
+
+w_j4s4p1, i_j4s4p1 = traiter_acquisitions_et_verre(lecteur_fichier_j4('jour4', 'petri1', 'souris4')) #petri1 = 60gy
+w_j4s5p1, i_j4s5p1 = traiter_acquisitions_et_verre(lecteur_fichier_j4('jour4', 'petri1', 'souris5'))
+w_j4s4p2, i_j4s4p2 = traiter_acquisitions_et_verre(lecteur_fichier_j4('jour4', 'petri2', 'souris4')) #petri2 = 80gy
+w_j4s5p2, i_j4s5p2 = traiter_acquisitions_et_verre(lecteur_fichier_j4('jour4', 'petri2', 'souris5'))
+
+
+w_j2s4p4, i_j2s4p4 = traiter_acquisitions_et_verre(lecteur_fichier_j2('jour2', 'petri4', 'souris4')) #petri4 = 60gy
+w_j2s5p4, i_j2s5p4 = traiter_acquisitions_et_verre(lecteur_fichier_j2('jour2', 'petri4', 'souris5'))
+w_j2s4p5, i_j2s4p5 = traiter_acquisitions_et_verre(lecteur_fichier_j2('jour2', 'petri5', 'souris4')) #petri5 = 80 gy
+w_j2s5p5, i_j2s5p5 = traiter_acquisitions_et_verre(lecteur_fichier_j2('jour2', 'petri5', 'souris5'))
+
+pythonfig, axes = plt.subplots(2, 2, figsize=(10, 10))  # ← syntaxe correcte
+
+ax1 = axes[0, 0]   # ← pas des listes, des vrais axes
+ax2 = axes[1, 0]
+ax3 = axes[0, 1]
+ax4 = axes[1, 1]
+
+ax1.plot(w_j4s4p1, i_j4s4p1,'b-', label='jour4')
+ax1.plot(w_j2s4p4, i_j2s4p4,'r-', label='jour2')
+ax1.set_title('Jour 4 et jour 2, souris 4')
+ax1.legend()
+ax2.plot(w_j4s5p1, i_j4s5p1,'b-', label='jour4')
+ax2.plot(w_j2s5p4, i_j2s5p4,'r-', label='jour2')
+ax2.set_title('Jour 4 et jour 2, souris 5')
+ax2.legend()
+ax3.plot(w_j4s4p2, i_j4s4p2,'b-', label='jour4')
+ax3.plot(w_j2s4p5, i_j2s4p5,'r-', label='jour2')
+ax3.set_title('Jour 4 et jour 2, souris 4')
+ax3.legend()
+ax4.plot(w_j4s5p2, i_j4s5p2,'b-', label='jour4')
+ax4.plot(w_j2s5p5, i_j2s5p5,'r-', label='jour2')
+ax4.set_title('Jour 4 et jour 2, souris 5')
+ax4.legend()
+plt.tight_layout()
+plt.suptitle('Comparaison des spectres du jour 4 et jour 2, pour les souris 4 et 5')
+plt.show()
