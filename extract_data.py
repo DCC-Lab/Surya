@@ -25,7 +25,7 @@ def formater_donnees(chemin_fichier, wn_min=500, wn_max=3025):
             if 'Integration Time' in ligne:
                 valeur_str = ligne.split(':')[-1].strip().replace(',', '.')
                 integration = float(valeur_str)
-                print(f"temps d'intégration : {integration} pour {chemin_fichier}")
+                #print(f"temps d'intégration : {integration} pour {chemin_fichier}")
                 continue
             try:
                 valeurs = [float(x) for x in ligne.replace(',', '.').split()]
