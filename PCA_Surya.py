@@ -8,7 +8,7 @@ import numpy as np
 
 
 # ─────────────────────────────────────────────
-# CONSTRUCTION DE LA MATRICE DE DONNÉESss
+# CONSTRUCTION DE LA MATRICE DE DONNÉES
 # ─────────────────────────────────────────────
 # DIFFÉRENCIER PETRI DE ZONE !!!!!!!!!!!!!!
 """
@@ -118,7 +118,7 @@ print(f"  Total : {sum(pca.explained_variance_ratio_):.1%}")
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
-# ── 1. Définir les mappings ───────────────────────────────────────────────────
+# ── Définir les mappings ──────────────────────────────────────────────────────
 color_map = {
     '0gy':      'blue',
     '45gy':     'green',
@@ -128,26 +128,35 @@ color_map = {
 }
 
 marker_map = {
-    'jour2':   '^',   # triangle
-    'jour4':   's',   # carré
-    'jour_8':  'o',   # cercle
-    'jour_11': 'D',   # diamant
+    'souris1': '^',
+    'souris2': 's',
+    'souris3': 'o',
+    'souris4': 'D',
+    'souris5': 'P',
 }
 
-# ── 2. Extraire dose/souris/jour depuis les étiquettes ───────────────────────
+def get_marker(s):
+    for cle, marker in marker_map.items():
+        if s.startswith(cle):
+            return marker
+    return 'x'
+
+# ── Extraire dose/souris/jour depuis les étiquettes ──────────────────────────
 doses  = [e.split('-')[-1] for e in etiquettes]
 souris = [e.split('-')[0]  for e in etiquettes]
 jours  = [e.split('-')[1]  for e in etiquettes]
 
-# ── 3. Plot ───────────────────────────────────────────────────────────────────
+# ── Plot ──────────────────────────────────────────────────────────────────────
 fig, axes = plt.subplots(1, 2, figsize=(16, 7))
 
 for ax, (pc_x, pc_y) in zip(axes, [(0, 1), (0, 2)]):
     for idx in range(len(etiquettes)):
         dose   = doses[idx]
         jour   = jours[idx]
+        s      = souris[idx]
         color  = color_map[dose]
-        marker = marker_map.get(jour, 'x')   # 'x' si jour inconnu
+        marker = get_marker(s)
+        est_replique = s.endswith('_1')
 
         ax.scatter(
             X_reduced[idx, pc_x],
@@ -155,10 +164,12 @@ for ax, (pc_x, pc_y) in zip(axes, [(0, 1), (0, 2)]):
             color=color,
             marker=marker,
             s=60,
+            edgecolors='black' if est_replique else 'none',
+            linewidths=1.2,
         )
 
         ax.annotate(
-            souris[idx],                    # juste le nom, le jour est déjà dans la forme
+            f"{s}\n{jour}",
             xy=(X_reduced[idx, pc_x], X_reduced[idx, pc_y]),
             xytext=(5, 5),
             textcoords='offset points',
@@ -171,20 +182,25 @@ for ax, (pc_x, pc_y) in zip(axes, [(0, 1), (0, 2)]):
     ax.axhline(0, color='grey', lw=0.5)
     ax.axvline(0, color='grey', lw=0.5)
 
-# ── 4. Légende dose (couleur) ─────────────────────────────────────────────────
+# ── Légende ───────────────────────────────────────────────────────────────────
 handles_dose = [mpatches.Patch(color=c, label=d) for d, c in color_map.items()]
 
-# ── 5. Légende jour (forme) ───────────────────────────────────────────────────
-handles_jour = [
-    plt.scatter([], [], marker=m, color='grey', label=j)
-    for j, m in marker_map.items()
+handles_souris = [
+    plt.scatter([], [], marker=m, color='grey', label=s)
+    for s, m in marker_map.items()
+]
+
+handles_replique = [
+    plt.scatter([], [], marker='o', color='grey', edgecolors='none',  label='souris originale'),
+    plt.scatter([], [], marker='o', color='grey', edgecolors='black', linewidths=1.2, label='souris _1 (réplique)'),
 ]
 
 axes[1].legend(
-    handles=handles_dose + handles_jour,
-    title="Dose / Jour",
+    handles=handles_dose + handles_souris + handles_replique,
+    title="Dose / Souris / Réplique",
     bbox_to_anchor=(1.05, 1),
     loc='upper left',
+    fontsize=7,
 )
 
 plt.suptitle("PCA — Score plots")
