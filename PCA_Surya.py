@@ -168,8 +168,21 @@ for ax, (pc_x, pc_y) in zip(axes, [(0, 1), (0, 2)]):
             linewidths=1.2,
         )
 
+        # ── Étiquette selon le cas ────────────────────────────────────────────
+        if s in ('souris1', 'souris2') and jour == 'jour_8':
+            # souris1 à j8 → "#1" pour la distinguer de souris1_1
+            num = s.replace('souris', '')
+            etiquette_point = f"#{num}\n{jour}"
+        elif s in ('souris1_1', 'souris2_1'):
+            # souris1_1 → "#2" (deuxième individu)
+            num = s.replace('souris', '').replace('_1', '')
+            etiquette_point = f"#{num} bis\n{jour}"
+        else:
+            # toutes les autres souris → juste le jour
+            etiquette_point = jour
+
         ax.annotate(
-            f"{s}\n{jour}",
+            etiquette_point,
             xy=(X_reduced[idx, pc_x], X_reduced[idx, pc_y]),
             xytext=(5, 5),
             textcoords='offset points',
