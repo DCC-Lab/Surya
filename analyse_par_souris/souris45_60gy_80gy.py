@@ -24,20 +24,20 @@ souris5-j11-80gy    0,1       ...       0,3
 # Correspondances pétri → (dose, souris valides)
 config = {
     'jour2': {
-        'petri1': ('0gy',      ['souris1', 'souris2', 'souris3']),
-        'petri2': ('45gy',     ['souris1', 'souris2']),
+        'petri4': ('60gy',     ['souris4', 'souris5']),
+        'petri5': ('80gy',     ['souris4']),
     },
     'jour4': {
-        'petri3': ('0gy',      ['souris1', 'souris2', 'souris3']),
-        'petri5': ('45gy',     ['souris1', 'souris2']),
+        'petri1': ('60gy',     ['souris4', 'souris5']),
+        'petri2': ('80gy',     ['souris4', 'souris5']),
     },
     'jour_8': {
-        'petri1': ('0gy',      ['souris1', 'souris2', 'souris3']),
-        'petri2': ('45gy',     ['souris1', 'souris2', 'souris3']),
+        'petri4': ('60gy',     ['souris4', 'souris5']),
+        'petri5': ('80gy',     ['souris4', 'souris5']),
     },
     'jour_11': {
-        'petri1': ('0gy',      ['souris1', 'souris2', 'souris3']),
-        'petri2': ('45gy',     ['souris1', 'souris3']),
+        'petri3': ('60gy',     ['souris4', 'souris5']),
+        'petri4': ('80gy',     ['souris4', 'souris5']),
     },
 }
 
@@ -73,6 +73,7 @@ for jour, petris in config.items():
             etiquettes.append(f"{souris}-{jour}-{dose}")
 
 # Cas spéciaux souris1.1 et souris2.1 (j8, petri3)
+
 plus_pansement = False
 for souris_sp in ['souris1.1', 'souris2.1']:
     souris_label = souris_sp.replace('.', '_')
@@ -104,17 +105,11 @@ for i, v in enumerate(pca.explained_variance_ratio_):
     print(f"  PC{i+1} : {v:.1%}")
 print(f"  Total : {sum(pca.explained_variance_ratio_):.1%}")
 
-
-# ─────────────────────────────────────────────
-# VISUALISATION PCA
-# ─────────────────────────────────────────────
-
 # ── Palette de couleurs par dose ─────────────────────────────────────────────
 doses_uniques = sorted(set(e.split('-')[-1] for e in etiquettes))
 palette = {
-    '0gy':       '#2196F3',   # bleu
-    '45gy':      '#F44336',   # rouge
-    '45gy + P':  '#FF9800',   # orange
+    '60gy':       '#2196F3',   # bleu
+    '80gy':       '#F44336',   # rouge
 }
 # Couleur de repli pour toute dose non prévue
 couleur_defaut = '#9C27B0'
@@ -184,5 +179,4 @@ fig.legend(
 
 plt.tight_layout(rect=[0, 0.05, 1, 1])
 plt.show()
-
 

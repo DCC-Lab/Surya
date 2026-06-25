@@ -294,7 +294,7 @@ def lecteur_fichier_j4(jour, petri, souris):
     Gère la structure : racine/jour/raman/petri/souris_dose_zone*/
     cependant, les souris sont mélangées en un dossier
     '''
-    dossier_petri = os.path.join(racine3, jour, "raman", petri)
+    dossier_petri = os.path.join(racine2, jour, "raman", petri)
 
     if not os.path.exists(dossier_petri):
         print(f"Dossier absent : {dossier_petri}")
@@ -305,3 +305,6 @@ def lecteur_fichier_j4(jour, petri, souris):
     fichiers = sorted(glob.glob(pattern))
 
     return fichiers
+
+
+
