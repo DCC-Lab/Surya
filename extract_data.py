@@ -183,7 +183,7 @@ dossier_verre = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\P
 liste_fichiers_verre =  sorted(glob.glob(os.path.join(dossier_verre, "*.txt")))
 
 
-def traiter_acquisitions_j8_j11(liste_fichiers, wn_min=500, wn_max=3025, retirer_cosmiques=True):
+def traiter_acquisitions_verre(liste_fichiers, wn_min=500, wn_max=3025, retirer_cosmiques=True):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
     Soustrait le spectre du verre et corrige la fluorescence.
@@ -204,7 +204,7 @@ def traiter_acquisitions_j8_j11(liste_fichiers, wn_min=500, wn_max=3025, retirer
 dossier_gellose = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya\spectre_gellose"
 liste_fichiers_gellose = sorted(glob.glob(os.path.join(dossier_gellose, "*.txt")))
 
-def traiter_acquisitions_j2_j4(liste_fichiers, wn_min=500, wn_max=3025, retirer_cosmiques=True):
+def traiter_acquisitions_gellose(liste_fichiers, wn_min=500, wn_max=3025, retirer_cosmiques=True):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
     Soustrait le spectre de la gellose et corrige la fluorescence.

@@ -1,4 +1,4 @@
-from extract_data import traiter_acquisitions_j2_j4, traiter_acquisitions_j8_j11, lecteur_fichier_j2, lecteur_fichier_j4, lecteur_fichier_j8_j11
+from extract_data import traiter_acquisitions_gellose, traiter_acquisitions_verre, lecteur_fichier_j2, lecteur_fichier_j4, lecteur_fichier_j8_j11
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
@@ -8,7 +8,7 @@ import numpy as np
 
 
 # ─────────────────────────────────────────────
-# CONSTRUCTION DE LA MATRICE DE DONNÉES
+# CONSTRUCTION DE LA MATRICE DE DONNÉESss
 # ─────────────────────────────────────────────
 # DIFFÉRENCIER PETRI DE ZONE !!!!!!!!!!!!!!
 """
@@ -68,10 +68,10 @@ for jour, petris in config.items():
             liste_fichiers = lecteurs[jour](jour, petri, souris)
             if not liste_fichiers:
                 continue
-            if jour == 'jour2' or jour == 'jour4':
-                w, i = traiter_acquisitions_j2_j4(liste_fichiers)
-            elif jour == 'jour_8' or jour == 'jour_11':
-                w, i = traiter_acquisitions_j8_j11(liste_fichiers)
+            if jour == 'jour2':
+                w, i = traiter_acquisitions_gellose(liste_fichiers)
+            elif jour == 'jour_8' or jour == 'jour_11' or jour == 'jour4':
+                w, i = traiter_acquisitions_verre(liste_fichiers)
             else:
                 print(f"⚠️ Jour inconnu : {jour}")
                 continue          # ← évite le NameError
@@ -88,7 +88,7 @@ for souris_sp in ['souris1.1', 'souris2.1']:
     souris_label = souris_sp.replace('.', '_')
     liste_fichiers = lecteur_fichier_j8_j11('jour_8', 'petri3', souris_sp)
     if liste_fichiers:
-        w, i = traiter_acquisitions_j8_j11(liste_fichiers)
+        w, i = traiter_acquisitions_verre(liste_fichiers)
         if i is not None and np.isfinite(i).all():
             spectres.append(i)
             etiquettes.append(f"{souris_label}-jour_8-45gy + P")
@@ -121,10 +121,17 @@ import matplotlib.patches as mpatches
 # ── 1. Définir les mappings ───────────────────────────────────────────────────
 color_map = {
     '0gy':      'blue',
-    '45gy':     'orange',
-    '45gy + P': 'purple',
+    '45gy':     'green',
+    '45gy + P': 'orange',
     '60gy':     'red',
-    '80gy':     'green',
+    '80gy':     'purple',
+}
+
+marker_map = {
+    'jour2':   '^',   # triangle
+    'jour4':   's',   # carré
+    'jour_8':  'o',   # cercle
+    'jour_11': 'D',   # diamant
 }
 
 # ── 2. Extraire dose/souris/jour depuis les étiquettes ───────────────────────
@@ -132,22 +139,26 @@ doses  = [e.split('-')[-1] for e in etiquettes]
 souris = [e.split('-')[0]  for e in etiquettes]
 jours  = [e.split('-')[1]  for e in etiquettes]
 
-#3── 3. Plot ───────────────────────────────────────────────────────────────────
+# ── 3. Plot ───────────────────────────────────────────────────────────────────
 fig, axes = plt.subplots(1, 2, figsize=(16, 7))
+
 for ax, (pc_x, pc_y) in zip(axes, [(0, 1), (0, 2)]):
     for idx in range(len(etiquettes)):
-        dose = doses[idx]
-        color = color_map[dose]
+        dose   = doses[idx]
+        jour   = jours[idx]
+        color  = color_map[dose]
+        marker = marker_map.get(jour, 'x')   # 'x' si jour inconnu
 
         ax.scatter(
             X_reduced[idx, pc_x],
             X_reduced[idx, pc_y],
             color=color,
+            marker=marker,
             s=60,
         )
 
         ax.annotate(
-            f"{souris[idx]}\n({jours[idx]})",
+            souris[idx],                    # juste le nom, le jour est déjà dans la forme
             xy=(X_reduced[idx, pc_x], X_reduced[idx, pc_y]),
             xytext=(5, 5),
             textcoords='offset points',
@@ -159,9 +170,22 @@ for ax, (pc_x, pc_y) in zip(axes, [(0, 1), (0, 2)]):
     ax.set_ylabel(f"PC{pc_y+1} ({pca.explained_variance_ratio_[pc_y]:.1%})")
     ax.axhline(0, color='grey', lw=0.5)
     ax.axvline(0, color='grey', lw=0.5)
-# ── 4. Légende ────────────────────────────────────────────────────────────────
-handles = [mpatches.Patch(color=c, label=d) for d, c in color_map.items()]
-axes[1].legend(handles=handles, title="Dose", bbox_to_anchor=(1.05, 1))
+
+# ── 4. Légende dose (couleur) ─────────────────────────────────────────────────
+handles_dose = [mpatches.Patch(color=c, label=d) for d, c in color_map.items()]
+
+# ── 5. Légende jour (forme) ───────────────────────────────────────────────────
+handles_jour = [
+    plt.scatter([], [], marker=m, color='grey', label=j)
+    for j, m in marker_map.items()
+]
+
+axes[1].legend(
+    handles=handles_dose + handles_jour,
+    title="Dose / Jour",
+    bbox_to_anchor=(1.05, 1),
+    loc='upper left',
+)
 
 plt.suptitle("PCA — Score plots")
 plt.tight_layout()
