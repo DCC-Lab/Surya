@@ -31,7 +31,7 @@ config = {
         'petri5': ('80gy',     ['souris4']),
     },
     'jour4': {
-        'petri1': ('60gy',     ['souris4ou5', 'souris5ou4']),
+        'petri1': ('60gy',     ['souris4', 'souris5']),
         'petri2': ('80gy',     ['souris4', 'souris5']),
         'petri3': ('0gy',      ['souris1', 'souris2', 'souris3']),
         'petri4': ('45gy + P', ['souris1', 'souris2', 'souris3']),
@@ -161,7 +161,7 @@ for ax, (pc_x, pc_y) in zip(axes, [(0, 1), (0, 2)]):
     ax.axvline(0, color='grey', lw=0.5)
 # ── 4. Légende ────────────────────────────────────────────────────────────────
 handles = [mpatches.Patch(color=c, label=d) for d, c in color_map.items()]
-axes[1].legend(handlesss=handles, title="Dose", bbox_to_anchor=(1.05, 1))
+axes[1].legend(handles=handles, title="Dose", bbox_to_anchor=(1.05, 1))
 
 plt.suptitle("PCA — Score plots")
 plt.tight_layout()

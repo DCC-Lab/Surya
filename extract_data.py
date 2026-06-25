@@ -287,13 +287,14 @@ def lecteur_fichier_j2(jour, petri, souris):
     return fichiers
 
 #J4
+racine3 = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya"
 
 def lecteur_fichier_j4(jour, petri, souris):
     ''' 
     Gère la structure : racine/jour/raman/petri/souris_dose_zone*/
     cependant, les souris sont mélangées en un dossier
     '''
-    dossier_petri = os.path.join(racine2, jour, "raman", petri)
+    dossier_petri = os.path.join(racine3, jour, "raman", petri)
 
     if not os.path.exists(dossier_petri):
         print(f"Dossier absent : {dossier_petri}")
@@ -305,4 +306,6 @@ def lecteur_fichier_j4(jour, petri, souris):
 
     return fichiers
 
-w, i = traiter_acquisitions_j2_j4(lecteur_fichier_j4("jour4", "petri1", "souris4ou5"), wn_min=500, wn_max=3025, retirer_cosmiques=True)
+#w, i = traiter_acquisitions_j2_j4(lecteur_fichier_j4("jour4", "petri1", "souris4"), wn_min=500, wn_max=3025, retirer_cosmiques=True)
+#print(f"première 10 longueurs d'onde : {w[:10]}")
+#print(f"première 10 intensités : {i[:10]}")
