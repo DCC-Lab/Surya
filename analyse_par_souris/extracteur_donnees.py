@@ -289,7 +289,7 @@ def lecteur_fichier_j2(jour, petri, souris):
 #J4
 racine3 = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya"
 
-def lecteur_fichier_j4(jour, petri, souris):
+def lecteur_fichier_j4_gellose(jour, petri, souris):
     ''' 
     Gère la structure : racine/jour/raman/petri/souris_dose_zone*/
     cependant, les souris sont mélangées en un dossier
@@ -306,5 +306,21 @@ def lecteur_fichier_j4(jour, petri, souris):
 
     return fichiers
 
+def lecteur_fichier_j4_verre(jour, petri, souris):
+    ''' 
+    Gère la structure : racine/jour/raman/petri/souris_dose_zone*/
+    cependant, les souris sont mélangées en un dossier
+    '''
+    dossier_petri = os.path.join(racine3, jour, "raman", petri)
+
+    if not os.path.exists(dossier_petri):
+        print(f"Dossier absent : {dossier_petri}")
+        return []   # ← retourne liste vide mais l'appelant continue
+
+    # cherche tous les fichiers qui commencent par le nom de la souris
+    pattern = os.path.join(dossier_petri, f"{souris}*.txt")
+    fichiers = sorted(glob.glob(pattern))
+
+    return fichiers
 
 

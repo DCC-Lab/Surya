@@ -1,4 +1,4 @@
-from extracteur_donnees import traiter_acquisitions_gellose, traiter_acquisitions_verre, lecteur_fichier_j2, lecteur_fichier_j4, lecteur_fichier_j8_j11
+from extracteur_donnees import traiter_acquisitions_gellose, traiter_acquisitions_verre, lecteur_fichier_j2, lecteur_fichier_j4_verre, lecteur_fichier_j4_gellose, lecteur_fichier_j8_j11
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
@@ -43,7 +43,7 @@ config = {
 
 lecteurs = {
     'jour2':  lecteur_fichier_j2,
-    'jour4':  lecteur_fichier_j4,
+    'jour4':  lecteur_fichier_j4_gellose,
     'jour_8': lecteur_fichier_j8_j11,
     'jour_11':lecteur_fichier_j8_j11,
 }
@@ -127,7 +127,7 @@ def label_court(etiquette):
     return f"{souris} {jour}"
 
 fig, axes = plt.subplots(1, 2, figsize=(16, 7))
-fig.suptitle("ACP des spectres Raman — coloration par dose", fontsize=14, fontweight='bold')
+fig.suptitle("Analyse PCA - souris mâle (4 et 5) - données dans gellose J4", fontsize=14, fontweight='bold')
 
 plans = [
     (axes[0], 0, 1, 'PC1', 'PC2'),
