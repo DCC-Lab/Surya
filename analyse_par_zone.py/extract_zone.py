@@ -218,18 +218,13 @@ def traiter_acquisitions_gellose(liste_fichiers, wn_min=500, wn_max=3025, retire
 racine1 = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya"
 
 def extraire_fichiers_jours_8_11(jour, petri, souris, zone):
-    '''
-    Gère la structure des fichiers tels que jour\Raman\petri1\zone1\*.txt¸
-    Retourne une liste de fichiers (d'habitude 10) provenant d'une zone
-    spécifique
-    '''
     dossier = os.path.join(racine1, jour, "Raman", petri, souris, zone)
             # Si le dossier n'existe pas, on le saute sans buguer
     if not os.path.exists(dossier):
         return []
     # Chercher les fichiers .txt dans ce dossier
     fichiers_zone = glob.glob(os.path.join(dossier, "*.txt"))
-    print(f'Premier 10 fichiers de la zone {zone} du jour {jour} : {fichiers_zone}')
+    #print(f'Premier 10 fichiers de la zone {zone} du jour {jour} : {fichiers_zone}')
     return fichiers_zone
 
 #extraire_fichiers_jours_8_11("jour_8", "petri1", "souris1", "zone1")
@@ -254,7 +249,7 @@ def extraire_fichiers_jour_2(jour, petri, souris, zone):
         return []
 
     fichiers_zone = sorted(glob.glob(os.path.join(dossiers_trouves[0], "*.txt")))
-    print(f'Fichiers de la {zone} du {petri} du {jour} : {fichiers_zone}')
+    #print(f'Fichiers de la {zone} du {petri} du {jour} : {fichiers_zone}')
     
     return fichiers_zone
     
@@ -272,30 +267,26 @@ def extraire_fichiers_jour_4(jour, petri, souris, zone, fichiers_par_zone=10):
     zone : int (1, 2, 3...)
     """
     dossier = os.path.join(racine2, jour, "Raman", petri)
-    pattern = os.path.join(dossier, f"{souris}*")
-    dossier_trouves = sorted(glob.glob(pattern))
-    # Récupère tous les .txt du dossier
-    tous_les_fichiers = glob.glob(os.path.join(dossier_trouves, "*.txt"))
+
+    pattern = os.path.join(dossier, f"{souris}*.txt")
+
+    tous_les_fichiers = sorted(glob.glob(pattern))
     
     if not tous_les_fichiers:
-        print(f"Aucun fichier trouvé dans : {dossier_trouves}")
+        #print(f"Aucun fichier trouvé avec le pattern : {pattern}")
         return []
     
     # Trie par date de modification (le plus ancien en premier)
     tous_les_fichiers_tries = sorted(tous_les_fichiers, key=lambda f: os.path.getmtime(f))
     
     # Découpe en tranches de 10
-    indice = float(zone[-1])
-    print(indice)
+    indice = int(zone[-1])
     debut = (indice - 1) * fichiers_par_zone
     fin = debut + fichiers_par_zone
     fichiers_zone = tous_les_fichiers_tries[debut:fin]
     
-    if not fichiers_zone:
-        print(f"Zone {zone} inexistante dans : {dossier_trouves}")
-        return []
     
-    print(f"Zone {zone} — {len(fichiers_zone)} fichiers trouvés")
+    #print(f"{zone} — {len(fichiers_zone)} fichiers trouvés")
     return fichiers_zone
 
-extraire_fichiers_jour_4("jour4", "petri1", "souris1", 'zone1')
+extraire_fichiers_jour_4("jour4", "petri1", "souris4ou5", 'zone2')
