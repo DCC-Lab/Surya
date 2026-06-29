@@ -236,13 +236,18 @@ racine2 = r"\\cafeine3.crulrg.ulaval.ca\Goliath\Goliath\labdata\dcclab\surya"
 def extraire_fichiers_jour_2(jour, petri, souris, zone):
     dossier = os.path.join(racine2, jour, "raman", petri)
 
-    pattern = os.path.join(dossier, f"{souris}*{zone}*")
-    dossiers_trouves = sorted(glob.glob(pattern))
+    if petri == 'petri1' and souris == 'souris1':
+        pattern = os.path.join(dossier, f"{souris}*")
 
+    else:
+        pattern = os.path.join(dossier, f"{souris}*{zone}*")
+
+    dossiers_trouves = sorted(glob.glob(pattern))
+    
     if not dossiers_trouves:
         print(f"La {zone} de la {souris} du {petri} n'existe pas")
         return []
-    
+
     fichiers_zone = sorted(glob.glob(os.path.join(dossiers_trouves, "*.txt")))
     print(f'Fichiers de la zone {zone} du jour {jour} : {fichiers_zone}')
     
