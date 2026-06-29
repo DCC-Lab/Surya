@@ -194,11 +194,16 @@ def get_marker(s):
 #plt.show()
 
 
-fig2, ax = plt.subplots(figsize=(10, 4))
-ax.plot(w, pca.components_[0], color='blue')   # components_[0] = PC1
-ax.set_xlabel("Longueur d'onde (nm)")
-ax.set_ylabel("Loading")
-ax.set_title(f"PC1 loading ({pca.explained_variance_ratio_[0]:.1%} de variance)")
-ax.axhline(0, color='grey', lw=0.5)
+colors = ['blue', 'orange', 'green', 'red', 'purple']
+
+fig2, axes = plt.subplots(5, 1, figsize=(10, 18))
+
+for i, ax in enumerate(axes):
+    ax.plot(w, pca.components_[i], color=colors[i])
+    ax.set_xlabel("Longueur d'onde (nm)")
+    ax.set_ylabel("Loading")
+    ax.set_title(f"PCA — PC{i+1} ({pca.explained_variance_ratio_[i]:.1%} de variance)")
+    ax.axhline(0, color='grey', lw=0.5)
+
 plt.tight_layout()
 plt.show()
