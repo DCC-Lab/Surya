@@ -112,7 +112,7 @@ def corriger_fluorescence(intensite, min_bubble_widths=50, fit_order=1):
     
     return spectre_corrigé
 
-def traiter_acquisitions(liste_fichiers, wn_min=500, wn_max=3025,
+def traiter_acquisitions(liste_fichiers,
                           retirer_cosmiques=True, retirer_fluorescence=True):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
@@ -126,7 +126,7 @@ def traiter_acquisitions(liste_fichiers, wn_min=500, wn_max=3025,
         return None, None
 
     for fichier in liste_fichiers:
-        wn, intensite = formater_donnees(fichier, wn_min, wn_max)
+        wn, intensite = formater_donnees(fichier)
 
         if wn is None:  # ← saute les fichiers mal formatés
             continue
@@ -157,7 +157,7 @@ def traiter_acquisitions(liste_fichiers, wn_min=500, wn_max=3025,
 dossier_verre = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya\jour_2\spectre du verre"
 liste_fichiers_verre =  sorted(glob.glob(os.path.join(dossier_verre, "*.txt")))
 
-def traiter_acquisitions_verre(liste_fichiers, wn_min=500, wn_max=3025, retirer_cosmiques=True):
+def traiter_acquisitions_verre(liste_fichiers, retirer_cosmiques=True):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
     Soustrait le spectre du verre et corrige la fluorescence.
@@ -165,8 +165,8 @@ def traiter_acquisitions_verre(liste_fichiers, wn_min=500, wn_max=3025, retirer_
     Retourne (wavenumbers, spectre_centré).
     """
     
-    wn, i = traiter_acquisitions(liste_fichiers, wn_min, wn_max, retirer_cosmiques)
-    wn_verre, i_verre = traiter_acquisitions(liste_fichiers_verre, wn_min, wn_max, retirer_cosmiques)
+    wn, i = traiter_acquisitions(liste_fichiers, retirer_cosmiques)
+    wn_verre, i_verre = traiter_acquisitions(liste_fichiers_verre, retirer_cosmiques)
     intensite_SV = soustraire_spectre(wn, i, wn_verre, i_verre)
     intensité_SV_SF = corriger_fluorescence(intensite_SV, min_bubble_widths=50, fit_order=1)
     return wn, intensité_SV_SF - np.mean(intensité_SV_SF)
@@ -178,15 +178,15 @@ def traiter_acquisitions_verre(liste_fichiers, wn_min=500, wn_max=3025, retirer_
 dossier_gellose = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya\spectre_gellose"
 liste_fichiers_gellose = sorted(glob.glob(os.path.join(dossier_gellose, "*.txt")))
 
-def traiter_acquisitions_gellose(liste_fichiers, wn_min=500, wn_max=3025, retirer_cosmiques=True):
+def traiter_acquisitions_gellose(liste_fichiers, retirer_cosmiques=True):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
     Soustrait le spectre de la gellose et corrige la fluorescence.
     Centrage des données en soustrayant la moyenne.
     Retourne (wavenumbers, spectre_centré).
     """
-    wn, i = traiter_acquisitions(liste_fichiers, wn_min, wn_max, retirer_cosmiques)
-    wn_gellose, i_gellose = traiter_acquisitions(liste_fichiers_gellose, wn_min, wn_max, retirer_cosmiques)
+    wn, i = traiter_acquisitions(liste_fichiers, retirer_cosmiques)
+    wn_gellose, i_gellose = traiter_acquisitions(liste_fichiers_gellose, retirer_cosmiques)
     # ── Vérification avant soustraction ──────────────────────────────────────
     if wn is None or i is None:
         print("❌ Échantillon : None")
