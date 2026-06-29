@@ -9,7 +9,7 @@ import numpy as np
 config = {
     'jour2': {
         'petri1': ('0gy',      {'souris1': ['zone1'], 'souris2': ['zone1','zone2'], 'souris3': ['zone1','zone2','zone3']}),
-        'petri2': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3']}),
+        'petri2': ('45gy',     {'souris1': ['zone1','zone2'], 'souris2': ['zone1','zone2','zone3']}),
         'petri3': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
         'petri4': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
         'petri5': ('80gy',     {'souris4': ['zone1','zone2','zone3']}),
@@ -133,52 +133,45 @@ def get_marker(s):
     return 'x'
 
 # ── Extraire dose/souris/jour depuis les étiquettes ──────────────────────────
+
 doses  = [e.split('-')[-1] for e in etiquettes]
 souris = [e.split('-')[0]  for e in etiquettes]
-jours  = [e.split('-')[1]  for e in etiquettes]
+zones  = [e.split('-')[1]  for e in etiquettes]
+jours  = [e.split('-')[2]  for e in etiquettes]
 
-# ── Plot ──────────────────────────────────────────────────────────────────────
 fig, axes = plt.subplots(1, 2, figsize=(16, 7))
 
 for ax, (pc_x, pc_y) in zip(axes, [(0, 1), (0, 2)]):
     for idx in range(len(etiquettes)):
-        dose   = doses[idx]
-        jour   = jours[idx]
-        s      = souris[idx]
-        color  = color_map[dose]
-        marker = get_marker(s)
-        est_replique = s.endswith('_1')
+        dose  = doses[idx]
+        jour  = jours[idx]
+        s     = souris[idx]
+        zone  = zones[idx]
+        color = color_map[dose]
 
         ax.scatter(
             X_reduced[idx, pc_x],
             X_reduced[idx, pc_y],
             color=color,
-            marker=marker,
-            s=60,
-            edgecolors='black' if est_replique else 'none',
-            linewidths=1.2,
+            marker='o',
+            s=50,
+            edgecolors='none',
         )
 
-        # ── Étiquette selon le cas ────────────────────────────────────────────
-        if s in ('souris1', 'souris2') and jour == 'jour_8':
-            # souris1 à j8 → "#1" pour la distinguer de souris1_1
-            num = s.replace('souris', '')
-            etiquette_point = f"#{num}\n{jour}"
-        elif s in ('souris1_1', 'souris2_1'):
-            # souris1_1 → "#2" (deuxième individu)
-            num = s.replace('souris', '').replace('_1', '')
-            etiquette_point = f"#{num} bis\n{jour}"
-        else:
-            # toutes les autres souris → juste le jour
-            etiquette_point = jour
+        # Étiquette : jour abrégé + numéro souris + zone
+        num_souris = s.replace('souris', '')
+        num_zone   = zone.replace('zone', 'z')
+        jour_court = jour.replace('jour_', 'j').replace('jour', 'j')  # jour4→j4, jour_8→j8
+        etiquette_point = f"j{jour_court[-1] if '_' not in jour else jour_court[1:]}·s{num_souris}·{num_zone}"
 
         ax.annotate(
             etiquette_point,
             xy=(X_reduced[idx, pc_x], X_reduced[idx, pc_y]),
-            xytext=(5, 5),
+            xytext=(3, 3),
             textcoords='offset points',
-            fontsize=6,
-            color=color,
+            fontsize=5,
+            color='black',
+            alpha=0.7,
         )
 
     ax.set_xlabel(f"PC{pc_x+1} ({pca.explained_variance_ratio_[pc_x]:.1%})")
@@ -186,25 +179,14 @@ for ax, (pc_x, pc_y) in zip(axes, [(0, 1), (0, 2)]):
     ax.axhline(0, color='grey', lw=0.5)
     ax.axvline(0, color='grey', lw=0.5)
 
-# ── Légende ───────────────────────────────────────────────────────────────────
+# Légende : seulement les doses
 handles_dose = [mpatches.Patch(color=c, label=d) for d, c in color_map.items()]
-
-handles_souris = [
-    plt.scatter([], [], marker=m, color='grey', label=s)
-    for s, m in marker_map.items()
-]
-
-handles_replique = [
-    plt.scatter([], [], marker='o', color='grey', edgecolors='none',  label='souris originale'),
-    plt.scatter([], [], marker='o', color='grey', edgecolors='black', linewidths=1.2, label='souris _1 (réplique)'),
-]
-
 axes[1].legend(
-    handles=handles_dose + handles_souris + handles_replique,
-    title="Dose / Souris / Réplique",
+    handles=handles_dose,
+    title="Dose",
     bbox_to_anchor=(1.05, 1),
     loc='upper left',
-    fontsize=7,
+    fontsize=8,
 )
 
 plt.suptitle("PCA — Score plots")
