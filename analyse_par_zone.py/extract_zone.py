@@ -245,7 +245,7 @@ def extraire_fichiers_jour_2(jour, petri, souris, zone):
     dossiers_trouves = sorted(glob.glob(pattern))
     
     if not dossiers_trouves:
-        print(f"La {zone} de la {souris} du {petri} n'existe pas")
+        print(f"Pour le {jour} La {zone} de la {souris} du {petri} n'existe pas")
         return []
 
     fichiers_zone = sorted(glob.glob(os.path.join(dossiers_trouves[0], "*.txt")))
