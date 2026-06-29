@@ -1,4 +1,4 @@
-from extracteur_donnees import traiter_acquisitions_gellose, traiter_acquisitions_verre, lecteur_fichier_j2, lecteur_fichier_j4_verre, lecteur_fichier_j8_j11
+from extracteur_donnees import traiter_acquisitions_gellose, traiter_acquisitions_verre, lecteur_fichier_j2, lecteur_fichier_j4_gellose, lecteur_fichier_j8_j11
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
@@ -43,7 +43,7 @@ config = {
 
 lecteurs = {
     'jour2':  lecteur_fichier_j2,
-    'jour4':  lecteur_fichier_j4_verre,
+    'jour4':  lecteur_fichier_j4_gellose,
     'jour_8': lecteur_fichier_j8_j11,
     'jour_11':lecteur_fichier_j8_j11,
 }
@@ -78,7 +78,7 @@ for souris_sp in ['souris1.1', 'souris2.1']:
     souris_label = souris_sp.replace('.', '_')
     liste_fichiers = lecteur_fichier_j8_j11('jour_8', 'petri3', souris_sp)
     if liste_fichiers and plus_pansement:
-        w, i = traiter_acquisitions_verre(liste_fichiers)
+        w, i = traiter_acquisitions_gellose(liste_fichiers)
         if i is not None and np.isfinite(i).all():
             spectres.append(i)
             etiquettes.append(f"{souris_label}-jour_8-45gy + P")
@@ -132,7 +132,7 @@ def label_court(etiquette):
     return f"{souris} {jour}"
 
 fig, axes = plt.subplots(1, 2, figsize=(16, 7))
-fig.suptitle("ACP des spectres Raman — coloration par dose", fontsize=14, fontweight='bold')
+fig.suptitle("Analyse PCA - souris 1, 2 et 3 - 0gy et 45gy - Données acquisent par Daniel", fontsize=14, fontweight='bold')
 
 plans = [
     (axes[0], 0, 1, 'PC1', 'PC2'),
@@ -171,15 +171,13 @@ patches = [
     for dose, c in palette.items()
     if dose in doses_uniques
 ]
-fig.legend(
+axes[0].legend(
     handles=patches,
     title='Dose',
-    loc='lower center',
-    ncol=len(patches),
-    bbox_to_anchor=(0.5, -0.04),
     fontsize=10,
     title_fontsize=10,
     frameon=True,
+    loc='best',
 )
 
 plt.tight_layout(rect=[0, 0.05, 1, 1])

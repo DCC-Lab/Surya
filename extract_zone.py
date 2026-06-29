@@ -50,11 +50,6 @@ def formater_donnees(chemin_fichier, wn_min=500, wn_max=3025):
     masque = (wn >= wn_min) & (wn <= wn_max)
     return wn[masque], intensite[masque]
 
-
-# ─────────────────────────────────────────────
-# 2. RETRAIT DES RAYONS COSMIQUES
-# ─────────────────────────────────────────────
-
 def retirer_rayons_cosmiques(intensite, seuil=10.0, fenetre=5):
     """
     Détecte et remplace les spikes de rayons cosmiques.
@@ -76,7 +71,6 @@ def retirer_rayons_cosmiques(intensite, seuil=10.0, fenetre=5):
                                            [intensite[i - demi], intensite[i + demi]])
     return intensite_corr
 
-# ─────────────────────────────────────────────
 # 3. SOUSTRACTION DE SPECTRE NOCIFS
 # ─────────────────────────────────────────────
 
@@ -99,10 +93,6 @@ def soustraire_spectre(wn_echantillon, intensite_echantillon,
     
     return intensite_corrigee
 
-# ─────────────────────────────────────────────
-# 4. CORRECTION DE FLUORESCENCE (baseline)
-# ─────────────────────────────────────────────
-
 def corriger_fluorescence(intensite, min_bubble_widths=50, fit_order=1):
     """
     Supprime l'autofluorescence avec l'algorithme BubbleFill (ORPL).
@@ -121,12 +111,6 @@ def corriger_fluorescence(intensite, min_bubble_widths=50, fit_order=1):
     spectre_corrigé =  résultat[0]
     
     return spectre_corrigé
-
-
-# ───────────────────────────────────────────────────────────
-# 5. COMBINAISON DES ACQUISITIONS + RETRAITS RAYONS COSMIQUES
-# ───────────────────────────────────────────────────────────
-
 
 def traiter_acquisitions(liste_fichiers, wn_min=500, wn_max=3025,
                           retirer_cosmiques=True, retirer_fluorescence=True):
@@ -158,7 +142,6 @@ def traiter_acquisitions(liste_fichiers, wn_min=500, wn_max=3025,
         if len(wn) != len(wn_ref):
             intensite = np.interp(wn_ref, wn, intensite)
 
-
         # ajout à la liste des spectres
         spectres.append(intensite)
     
@@ -171,18 +154,8 @@ def traiter_acquisitions(liste_fichiers, wn_min=500, wn_max=3025,
 
     return wn_ref, intensite_sans_fluorescence
 
-
-
-
-
-# ────────────────────────────────────────────────────────────────────────
-# 6. RETRAITS DU VERRE + CENTRAGE DES DONNÉES: JOUR 8 ET 11
-# ────────────────────────────────────────────────────────────────────────
-
-
 dossier_verre = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya\jour_2\spectre du verre"
 liste_fichiers_verre =  sorted(glob.glob(os.path.join(dossier_verre, "*.txt")))
-
 
 def traiter_acquisitions_verre(liste_fichiers, wn_min=500, wn_max=3025, retirer_cosmiques=True):
     """
@@ -232,81 +205,47 @@ def traiter_acquisitions_gellose(liste_fichiers, wn_min=500, wn_max=3025, retire
     intensité_SG_SF = corriger_fluorescence(intensite_SG, min_bubble_widths=50, fit_order=1)
     return wn, intensité_SG_SF - np.mean(intensité_SG_SF)
 
-# ─────────────────────────────────────────────
-# OBTENTEUR DE FICHIERS J2, J4, J8, J11
-# ─────────────────────────────────────────────
+# ───────────────────────────────────────────────────
+# on va créer des fonctions 
+# pour extraire les fichiers par zone et non par 
+# souris
+#────────────────────────────────────────────────────
 
-#J8, J11
+
+
+#──────────────────────1. FICHIER DES JOURS 8 ET 11────────────────────────────
 
 racine1 = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya"
 
-def lecteur_fichier_j8_j11(jour, petri, souris):
-    
-    fichiers = []
+def extraire_fichiers_jours_8_11(jour, petri, souris, zone):
+    dossier = os.path.join(racine1, jour, "Raman", petri, souris, zone)
+            # Si le dossier n'existe pas, on le saute sans buguer
+    if not os.path.exists(dossier):
+        return []
+    # Chercher les fichiers .txt dans ce dossier
+    fichiers_zone = glob.glob(os.path.join(dossier, "*.txt"))
+    print(f'Premier 10 fichiers de la zone {zone} du jour {jour} : {fichiers_zone}')
+    return fichiers_zone
 
-    for i in range(1, 4):
-        zone = f"zone{i}"
-        dossier = os.path.join(racine1, jour, "Raman", petri, souris, zone)
-        
-        # Si le dossier n'existe pas, on le saute sans buguer
-        if not os.path.exists(dossier):
-            #print(f"Dossier absent, ignoré : {dossier}")
-            continue
-        
-        # Chercher les fichiers .txt dans ce dossier
-        fichiers_zone = glob.glob(os.path.join(dossier, "*.txt"))
-        fichiers.extend(fichiers_zone)
+#extraire_fichiers_jours_8_11("jour_8", "petri1", "souris1", "zone1")
 
-    fichiers = sorted(fichiers)
-    return fichiers
-
-#J2
+#───────────────2. FICHIER DU JOUR 2 ────────────────
 
 racine2 = r"\\cafeine3.crulrg.ulaval.ca\Goliath\Goliath\labdata\dcclab\surya"
 
-def lecteur_fichier_j2(jour, petri, souris):
-    """
-    Gère la structure : racine/jour/raman/petri/souris_dose_zone*/
-    ex: souris1_0Gy/  ou  souris2_0Gy_zone1/  souris2_0Gy_zone2/
-    """
-    fichiers = []
-    dossier_petri = os.path.join(racine2, jour, "raman", petri)
+def extraire_fichiers_jour_2(jour, petri, souris, zone):
+    dossier = os.path.join(racine2, jour, "raman", petri)
 
-    # Cherche tous les dossiers qui commencent par le nom de la souris
-    pattern = os.path.join(dossier_petri, f"{souris}*")
+    pattern = os.path.join(dossier, f"{souris}*{zone}*")
     dossiers_trouves = sorted(glob.glob(pattern))
 
     if not dossiers_trouves:
+        print(f"La {zone} de la {souris} du {petri} n'existe pas")
         return []
-
-    for dossier in dossiers_trouves:
-        if not os.path.isdir(dossier):
-            continue
-        fichiers_zone = sorted(glob.glob(os.path.join(dossier, "*.txt")))
-        fichiers.extend(fichiers_zone)
-
-    return fichiers
-
-#J4
-racine3 = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya"
-
-def lecteur_fichier_j4(jour, petri, souris):
-    ''' 
-    Gère la structure : racine/jour/raman/petri/souris_dose_zone*/
-    cependant, les souris sont mélangées en un dossier
-    '''
-    dossier_petri = os.path.join(racine3, jour, "raman", petri)
-
-    if not os.path.exists(dossier_petri):
-        print(f"Dossier absent : {dossier_petri}")
-        return []   # ← retourne liste vide mais l'appelant continue
-
-    # cherche tous les fichiers qui commencent par le nom de la souris
-    pattern = os.path.join(dossier_petri, f"{souris}*.txt")
-    fichiers = sorted(glob.glob(pattern))
-
-    return fichiers
-
-#w, i = traiter_acquisitions_j2_j4(lecteur_fichier_j4("jour4", "petri1", "souris4"), wn_min=500, wn_max=3025, retirer_cosmiques=True)
-#print(f"première 10 longueurs d'onde : {w[:10]}")
-#print(f"première 10 intensités : {i[:10]}")
+    
+    fichiers_zone = sorted(glob.glob(os.path.join(dossiers_trouves, "*.txt")))
+    print(f'Fichiers de la zone {zone} du jour {jour} : {fichiers_zone}')
+    
+    return fichiers_zone
+    
+extraire_fichiers_jour_2("jour2", "petri1", "souris1", "zone1")

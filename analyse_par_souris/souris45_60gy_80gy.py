@@ -43,7 +43,7 @@ config = {
 
 lecteurs = {
     'jour2':  lecteur_fichier_j2,
-    'jour4':  lecteur_fichier_j4_gellose,
+    'jour4':  lecteur_fichier_j4_verre,
     'jour_8': lecteur_fichier_j8_j11,
     'jour_11':lecteur_fichier_j8_j11,
 }
@@ -127,7 +127,7 @@ def label_court(etiquette):
     return f"{souris} {jour}"
 
 fig, axes = plt.subplots(1, 2, figsize=(16, 7))
-fig.suptitle("Analyse PCA - souris mâle (4 et 5) - données dans gellose J4", fontsize=14, fontweight='bold')
+fig.suptitle("Analyse PCA - souris mâle (4 et 5)- 60 et 80 gy - (j4 fixées et prisent sur le verre)", fontsize=14, fontweight='bold')
 
 plans = [
     (axes[0], 0, 1, 'PC1', 'PC2'),
@@ -166,15 +166,13 @@ patches = [
     for dose, c in palette.items()
     if dose in doses_uniques
 ]
-fig.legend(
+axes[0].legend(
     handles=patches,
     title='Dose',
-    loc='lower center',
-    ncol=len(patches),
-    bbox_to_anchor=(0.5, -0.04),
     fontsize=10,
     title_fontsize=10,
     frameon=True,
+    loc='best',
 )
 
 plt.tight_layout(rect=[0, 0.05, 1, 1])
