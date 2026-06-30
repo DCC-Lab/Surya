@@ -297,7 +297,7 @@ def extraire_fichiers_jour_0(jour, petri, souris, echantillon, zone, fichiers_pa
     tous_les_fichiers = sorted(glob.glob(pattern))
     
     if not tous_les_fichiers:
-        #print(f"Aucun fichier trouvé avec le pattern : {pattern}")
+        print(f"Aucun fichier trouvé avec le pattern : {pattern}")
         return []
     
     # Trie par date de modification (le plus ancien en premier)
@@ -309,7 +309,7 @@ def extraire_fichiers_jour_0(jour, petri, souris, echantillon, zone, fichiers_pa
     fin = debut + fichiers_par_zone
     fichiers_zone = tous_les_fichiers_tries[debut:fin]
 
-    #print(f"{zone} — {len(fichiers_zone)} fichiers trouvés")
+    print(f"{zone} — {len(fichiers_zone)} fichiers trouvés")
     return fichiers_zone    
 
 
