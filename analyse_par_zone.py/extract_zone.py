@@ -289,4 +289,31 @@ def extraire_fichiers_jour_4(jour, petri, souris, zone, fichiers_par_zone=10):
     #print(f"{zone} — {len(fichiers_zone)} fichiers trouvés")
     return fichiers_zone
 
-extraire_fichiers_jour_4("jour4", "petri1", "souris4", 'zone2')
+def extraire_fichiers_jour_0(jour, petri, souris, echantillon, zone, fichiers_par_zone=10):
+
+    dossier = os.path.join(racine1, jour, 'raman', petri, souris)
+
+    pattern = os.path.join(dossier, f"{echantillon}*.txt")
+    tous_les_fichiers = sorted(glob.glob(pattern))
+    
+    if not tous_les_fichiers:
+        print(f"Aucun fichier trouvé avec le pattern : {pattern}")
+        return []
+    
+    # Trie par date de modification (le plus ancien en premier)
+    tous_les_fichiers_tries = sorted(tous_les_fichiers, key=lambda f: os.path.getmtime(f))
+
+        # Découpe en tranches de 10
+    indice = int(zone[-1])
+    debut = (indice - 1) * fichiers_par_zone
+    fin = debut + fichiers_par_zone
+    fichiers_zone = tous_les_fichiers_tries[debut:fin]
+
+    print(f"{zone} — {len(fichiers_zone)} fichiers trouvés")
+    return fichiers_zone    
+
+
+
+
+
+extraire_fichiers_jour_0("jour0", "petri1", "souris1", 'echantillon1', 'zone2')
