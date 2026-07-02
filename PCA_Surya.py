@@ -236,7 +236,7 @@ handles_souris = [
 
 axes[1].legend(
     handles=handles_dose + handles_souris,
-    title="Dose / Souris / Réplique",
+    title="Dose et Souris",
     bbox_to_anchor=(1.05, 1),
     loc='upper left',
     fontsize=7,
@@ -247,17 +247,16 @@ plt.tight_layout()
 plt.show()
 
 # ── 5. Loadings PC1 selon longueur d'onde ────────────────────────────────────
-#plt.close('all')
 
 
 
-#fig2, ax = plt.subplots(figsize=(10, 4))
+fig2, ax = plt.subplots(figsize=(10, 4))
 
-#ax.plot(w, pca.components_[0], color='blue')   # components_[0] = PC1
-#ax.set_xlabel("Longueur d'onde (nm)")
-#ax.set_ylabel("Loading")
-#ax.set_title(f"PC1 loading ({pca.explained_variance_ratio_[0]:.1%} de variance)")
-#ax.axhline(0, color='grey', lw=0.5)
+ax.plot(w, pca.components_[0], color='blue')   # components_[0] = PC1
+ax.set_xlabel("Longueur d'onde (nm)")
+ax.set_ylabel("Loading")
+ax.set_title(f"PC1 loading ({pca.explained_variance_ratio_[0]:.1%} de variance)")
+ax.axhline(0, color='grey', lw=0.5)
 
-#plt.tight_layout()
-#plt.show()
+plt.tight_layout()
+plt.show()
