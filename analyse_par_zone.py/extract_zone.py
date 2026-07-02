@@ -169,7 +169,11 @@ def traiter_acquisitions_verre(liste_fichiers, retirer_cosmiques=True):
     wn_verre, i_verre = traiter_acquisitions(liste_fichiers_verre, retirer_cosmiques)
     intensite_SV = soustraire_spectre(wn, i, wn_verre, i_verre)
     intensité_SV_SF = corriger_fluorescence(intensite_SV, min_bubble_widths=50, fit_order=1)
-    return wn, intensité_SV_SF - np.mean(intensité_SV_SF)
+    
+    intensite_centree = intensité_SV_SF - np.mean(intensité_SV_SF)
+    i_nrml = intensite_centree / np.max(intensite_centree)
+    
+    return wn, i_nrml
 
 # ────────────────────────────────────────────────────────────────────────
 # 6. RETRAITS DE LA GELLOSE + CENTRAGE DES DONNÉES: JOUR 2 ET 4
@@ -203,7 +207,11 @@ def traiter_acquisitions_gellose(liste_fichiers, retirer_cosmiques=True):
     # ─────────────────────────────────────────────────────────────────────────
     intensite_SG = soustraire_spectre(wn, i, wn_gellose, i_gellose)
     intensité_SG_SF = corriger_fluorescence(intensite_SG, min_bubble_widths=50, fit_order=1)
-    return wn, intensité_SG_SF - np.mean(intensité_SG_SF)
+    
+    intensite_centree = intensité_SG_SF - np.mean(intensité_SG_SF)
+    i_nrml = intensite_centree / np.max(intensite_centree)
+    
+    return wn, i_nrml
 
 # ───────────────────────────────────────────────────
 # on va créer des fonctions 
