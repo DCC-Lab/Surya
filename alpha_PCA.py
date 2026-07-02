@@ -1,4 +1,4 @@
-from extract_data import traiter_acquisitions_gellose, traiter_acquisitions_verre, lecteur_fichier_j0, lecteur_fichier_j2, lecteur_fichier_j4, lecteur_fichier_j8_j11
+from extract_data_alpha import traiter_acquisitions_gellose, traiter_acquisitions_verre, lecteur_fichier_j0, lecteur_fichier_j2, lecteur_fichier_j4, lecteur_fichier_j8_j11
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
@@ -22,13 +22,20 @@ souris1-j2-45gy     0,2       ...       0,4
 souris5-j11-80gy    0,1       ...       0,3
 """ 
 # Correspondances pétri → (dose, souris valides)
+from extract_data import traiter_acquisitions_gellose, traiter_acquisitions_verre, lecteur_fichier_j0, lecteur_fichier_j2, lecteur_fichier_j4, lecteur_fichier_j8_j11
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import numpy as np
+
+
 config = {
     'jour0': {
         'petri1': ('0gy', {
             'souris1': ['echantillon1', 'echantillon2'],
             'souris2': ['ecantillon1', 'echantillon2'],
             'souris3': ['echantillon1']}),
-            
         'petri2': ('0gy', {
             'souris4': ['echantillon1'],
             'souris5': ['echantillon1'],
@@ -54,7 +61,7 @@ config = {
     'jour_8': {
         'petri1': ('0gy',      ['souris1', 'souris2', 'souris3']),
         'petri2': ('45gy',     ['souris1', 'souris2', 'souris3']),
-        'petri3': ('45gy + P', ['souris1', 'souris2']),  # souris1.1 et 2.1 gérés séparément
+        'petri3': ('45gy + P', ['souris1', 'souris2']),
         'petri4': ('60gy',     ['souris4', 'souris5']),
         'petri5': ('80gy',     ['souris4', 'souris5']),
     },
@@ -73,8 +80,13 @@ lecteurs = {
     'jour_11':lecteur_fichier_j8_j11,
 }
 
-spectres = []
-etiquettes = []
+# ── ÉTAPE 1 : collecter tous les spectres, DÉJÀ regroupés par (jour, type_ref) ──
+# groupes = {(jour, type_ref): {etiquette: (wn, intensite, alpha)}}
+groupes = {}
+
+def ajouter_resultat(groupes, jour, type_ref, etiquette, w, i, alpha):
+    cle = (jour, type_ref)
+    groupes.setdefault(cle, {})[etiquette] = (w, i, alpha)
 
 for jour, petris in config.items():
     for petri, (dose, souris_data) in petris.items():
@@ -84,45 +96,99 @@ for jour, petris in config.items():
                     liste_fichiers = lecteur_fichier_j0(jour, petri, souris, echantillon)
                     if not liste_fichiers:
                         continue
-                    w, i = traiter_acquisitions_verre(liste_fichiers)
+                    w, i, alpha = traiter_acquisitions_verre(liste_fichiers)
                     if w is None or i is None:
                         continue
                     if not np.isfinite(i).all():
                         print(f"NaN/Inf : {souris} {echantillon}, {petri}, {jour} — ignoré")
                         continue
-                    spectres.append(i)
-                    etiquettes.append(f"{souris}-{jour}-{dose}")
+                    etiquette = f"{souris}-{echantillon}-{jour}-{dose}"
+                    ajouter_resultat(groupes, jour, 'verre', etiquette, w, i, alpha)
             continue
-        souris_valides = souris_data        
+
+        souris_valides = souris_data
         for souris in souris_valides:
             liste_fichiers = lecteurs[jour](jour, petri, souris)
             if not liste_fichiers:
                 continue
             if jour == 'jour2':
-                w, i = traiter_acquisitions_gellose(liste_fichiers)
+                w, i, alpha = traiter_acquisitions_gellose(liste_fichiers)
+                type_ref = 'gellose'
             elif jour == 'jour_8' or jour == 'jour_11' or jour == 'jour4':
-                w, i = traiter_acquisitions_verre(liste_fichiers)
+                w, i, alpha = traiter_acquisitions_verre(liste_fichiers)
+                type_ref = 'verre'
             else:
                 print(f"⚠️ Jour inconnu : {jour}")
-                continue          # ← évite le NameError
+                continue
             if w is None or i is None:
                 continue
             if not np.isfinite(i).all():
                 print(f"NaN/Inf : {souris}, {petri}, {jour} — ignoré")
                 continue
-            spectres.append(i)
-            etiquettes.append(f"{souris}-{jour}-{dose}")
+            etiquette = f"{souris}-{jour}-{dose}"
+            ajouter_resultat(groupes, jour, type_ref, etiquette, w, i, alpha)
 
 # Cas spéciaux souris1.1 et souris2.1 (j8, petri3)
 for souris_sp in ['souris1.1', 'souris2.1']:
     souris_label = souris_sp.replace('.', '_')
     liste_fichiers = lecteur_fichier_j8_j11('jour_8', 'petri3', souris_sp)
     if liste_fichiers:
-        w, i = traiter_acquisitions_verre(liste_fichiers)
+        w, i, alpha = traiter_acquisitions_verre(liste_fichiers)
         if i is not None and np.isfinite(i).all():
-            spectres.append(i)
-            etiquettes.append(f"{souris_label}-jour_8-45gy + P")
+            etiquette = f"{souris_label}-jour_8-45gy + P"
+            ajouter_resultat(groupes, 'jour_8', 'verre', etiquette, w, i, alpha)
 
+
+# ── ÉTAPE 2 : filtrer chaque groupe (jour, type_ref) séparément selon alpha ──
+
+def filtrer_spectres_par_alpha(dict_spectres, seuil_mad=3.0, min_echantillons=4):
+    noms = list(dict_spectres.keys())
+
+    if len(noms) < min_echantillons:
+        print(f"  ⚠️ Seulement {len(noms)} échantillon(s) — pas de filtrage (minimum {min_echantillons})")
+        return dict_spectres, {}
+
+    alphas = np.array([dict_spectres[nom][2] for nom in noms])
+    mediane = np.median(alphas)
+    mad = np.median(np.abs(alphas - mediane)) + 1e-10
+
+    spectres_ok, spectres_rejetes = {}, {}
+    for nom, alpha in zip(noms, alphas):
+        ecart = abs(alpha - mediane) / mad
+        if ecart > seuil_mad:
+            spectres_rejetes[nom] = alpha
+        else:
+            spectres_ok[nom] = dict_spectres[nom]
+
+    print(f"  Médiane α : {mediane:.4f} | MAD : {mad:.4f} | seuil : {seuil_mad} MAD")
+    print(f"  {len(spectres_ok)} conservés, {len(spectres_rejetes)} rejetés")
+    for nom, alpha in sorted(spectres_rejetes.items(), key=lambda x: -x[1]):
+        print(f"    ❌ {nom} : α = {alpha:.4f}")
+
+    return spectres_ok, spectres_rejetes
+
+
+spectres_ok = {}
+spectres_rejetes = {}
+
+for (jour, type_ref), groupe in groupes.items():
+    print(f"── Groupe : {jour} / {type_ref} ({len(groupe)} échantillons) ──")
+    ok, rejetes = filtrer_spectres_par_alpha(groupe, seuil_mad=3.0, min_echantillons=4)
+    spectres_ok.update(ok)
+    spectres_rejetes.update(rejetes)
+    print()
+
+print(f"=== RÉSUMÉ FINAL ===")
+print(f"Total conservé : {len(spectres_ok)}")
+print(f"Total rejeté : {len(spectres_rejetes)}")
+if spectres_rejetes:
+    print("Liste complète des rejetés :")
+    for nom, alpha in spectres_rejetes.items():
+        print(f"  - {nom} : α = {alpha:.4f}")
+
+# ── ÉTAPE 3 : reconstruire X et étiquettes à partir des spectres conservés ──
+etiquettes = list(spectres_ok.keys())
+spectres = [spectres_ok[e][1] for e in etiquettes]
 
 X = np.array(spectres)
 

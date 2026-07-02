@@ -16,41 +16,41 @@ config = {
             'souris2': {'echantillon1': ['zone1','zone2','zone3'], 'echantillon2': ['zone1','zone2','zone3']},
             'souris3': {'echantillon1': ['zone1','zone2','zone3']},
         }),
-        #'petri2': ('0gy', {
-        #    'souris4': {'echantillon1': ['zone1','zone2','zone3']},
-        #    'souris5': {'echantillon1': ['zone1','zone2','zone3']},
-        #}),
-        #'petri3': ('80gy', {
-        #    'souris4': {'echantillon1': ['zone1','zone2','zone3']},
-        #}),
+        'petri2': ('0gy', {
+            'souris4': {'echantillon1': ['zone1','zone2','zone3']},
+            'souris5': {'echantillon1': ['zone1','zone2','zone3']},
+        }),
+        'petri3': ('80gy', {
+            'souris4': {'echantillon1': ['zone1','zone2','zone3']},
+        }),
     },
     
     'jour2': {
         'petri1': ('0gy',      {'souris1': ['zone1'], 'souris2': ['zone1','zone2'], 'souris3': ['zone1','zone2','zone3']}),
         'petri2': ('45gy',     {'souris1': ['zone1','zone2'], 'souris2': ['zone1','zone2','zone3']}),
-        #'petri3': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
-        #'petri4': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
-        #'petri5': ('80gy',     {'souris4': ['zone1','zone2','zone3']}),
+        'petri3': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
+        'petri4': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        'petri5': ('80gy',     {'souris4': ['zone1','zone2','zone3']}),
     },
     'jour4': {
-        #'petri1': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
-        #'petri2': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        'petri1': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        'petri2': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
         'petri3': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
-        #'petri4': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
+        'petri4': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
         'petri5': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3']}),
     },
     'jour_8': {
         'petri1': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
         'petri2': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
-        #'petri3': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3']}),
-        #'petri4': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
-        #'petri5': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        'petri3': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3']}),
+        'petri4': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        'petri5': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
     },
     'jour_11': {
         'petri1': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
         'petri2': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
-        #'petri3': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
-        #'petri4': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        'petri3': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        'petri4': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
     },
 }
 
@@ -119,12 +119,17 @@ X = np.array(spectres)
 
 
 # ── 2. Standardiser X (recommandé pour les spectres) ─────────────────────────
-scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
+#scaler = StandardScaler()
+#X_scaled = scaler.fit_transform(X)
 
 # ── 3. PCA → 3 composantes ───────────────────────────────────────────────────
-pca = PCA(n_components=5)
-X_reduced = pca.fit_transform(X_scaled)
+#pca = PCA(n_components=5)
+#X_reduced = pca.fit_transform(X_scaled)
+
+
+# ── 3. PCA → 3 composantes ───────────────────────────────────────────────────
+pca = PCA(n_components=3)
+X_reduced = pca.fit_transform(X)
 
 print("Variance expliquée par chaque composante :")
 for i, v in enumerate(pca.explained_variance_ratio_):
@@ -184,7 +189,7 @@ for ax, (pc_x, pc_y) in zip(axes, [(0, 1), (1, 2)]):
         dose  = doses[idx]
         jour  = jours[idx]
         s     = souris[idx]
-        zone  = zones[idx]
+        #zone  = zones[idx]
         color = color_map[dose]
 
         ax.scatter(
@@ -198,9 +203,9 @@ for ax, (pc_x, pc_y) in zip(axes, [(0, 1), (1, 2)]):
 
         # Étiquette : jour abrégé + numéro souris + zone
         num_souris = s.replace('souris', '')
-        num_zone   = zone.replace('zone', 'z')
+        #num_zone   = zone.replace('zone', 'z')
         jour_court = jour.replace('jour_', 'j').replace('jour', 'j')  # jour4→j4, jour_8→j8
-        etiquette_point = f"j{jour_court[-1] if '_' not in jour else jour_court[1:]}·{num_zone}"
+        etiquette_point = f"j{jour_court[-1] if '_' not in jour else jour_court[1:]}"
 
         ax.annotate(
             etiquette_point,
@@ -257,26 +262,26 @@ plt.show()
 # -1- décale tout pour que le minimum soit 0
 X_nmf = X - X.min()   
 # -2- applique NMF
-nmf = NMF(n_components=5, random_state=0)
+nmf = NMF(n_components=3, random_state=0)
 X_reduced_nmf = nmf.fit_transform(X_nmf)   # ← pas de StandardScaler ! NMF exige des valeurs >= 0
 
 
 couleurs = ['blue', 'orange', 'green', 'red', 'purple']
 
-fig, axes = plt.subplots(5, 2, figsize=(14, 10))
+fig, axes = plt.subplots(3, 2, figsize=(14, 10))
 
-for idx in range(5):
+for idx in range(3):
     # ── Colonne gauche : NMF ──────────────────────────────────────────────────
     axes[idx, 0].plot(w, nmf.components_[idx], color=couleurs[idx])
     axes[idx, 0].set_title(f"NMF — Composante {idx+1}")
-    axes[idx, 0].set_xlabel("Longueur d'onde (nm)")
+    axes[idx, 0].set_xlabel("Raman shift (cm$^-1$)")
     axes[idx, 0].set_ylabel("Loading")
     axes[idx, 0].axhline(0, color='grey', lw=0.5)
 
     # ── Colonne droite : PCA ──────────────────────────────────────────────────
     axes[idx, 1].plot(w, pca.components_[idx], color=couleurs[idx])
     axes[idx, 1].set_title(f"PCA — PC{idx+1} ({pca.explained_variance_ratio_[idx]:.1%} de variance)")
-    axes[idx, 1].set_xlabel("Longueur d'onde (nm)")
+    axes[idx, 1].set_xlabel("Raman shift (cm$^-1$)")
     axes[idx, 1].set_ylabel("Loading")
     axes[idx, 1].axhline(0, color='grey', lw=0.5)
 

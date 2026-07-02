@@ -87,22 +87,8 @@ from scipy.optimize import lsq_linear
 def soustraire_spectre(wn_echantillon, intensite_echantillon, 
                         wn_nocif, intensite_nocif,
                         ordre_baseline=1, fenetres_fit=None):
-    """
-    Soustrait la contribution du verre (ou de la gellose) en trouvant 
-    le meilleur coefficient, avec une baseline polynomiale optionnelle 
-    pour absorber le fond que le verre seul n'explique pas.
-
-    ordre_baseline : ordre du polynôme de baseline ajouté au fit 
-                      (0 = juste un offset, 1 = offset + pente, etc.)
-                      Mets 0 pour te rapprocher de ton comportement original.
-    fenetres_fit   : liste de tuples (wn_min, wn_max) pour restreindre 
-                      le fit à des zones dominées par le verre 
-                      (ex: [(500, 550), (900, 950)]). None = tout le spectre.
-    """
-    # Interpoler le verre/gellose sur la même grille que l'échantillon
     nocif_interp = np.interp(wn_echantillon, wn_nocif, intensite_nocif)
 
-    # Masque pour restreindre le fit à certaines fenêtres si demandé
     if fenetres_fit is not None:
         masque = np.zeros_like(wn_echantillon, dtype=bool)
         for (lo, hi) in fenetres_fit:
@@ -110,7 +96,6 @@ def soustraire_spectre(wn_echantillon, intensite_echantillon,
     else:
         masque = np.ones_like(wn_echantillon, dtype=bool)
 
-    # Matrice de design : [verre, 1, x, x², ...] (x normalisé pour la stabilité numérique)
     x_norm = (wn_echantillon - wn_echantillon.mean()) / wn_echantillon.std()
     colonnes = [nocif_interp] + [x_norm**k for k in range(ordre_baseline + 1)]
     A_full = np.column_stack(colonnes)
@@ -118,7 +103,6 @@ def soustraire_spectre(wn_echantillon, intensite_echantillon,
     A_fit = A_full[masque]
     y_fit = intensite_echantillon[masque]
 
-    # Bornes : coefficient du verre >= 0, coefficients de baseline libres
     n_baseline = ordre_baseline + 1
     bornes_inf = [0.0] + [-np.inf] * n_baseline
     bornes_sup = [np.inf] + [np.inf] * n_baseline
@@ -127,11 +111,10 @@ def soustraire_spectre(wn_echantillon, intensite_echantillon,
     coeffs = resultat.x
     alpha = coeffs[0]
 
-    # Appliquer le modèle complet (verre + baseline) sur TOUT le spectre
     modele_complet = A_full @ coeffs
     intensite_corrigee = intensite_echantillon - modele_complet
 
-    return intensite_corrigee
+    return intensite_corrigee, alpha   # ← retourne maintenant alpha aussi
 
 # ─────────────────────────────────────────────
 # 4. CORRECTION DE FLUORESCENCE (baseline)
@@ -216,22 +199,19 @@ liste_fichiers_verre =  sorted(glob.glob(os.path.join(dossier_verre, "*.txt")))
 
 
 def traiter_acquisitions_verre(liste_fichiers, wn_min=500, wn_max=3025, retirer_cosmiques=True):
-    """
-    Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
-    Soustrait le spectre du verre et corrige la fluorescence.
-    Centrage des données en soustrayant la moyenne.
-    Retourne (wavenumbers, spectre_centré).
-    """
-    
     wn, i = traiter_acquisitions(liste_fichiers, wn_min, wn_max, retirer_cosmiques)
     wn_verre, i_verre = traiter_acquisitions(liste_fichiers_verre, wn_min, wn_max, retirer_cosmiques)
-    intensite_SV = soustraire_spectre(wn, i, wn_verre, i_verre)
+    
+    if wn is None or i is None or wn_verre is None or i_verre is None:
+        return None, None, None
+
+    intensite_SV, alpha = soustraire_spectre(wn, i, wn_verre, i_verre)
     intensité_SV_SF = corriger_fluorescence(intensite_SV, min_bubble_widths=50, fit_order=1)
 
     intensite_centree = intensité_SV_SF - np.mean(intensité_SV_SF)
     i_nrml = intensite_centree / np.max(intensite_centree)
     
-    return wn, i_nrml
+    return wn, i_nrml, alpha   # ← alpha en plus
 
 # ────────────────────────────────────────────────────────────────────────
 # 6. RETRAITS DE LA GELLOSE + CENTRAGE DES DONNÉES: JOUR 2 ET 4
@@ -263,13 +243,83 @@ def traiter_acquisitions_gellose(liste_fichiers, wn_min=500, wn_max=3025, retire
         print(f"❌ NaN/Inf dans la gellose : {np.sum(~np.isfinite(i_gellose))} points")
         return None, None
     # ─────────────────────────────────────────────────────────────────────────
-    intensite_SG = soustraire_spectre(wn, i, wn_gellose, i_gellose)
+    intensite_SG, alpha= soustraire_spectre(wn, i, wn_gellose, i_gellose)
     intensité_SG_SF = corriger_fluorescence(intensite_SG, min_bubble_widths=50, fit_order=1)
 
     intensite_centree = intensité_SG_SF - np.mean(intensité_SG_SF)
     i_nrml = intensite_centree / np.max(intensite_centree)
     
-    return wn, i_nrml
+    return wn, i_nrml, alpha
+
+
+# ─────────────────────────────────────────────
+# Fonction qui évalue le coefficient alpha
+# ─────────────────────────────────────────────
+
+def filtrer_spectres_par_alpha(dict_spectres, seuil_mad=3.0, min_echantillons=4):
+    """
+    dict_spectres : dict {nom_echantillon: (wn, intensite, alpha)}
+    seuil_mad     : nombre de MAD au-delà duquel un alpha est jugé aberrant
+    min_echantillons : nombre minimal d'échantillons requis pour filtrer ce groupe.
+                        En dessous, on garde tout (pas assez de données pour juger).
+
+    Retourne (dict_spectres_filtrés, dict_spectres_rejetés)
+    """
+    noms = list(dict_spectres.keys())
+    
+    if len(noms) < min_echantillons:
+        print(f"⚠️ Seulement {len(noms)} échantillon(s) — pas de filtrage (minimum {min_echantillons} requis)\n")
+        return dict_spectres, {}
+
+    alphas = np.array([dict_spectres[nom][2] for nom in noms])
+
+    mediane = np.median(alphas)
+    mad = np.median(np.abs(alphas - mediane)) + 1e-10
+
+    spectres_ok = {}
+    spectres_rejetes = {}
+
+    for nom, alpha in zip(noms, alphas):
+        ecart = abs(alpha - mediane) / mad
+        if ecart > seuil_mad:
+            spectres_rejetes[nom] = alpha
+        else:
+            spectres_ok[nom] = dict_spectres[nom]
+
+    print(f"Médiane α : {mediane:.4f} | MAD : {mad:.4f} | seuil : {seuil_mad} MAD")
+    print(f"{len(spectres_ok)} conservés, {len(spectres_rejetes)} rejetés")
+    if spectres_rejetes:
+        for nom, alpha in sorted(spectres_rejetes.items(), key=lambda x: -x[1]):
+            print(f"  ❌ {nom} : α = {alpha:.4f}")
+    print()
+
+    return spectres_ok, spectres_rejetes
+
+
+def filtrer_par_groupe(resultats, cle_groupe_fn, seuil_mad=3.0, min_echantillons=4):
+    """
+    Groupe les résultats selon cle_groupe_fn(nom_etiquette) puis filtre chaque groupe séparément.
+    
+    cle_groupe_fn : fonction qui prend une étiquette et retourne la clé de groupe (ex: le jour)
+    """
+    groupes = {}
+    for nom, valeurs in resultats.items():
+        cle = cle_groupe_fn(nom)
+        groupes.setdefault(cle, {})[nom] = valeurs
+
+    tous_ok = {}
+    tous_rejetes = {}
+
+    for cle, groupe in groupes.items():
+        print(f"── Groupe : {cle} ({len(groupe)} échantillons) ──")
+        ok, rejetes = filtrer_spectres_par_alpha(groupe, seuil_mad=seuil_mad, min_echantillons=min_echantillons)
+        tous_ok.update(ok)
+        tous_rejetes.update(rejetes)
+
+    return tous_ok, tous_rejetes
+
+
+
 
 # ─────────────────────────────────────────────
 # OBTENTEUR DE FICHIERS J2, J4, J8, J11
