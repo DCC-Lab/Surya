@@ -310,3 +310,19 @@ def lecteur_fichier_j4(jour, petri, souris):
 #w, i = traiter_acquisitions_j2_j4(lecteur_fichier_j4("jour4", "petri1", "souris4"), wn_min=500, wn_max=3025, retirer_cosmiques=True)
 #print(f"première 10 longueurs d'onde : {w[:10]}")
 #print(f"première 10 intensités : {i[:10]}")
+
+def lecteur_fichier_j0(jour, petri, souris, échantillon):
+
+    dossier = os.path.join(racine1, jour, "raman", petri, souris)
+
+    if not os.path.exists(dossier):
+        print(f"Dossier absent : {dossier}")
+        return []     
+    
+    pattern = os.path.join(dossier, f"{échantillon}*.txt")
+    fichiers = sorted(glob.glob(pattern))
+    print(f'premier 12 fichiers : {fichiers[:12]}')
+    
+    return fichiers
+
+#lecteur_fichier_j0("jour0", "petri1", "souris1", "echantillon1")

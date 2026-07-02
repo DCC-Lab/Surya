@@ -3,6 +3,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.decomposition import NMF
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 import matplotlib.patches as mpatches
 import numpy as np
 
@@ -178,7 +179,7 @@ for e in etiquettes:
 
 fig, axes = plt.subplots(1, 2, figsize=(16, 7))
 
-for ax, (pc_x, pc_y) in zip(axes, [(0, 1), (0, 2)]):
+for ax, (pc_x, pc_y) in zip(axes, [(0, 1), (1, 2)]):
     for idx in range(len(etiquettes)):
         dose  = doses[idx]
         jour  = jours[idx]
@@ -190,7 +191,7 @@ for ax, (pc_x, pc_y) in zip(axes, [(0, 1), (0, 2)]):
             X_reduced[idx, pc_x],
             X_reduced[idx, pc_y],
             color=color,
-            marker='o',
+            marker=get_marker(s),
             s=50,
             edgecolors='none',
         )
@@ -199,7 +200,7 @@ for ax, (pc_x, pc_y) in zip(axes, [(0, 1), (0, 2)]):
         num_souris = s.replace('souris', '')
         num_zone   = zone.replace('zone', 'z')
         jour_court = jour.replace('jour_', 'j').replace('jour', 'j')  # jour4→j4, jour_8→j8
-        etiquette_point = f"j{jour_court[-1] if '_' not in jour else jour_court[1:]}·s{num_souris}·{num_zone}"
+        etiquette_point = f"j{jour_court[-1] if '_' not in jour else jour_court[1:]}·{num_zone}"
 
         ax.annotate(
             etiquette_point,
@@ -226,36 +227,59 @@ axes[1].legend(
     fontsize=8,
 )
 
+handles_souris = [
+    Line2D([0], [0], marker=m, color='grey', linestyle='', markersize=8, label=s)
+    for s, m in marker_map.items()
+]
+
+
+legend_dose = axes[1].legend(
+    handles=handles_dose,
+    title="Dose",
+    bbox_to_anchor=(1.05, 1),
+    loc='upper left',
+    fontsize=8,
+)
+axes[1].add_artist(legend_dose)
+
+axes[1].legend(
+    handles=handles_souris,
+    title="Souris",
+    bbox_to_anchor=(1.05, 0.5),
+    loc='upper left',
+    fontsize=8,
+)
+
 plt.suptitle("PCA — Score plots")
 plt.tight_layout()
 plt.show()
 
 # -1- décale tout pour que le minimum soit 0
-#X_nmf = X - X.min()   
+X_nmf = X - X.min()   
 # -2- applique NMF
-#nmf = NMF(n_components=5, random_state=0)
-#X_reduced_nmf = nmf.fit_transform(X_nmf)   # ← pas de StandardScaler ! NMF exige des valeurs >= 0
+nmf = NMF(n_components=5, random_state=0)
+X_reduced_nmf = nmf.fit_transform(X_nmf)   # ← pas de StandardScaler ! NMF exige des valeurs >= 0
 
 
-#couleurs = ['blue', 'orange', 'green', 'red', 'purple']
+couleurs = ['blue', 'orange', 'green', 'red', 'purple']
 
-#fig, axes = plt.subplots(5, 2, figsize=(14, 10))
+fig, axes = plt.subplots(5, 2, figsize=(14, 10))
 
-#for idx in range(5):
+for idx in range(5):
     # ── Colonne gauche : NMF ──────────────────────────────────────────────────
-    #axes[idx, 0].plot(w, nmf.components_[idx], color=couleurs[idx])
-    #axes[idx, 0].set_title(f"NMF — Composante {idx+1}")
-    #axes[idx, 0].set_xlabel("Longueur d'onde (nm)")
-    #axes[idx, 0].set_ylabel("Loading")
-    #axes[idx, 0].axhline(0, color='grey', lw=0.5)
+    axes[idx, 0].plot(w, nmf.components_[idx], color=couleurs[idx])
+    axes[idx, 0].set_title(f"NMF — Composante {idx+1}")
+    axes[idx, 0].set_xlabel("Longueur d'onde (nm)")
+    axes[idx, 0].set_ylabel("Loading")
+    axes[idx, 0].axhline(0, color='grey', lw=0.5)
 
     # ── Colonne droite : PCA ──────────────────────────────────────────────────
-    #axes[idx, 1].plot(w, pca.components_[idx], color=couleurs[idx])
-    #axes[idx, 1].set_title(f"PCA — PC{idx+1} ({pca.explained_variance_ratio_[idx]:.1%} de variance)")
-    #axes[idx, 1].set_xlabel("Longueur d'onde (nm)")
-    #axes[idx, 1].set_ylabel("Loading")
-    #axes[idx, 1].axhline(0, color='grey', lw=0.5)
+    axes[idx, 1].plot(w, pca.components_[idx], color=couleurs[idx])
+    axes[idx, 1].set_title(f"PCA — PC{idx+1} ({pca.explained_variance_ratio_[idx]:.1%} de variance)")
+    axes[idx, 1].set_xlabel("Longueur d'onde (nm)")
+    axes[idx, 1].set_ylabel("Loading")
+    axes[idx, 1].axhline(0, color='grey', lw=0.5)
 
-#plt.suptitle("NMF vs PCA — Composantes spectrales")
-#plt.tight_layout()
-#plt.show()
+plt.suptitle("NMF vs PCA — Composantes spectrales")
+plt.tight_layout()
+plt.show()

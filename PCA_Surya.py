@@ -1,4 +1,4 @@
-from extract_data import traiter_acquisitions_gellose, traiter_acquisitions_verre, lecteur_fichier_j2, lecteur_fichier_j4, lecteur_fichier_j8_j11
+from extract_data import traiter_acquisitions_gellose, traiter_acquisitions_verre, lecteur_fichier_j0, lecteur_fichier_j2, lecteur_fichier_j4, lecteur_fichier_j8_j11
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
@@ -23,6 +23,20 @@ souris5-j11-80gy    0,1       ...       0,3
 """ 
 # Correspondances pétri → (dose, souris valides)
 config = {
+    'jour0': {
+        'petri1': ('0gy', {
+            'souris1': ['echantillon1', 'echantillon2'],
+            'souris2': ['ecantillon1', 'echantillon2'],
+            'souris3': ['echantillon1']}),
+            
+        'petri2': ('0gy', {
+            'souris4': ['echantillon1'],
+            'souris5': ['echantillon1'],
+        }),
+        'petri3': ('80gy', {
+            'souris4': ['echantillon1'],
+        }),
+    },
     'jour2': {
         'petri1': ('0gy',      ['souris1', 'souris2', 'souris3']),
         'petri2': ('45gy',     ['souris1', 'souris2']),
@@ -63,7 +77,23 @@ spectres = []
 etiquettes = []
 
 for jour, petris in config.items():
-    for petri, (dose, souris_valides) in petris.items():
+    for petri, (dose, souris_data) in petris.items():
+        if jour == 'jour0':
+            for souris, echantillons in souris_data.items():
+                for echantillon in echantillons:
+                    liste_fichiers = lecteur_fichier_j0(jour, petri, souris, echantillon)
+                    if not liste_fichiers:
+                        continue
+                    w, i = traiter_acquisitions_verre(liste_fichiers)
+                    if w is None or i is None:
+                        continue
+                    if not np.isfinite(i).all():
+                        print(f"NaN/Inf : {souris} {echantillon}, {petri}, {jour} — ignoré")
+                        continue
+                    spectres.append(i)
+                    etiquettes.append(f"{souris}-{jour}-{dose}")
+            continue
+        souris_valides = souris_data        
         for souris in souris_valides:
             liste_fichiers = lecteurs[jour](jour, petri, souris)
             if not liste_fichiers:
@@ -149,7 +179,7 @@ jours  = [e.split('-')[1]  for e in etiquettes]
 # ── Plot ──────────────────────────────────────────────────────────────────────
 fig, axes = plt.subplots(1, 2, figsize=(16, 7))
 
-for ax, (pc_x, pc_y) in zip(axes, [(0, 1), (0, 2)]):
+for ax, (pc_x, pc_y) in zip(axes, [(0, 1), (1, 2)]):
     for idx in range(len(etiquettes)):
         dose   = doses[idx]
         jour   = jours[idx]
@@ -184,10 +214,11 @@ for ax, (pc_x, pc_y) in zip(axes, [(0, 1), (0, 2)]):
         ax.annotate(
             etiquette_point,
             xy=(X_reduced[idx, pc_x], X_reduced[idx, pc_y]),
-            xytext=(5, 5),
+            xytext=(3, 3),
             textcoords='offset points',
-            fontsize=6,
-            color=color,
+            fontsize=5,
+            color='black',
+            alpha=0.7,
         )
 
     ax.set_xlabel(f"PC{pc_x+1} ({pca.explained_variance_ratio_[pc_x]:.1%})")
