@@ -13,7 +13,7 @@ from sklearn.preprocessing import StandardScaler
 # 1. LECTURE ET TRONCATURE
 # ─────────────────────────────────────────────
 
-def formater_donnees(chemin_fichier, wn_min=500, wn_max=1800):
+def formater_donnees(chemin_fichier, wn_min=500, wn_max=3500):
     data = []
     integration = 1.0  # valeur par défaut si non trouvée
     
@@ -349,7 +349,7 @@ def extraire_fichiers_jour_0(jour, petri, souris, echantillon, zone, fichiers_pa
     fin = debut + fichiers_par_zone
     fichiers_zone = tous_les_fichiers_tries[debut:fin]
 
-    print(f"{zone} — {len(fichiers_zone)} fichiers trouvés")
+    #print(f"{zone} — {len(fichiers_zone)} fichiers trouvés")
     return fichiers_zone    
 
 
