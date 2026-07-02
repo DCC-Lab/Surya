@@ -20,16 +20,7 @@ souris1-j2-0gy      0,3       ...       0,5
 souris1-j2-45gy     0,2       ...       0,4
         ...
 souris5-j11-80gy    0,1       ...       0,3
-""" 
-# Correspondances pétri → (dose, souris valides)
-from extract_data import traiter_acquisitions_gellose, traiter_acquisitions_verre, lecteur_fichier_j0, lecteur_fichier_j2, lecteur_fichier_j4, lecteur_fichier_j8_j11
-from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-import numpy as np
-
-
+"""
 config = {
     'jour0': {
         'petri1': ('0gy', {

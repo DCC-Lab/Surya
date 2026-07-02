@@ -4,7 +4,7 @@ from orpl.baseline_removal import bubblefill
 import glob
 import os
 import matplotlib.pyplot as plt
-from scipy.optimize import nnls
+from scipy.optimize import lsq_linear
 import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
@@ -76,22 +76,54 @@ def retirer_rayons_cosmiques(intensite, seuil=10.0, fenetre=5):
 
 
 def soustraire_spectre(wn_echantillon, intensite_echantillon, 
-                     wn_nocif, intensite_nocif):
+                        wn_nocif, intensite_nocif,
+                        ordre_baseline=1, fenetres_fit=None):
     """
-    Soustrait la contribution du verre en trouvant le meilleur coefficient.
-    Utilise NNLS pour que le coefficient soit toujours positif.
+    Soustrait la contribution du verre (ou de la gellose) en trouvant 
+    le meilleur coefficient, avec une baseline polynomiale optionnelle 
+    pour absorber le fond que le verre seul n'explique pas.
+
+    ordre_baseline : ordre du polynôme de baseline ajouté au fit 
+                      (0 = juste un offset, 1 = offset + pente, etc.)
+                      Mets 0 pour te rapprocher de ton comportement original.
+    fenetres_fit   : liste de tuples (wn_min, wn_max) pour restreindre 
+                      le fit à des zones dominées par le verre 
+                      (ex: [(500, 550), (900, 950)]). None = tout le spectre.
     """
-    # Interpoler le verre sur la même grille que l'échantillon
+    # Interpoler le verre/gellose sur la même grille que l'échantillon
     nocif_interp = np.interp(wn_echantillon, wn_nocif, intensite_nocif)
-    
-    # Trouver le coefficient α optimal (NNLS = non-negative least squares)
-    A = nocif_interp.reshape(-1, 1)
-    alpha, _ = nnls(A, intensite_echantillon)
-    
-    # Soustraire
-    intensite_corrigee = intensite_echantillon - alpha * nocif_interp
-    
+
+    # Masque pour restreindre le fit à certaines fenêtres si demandé
+    if fenetres_fit is not None:
+        masque = np.zeros_like(wn_echantillon, dtype=bool)
+        for (lo, hi) in fenetres_fit:
+            masque |= (wn_echantillon >= lo) & (wn_echantillon <= hi)
+    else:
+        masque = np.ones_like(wn_echantillon, dtype=bool)
+
+    # Matrice de design : [verre, 1, x, x², ...] (x normalisé pour la stabilité numérique)
+    x_norm = (wn_echantillon - wn_echantillon.mean()) / wn_echantillon.std()
+    colonnes = [nocif_interp] + [x_norm**k for k in range(ordre_baseline + 1)]
+    A_full = np.column_stack(colonnes)
+
+    A_fit = A_full[masque]
+    y_fit = intensite_echantillon[masque]
+
+    # Bornes : coefficient du verre >= 0, coefficients de baseline libres
+    n_baseline = ordre_baseline + 1
+    bornes_inf = [0.0] + [-np.inf] * n_baseline
+    bornes_sup = [np.inf] + [np.inf] * n_baseline
+
+    resultat = lsq_linear(A_fit, y_fit, bounds=(bornes_inf, bornes_sup))
+    coeffs = resultat.x
+    alpha = coeffs[0]
+
+    # Appliquer le modèle complet (verre + baseline) sur TOUT le spectre
+    modele_complet = A_full @ coeffs
+    intensite_corrigee = intensite_echantillon - modele_complet
+
     return intensite_corrigee
+
 
 def corriger_fluorescence(intensite, min_bubble_widths=50, fit_order=1):
     """
