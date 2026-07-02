@@ -206,7 +206,7 @@ for ax, (pc_x, pc_y) in zip(axes, [(0, 1), (1, 2)]):
         elif s in ('souris1_1', 'souris2_1'):
             # souris1_1 → "#2" (deuxième individu)
             num = s.replace('souris', '').replace('_1', '')
-            etiquette_point = f"#{num} bis\n{jour}"
+            etiquette_point = f"#{num} \n{jour}"
         else:
             # toutes les autres souris → juste le jour
             etiquette_point = jour
@@ -234,13 +234,8 @@ handles_souris = [
     for s, m in marker_map.items()
 ]
 
-handles_replique = [
-    plt.scatter([], [], marker='o', color='grey', edgecolors='none',  label='souris originale'),
-    plt.scatter([], [], marker='o', color='grey', edgecolors='black', linewidths=1.2, label='souris _1 (réplique)'),
-]
-
 axes[1].legend(
-    handles=handles_dose + handles_souris + handles_replique,
+    handles=handles_dose + handles_souris,
     title="Dose / Souris / Réplique",
     bbox_to_anchor=(1.05, 1),
     loc='upper left',

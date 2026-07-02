@@ -321,7 +321,7 @@ def lecteur_fichier_j0(jour, petri, souris, échantillon):
     
     pattern = os.path.join(dossier, f"{échantillon}*.txt")
     fichiers = sorted(glob.glob(pattern))
-    print(f'premier 12 fichiers : {fichiers[:12]}')
+    #print(f'premier 12 fichiers : {fichiers[:12]}')
     
     return fichiers
 
