@@ -1,6 +1,7 @@
 from extract_data import traiter_acquisitions_gellose, traiter_acquisitions_verre, lecteur_fichier_j0, lecteur_fichier_j2, lecteur_fichier_j4, lecteur_fichier_j8_j11
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
+from sklearn.decomposition import NMF
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
@@ -202,11 +203,10 @@ for ax, (pc_x, pc_y) in zip(axes, [(0, 1), (1, 2)]):
         if s in ('souris1', 'souris2') and jour == 'jour_8':
             # souris1 à j8 → "#1" pour la distinguer de souris1_1
             num = s.replace('souris', '')
-            etiquette_point = f"#{num}\n{jour}"
+            etiquette_point = f"#1 \n{jour}"
         elif s in ('souris1_1', 'souris2_1'):
-            # souris1_1 → "#2" (deuxième individu)
             num = s.replace('souris', '').replace('_1', '')
-            etiquette_point = f"#{num} \n{jour}"
+            etiquette_point = f"#2 \n{jour}"
         else:
             # toutes les autres souris → juste le jour
             etiquette_point = jour
@@ -246,17 +246,89 @@ plt.suptitle("PCA — Score plots")
 plt.tight_layout()
 plt.show()
 
-# ── 5. Loadings PC1 selon longueur d'onde ────────────────────────────────────
 
 
 
-fig2, ax = plt.subplots(figsize=(10, 4))
 
-ax.plot(w, pca.components_[0], color='blue')   # components_[0] = PC1
-ax.set_xlabel("Raman shift (cm$^-1$)")
-ax.set_ylabel("Loading")
-ax.set_title(f"PC1 loading ({pca.explained_variance_ratio_[0]:.1%} de variance)")
-ax.axhline(0, color='grey', lw=0.5)
 
-plt.tight_layout()
+
+
+# ── 5. Loadings PC1 selon longueur d'onde (axe X cassé) ──────────────────────
+
+def plot_casse(fig, gridspec_cell, w, y, couleur, titre, xlim_gauche=(500, 1900), xlim_droite=(2300, 4000)):
+    """
+    Trace y en fonction de w sur un axe X cassé en deux segments,
+    dans la cellule gridspec_cell (un SubplotSpec) de la figure fig.
+    """
+    import matplotlib.gridspec as gridspec
+
+    # Sous-gridspec : 2 colonnes dans cette cellule (gauche/droite), 
+    # largeur proportionnelle à l'étendue de chaque segment
+    largeur_gauche = xlim_gauche[1] - xlim_gauche[0]
+    largeur_droite = xlim_droite[1] - xlim_droite[0]
+    gs_inner = gridspec.GridSpecFromSubplotSpec(
+        1, 2, subplot_spec=gridspec_cell,
+        width_ratios=[largeur_gauche, largeur_droite],
+        wspace=0.05
+    )
+
+    ax_g = fig.add_subplot(gs_inner[0])
+    ax_d = fig.add_subplot(gs_inner[1], sharey=ax_g)
+
+    # Masquer les données selon chaque segment
+    masque_g = (w >= xlim_gauche[0]) & (w <= xlim_gauche[1])
+    masque_d = (w >= xlim_droite[0]) & (w <= xlim_droite[1])
+
+    ax_g.plot(w[masque_g], y[masque_g], color=couleur)
+    ax_d.plot(w[masque_d], y[masque_d], color=couleur)
+
+    ax_g.set_xlim(xlim_gauche)
+    ax_d.set_xlim(xlim_droite)
+
+    # Cacher la bordure entre les deux segments
+    ax_g.spines['right'].set_visible(False)
+    ax_d.spines['left'].set_visible(False)
+    ax_d.tick_params(labelleft=False)  # pas de doublons d'étiquettes Y à droite
+
+    # Symboles de cassure (petits traits diagonaux)
+    d = 0.5
+    kwargs_cassure = dict(marker=[(-1, -d), (1, d)], markersize=8,
+                           linestyle="none", color='k', mec='k', mew=1, clip_on=False)
+    ax_g.plot([1], [0], transform=ax_g.transAxes, **kwargs_cassure)
+    ax_g.plot([1], [1], transform=ax_g.transAxes, **kwargs_cassure)
+    ax_d.plot([0], [0], transform=ax_d.transAxes, **kwargs_cassure)
+    ax_d.plot([0], [1], transform=ax_d.transAxes, **kwargs_cassure)
+
+    ax_g.axhline(0, color='grey', lw=0.5)
+    ax_d.axhline(0, color='grey', lw=0.5)
+
+    # Titre centré au-dessus des deux segments
+    ax_g.set_title(titre, loc='left', fontsize=10)
+    ax_g.set_xlabel("Raman shift (cm$^{-1}$)")
+    ax_g.set_ylabel("Loading")
+
+    return ax_g, ax_d
+
+
+# -1- décale tout pour que le minimum soit 0
+X_nmf = X - X.min()   
+# -2- applique NMF
+nmf = NMF(n_components=3, random_state=0)
+X_reduced_nmf = nmf.fit_transform(X_nmf)   # ← pas de StandardScaler ! NMF exige des valeurs >= 0
+
+couleurs = ['blue', 'orange', 'green', 'red', 'purple']
+
+fig2 = plt.figure(figsize=(16, 10))
+gs = fig2.add_gridspec(3, 2, hspace=0.5, wspace=0.3)
+
+for idx in range(3):
+    # ── Colonne gauche : NMF ──────────────────────────────────────────────
+    plot_casse(fig2, gs[idx, 0], w, nmf.components_[idx], couleurs[idx],
+               titre=f"NMF — Composante {idx+1}")
+
+    # ── Colonne droite : PCA ───────────────────────────────────────────────
+    plot_casse(fig2, gs[idx, 1], w, pca.components_[idx], couleurs[idx],
+               titre=f"PCA — PC{idx+1} ({pca.explained_variance_ratio_[idx]:.1%} de variance)")
+
+plt.suptitle("NMF vs PCA — Composantes spectrales")
 plt.show()
