@@ -1,4 +1,4 @@
-from extract_zone import traiter_acquisitions_verre_gelose, traiter_acquisitions_verre, extraire_fichiers_jour_0, extraire_fichiers_jour_2, extraire_fichiers_jour_4, extraire_fichiers_jours_8_11
+from extract_zone import traiter_acquisitions_gellose, traiter_acquisitions_verre, extraire_fichiers_jour_0, extraire_fichiers_jour_2, extraire_fichiers_jour_4, extraire_fichiers_jours_8_11
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.decomposition import NMF
@@ -97,7 +97,7 @@ for jour, petris in config.items():
                         continue
 
                     if jour == 'jour2':
-                        w, i = traiter_acquisitions_verre_gelose(liste_fichiers)
+                        w, i = traiter_acquisitions_gellose(liste_fichiers)
 
                     else:
                         w, i = traiter_acquisitions_verre(liste_fichiers)
