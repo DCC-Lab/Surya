@@ -292,9 +292,11 @@ def extraire_fichiers_j2_frais(jour, petri, souris, zone):
     
     return fichiers_zone
 
+racine1 = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya"
+
 def extraire_fichiers_j2_fixe(matiere, jour, petri, souris, zone, fichiers_par_zone=10):
 
-    dossier = os.path.join(racine2, jour, "raman", petri)
+    dossier = os.path.join(racine1, jour, "raman", petri)
     pattern = os.path.join(dossier, f"{souris}*{matiere}*")
 
     tous_les_fichiers = sorted(glob.glob(pattern))
@@ -311,12 +313,11 @@ def extraire_fichiers_j2_fixe(matiere, jour, petri, souris, zone, fichiers_par_z
     debut = (indice - 1) * fichiers_par_zone
     fin = debut + fichiers_par_zone
     fichiers_zone = tous_les_fichiers_tries[debut:fin]
-    print(f"{zone} — {len(fichiers_zone)} fichiers trouvés: {fichiers_zone}")
+    #print(f"{zone} — {len(fichiers_zone)} fichiers trouvés: {fichiers_zone}")
     
-    #print(f"{zone} — {len(fichiers_zone)} fichiers trouvés")
     return fichiers_zone
 
-extraire_fichiers_j2_fixe('gelose', 'jour2', 'petri1', 'souris1', 'zone1', 10)
+
 
     
 
