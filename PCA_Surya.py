@@ -43,7 +43,7 @@ config = {
         'petri2': ('45gy',     ['souris1', 'souris2']),
         'petri3': ('45gy + P', ['souris1', 'souris2', 'souris3']),
         'petri4': ('60gy',     ['souris4', 'souris5']),
-        'petri5': ('80gy',     ['souris4', 'souris5']),
+        'petri5': ('80gy',     ['souris4']),
     },
     'jour4': {
         'petri1': ('60gy',     ['souris4', 'souris5']),

@@ -14,7 +14,7 @@ from sklearn.preprocessing import StandardScaler
 # 1. LECTURE ET TRONCATURE
 # ─────────────────────────────────────────────
 
-def formater_donnees(chemin_fichier, wn_min=500, wn_max=1800):
+def formater_donnees(chemin_fichier, wn_min=500, wn_max=3025):
     data = []
     integration = 1.0  # valeur par défaut si non trouvée
     
