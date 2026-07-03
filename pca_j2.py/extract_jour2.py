@@ -292,6 +292,7 @@ def extraire_fichiers_j2_frais(jour, petri, souris, zone):
     
     return fichiers_zone
 
+
 racine1 = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya"
 
 def extraire_fichiers_j2_fixe(matiere, jour, petri, souris, zone, fichiers_par_zone=10):
