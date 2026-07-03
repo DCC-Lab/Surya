@@ -43,12 +43,12 @@ extracteur = {
 
 spectres = []
 etiquettes = []
-jour = 'jour_2'
 
 for support, petris in config.items():
     for petri, (dose, souris_data) in petris.items():
         for souris, zones in souris_data.items():
             if 'fixe' in support:
+                jour = 'jour_2'
                 for zone in zones:
                     liste_fichiers = extracteur[support](support.split(' ')[-1], jour, petri, souris, zone)
                     if not liste_fichiers:
@@ -67,8 +67,8 @@ for support, petris in config.items():
                     spectres.append(i)
                     etiquettes.append(f"{souris}-{zone}-{support}-{dose}")
             else:
+                jour = 'jour2'
                 for zone in zones:
-                    jour = 'jour2'
                     liste_fichiers = extracteur[support](jour, petri, souris, zone)
                     if not liste_fichiers:
                         continue
@@ -168,7 +168,8 @@ for ax, (pc_x, pc_y) in zip(axes, [(0, 1), (1, 2)]):
         )
 
         support_txt = supports[idx]
-        etiquette_point = support_abr.get(support_txt, support_txt)
+        zone_txt    = zones[idx].replace('zone', 'z')  # "zone1" → "z1"
+        etiquette_point = f"{support_abr.get(support_txt, support_txt)}-{zone_txt}"
 
         ax.annotate(
             etiquette_point,

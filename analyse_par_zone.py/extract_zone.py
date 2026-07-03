@@ -368,7 +368,30 @@ def extraire_fichiers_jour_0(jour, petri, souris, echantillon, zone, fichiers_pa
     #print(f"{zone} — {len(fichiers_zone)} fichiers trouvés")
     return fichiers_zone    
 
+racine1 = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya"
 
+def extraire_fichiers_j2_fixe(matiere, jour, petri, souris, zone, fichiers_par_zone=10):
+
+    dossier = os.path.join(racine1, jour, "raman", petri)
+    pattern = os.path.join(dossier, f"{souris}*{matiere}*")
+
+    tous_les_fichiers = sorted(glob.glob(pattern))
+    
+    if not tous_les_fichiers:
+        #print(f"Aucun fichier trouvé avec le pattern : {pattern}")
+        return []
+    
+    # Trie par date de modification (le plus ancien en premier)
+    tous_les_fichiers_tries = sorted(tous_les_fichiers, key=lambda f: os.path.getmtime(f))
+    
+    # Découpe en tranches de 10
+    indice = int(zone[-1])
+    debut = (indice - 1) * fichiers_par_zone
+    fin = debut + fichiers_par_zone
+    fichiers_zone = tous_les_fichiers_tries[debut:fin]
+    #print(f"{zone} — {len(fichiers_zone)} fichiers trouvés: {fichiers_zone}")
+    
+    return fichiers_zone
 
 
 

@@ -1,4 +1,4 @@
-from extract_zone import traiter_acquisitions_gellose, traiter_acquisitions_verre, extraire_fichiers_jour_0, extraire_fichiers_jour_2, extraire_fichiers_jour_4, extraire_fichiers_jours_8_11
+from extract_zone import traiter_acquisitions_gellose, traiter_acquisitions_verre, extraire_fichiers_jour_0, extraire_fichiers_j2_fixe, extraire_fichiers_jour_4, extraire_fichiers_jours_8_11
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.decomposition import NMF
@@ -56,7 +56,7 @@ config = {
 
 extracteur = {
     'jour0':   extraire_fichiers_jour_0,
-    'jour2':   extraire_fichiers_jour_2,
+    'jour2':   extraire_fichiers_j2_fixe,
     'jour4':   extraire_fichiers_jour_4,
     'jour_8':  extraire_fichiers_jours_8_11,
     'jour_11': extraire_fichiers_jours_8_11,
@@ -87,6 +87,25 @@ for jour, petris in config.items():
 
                         spectres.append(i)
                         etiquettes.append(f"{souris}-{echantillon}-{zone}-{jour}-{dose}")
+
+            elif jour == 'jour2':
+                # ✅ structure normale : contenu est une liste de zones
+                zones = contenu
+                for zone in zones:
+                    liste_fichiers = extracteur[jour]('verre', jour, petri, souris, zone)
+                    if not liste_fichiers:
+                        continue
+
+                    w, i = traiter_acquisitions_verre(liste_fichiers)
+
+                    if w is None or i is None:
+                        continue
+                    if not np.isfinite(i).all():
+                        print(f"NaN/Inf : {souris} {zone}, {petri}, {jour} — ignoré")
+                        continue
+
+                    spectres.append(i)
+                    etiquettes.append(f"{souris}-{zone}-{jour}-{dose}")               
 
             else:
                 # ✅ structure normale : contenu est une liste de zones
