@@ -189,6 +189,9 @@ def traiter_acquisitions(liste_fichiers,
 dossier_verre = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya\jour_2\spectre du verre"
 liste_fichiers_verre =  sorted(glob.glob(os.path.join(dossier_verre, "*.txt")))
 
+dossier_gellose = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya\spectre_gellose"
+liste_fichiers_gellose = sorted(glob.glob(os.path.join(dossier_gellose, "*.txt")))
+
 def traiter_acquisitions_verre(liste_fichiers, retirer_cosmiques=True):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
@@ -207,12 +210,25 @@ def traiter_acquisitions_verre(liste_fichiers, retirer_cosmiques=True):
     
     return wn, i_nrml
 
+def traiter_acquisitions_verre_gelose(liste_fichiers, retirer_cosmiques=True):
+
+    wn, i = traiter_acquisitions(liste_fichiers, retirer_cosmiques)
+    wn_verre, i_verre = traiter_acquisitions(liste_fichiers_verre, retirer_cosmiques)
+    wn_gelose, i_gelose = traiter_acquisitions(liste_fichiers_gellose, retirer_cosmiques)
+    intensite_SV = soustraire_spectre(wn, i, wn_verre, i_verre)
+    intensite_SV_SG = soustraire_spectre(wn, intensite_SV, wn_gelose, i_gelose)
+    intensite_SV_SG_SF = corriger_fluorescence(intensite_SV_SG, min_bubble_widths=50, fit_order=1)
+
+    intensite_centree = intensite_SV_SG_SF - np.mean(intensite_SV_SG_SF)
+    i_nrml = intensite_centree / np.max(intensite_centree)
+    
+    return wn, i_nrml
+
 # ────────────────────────────────────────────────────────────────────────
 # 6. RETRAITS DE LA GELLOSE + CENTRAGE DES DONNÉES: JOUR 2 ET 4
 # ────────────────────────────────────────────────────────────────────────
 
-dossier_gellose = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya\spectre_gellose"
-liste_fichiers_gellose = sorted(glob.glob(os.path.join(dossier_gellose, "*.txt")))
+
 
 def traiter_acquisitions_gellose(liste_fichiers, retirer_cosmiques=True):
     """

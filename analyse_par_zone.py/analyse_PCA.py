@@ -1,4 +1,4 @@
-from extract_zone import traiter_acquisitions_gellose, traiter_acquisitions_verre, extraire_fichiers_jour_0, extraire_fichiers_jour_2, extraire_fichiers_jour_4, extraire_fichiers_jours_8_11
+from extract_zone import traiter_acquisitions_verre_gelose, traiter_acquisitions_verre, extraire_fichiers_jour_0, extraire_fichiers_jour_2, extraire_fichiers_jour_4, extraire_fichiers_jours_8_11
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.decomposition import NMF
@@ -28,9 +28,9 @@ config = {
     'jour2': {
         'petri1': ('0gy',      {'souris1': ['zone1'], 'souris2': ['zone1','zone2'], 'souris3': ['zone1','zone2','zone3']}),
         'petri2': ('45gy',     {'souris1': ['zone1','zone2'], 'souris2': ['zone1','zone2','zone3']}),
-        #'petri3': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
-        #'petri4': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
-        #'petri5': ('80gy',     {'souris4': ['zone1','zone2','zone3']}),
+        'petri3': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
+        'petri4': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        'petri5': ('80gy',     {'souris4': ['zone1','zone2','zone3']}),
     },
     'jour4': {
         #'petri1': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
@@ -46,12 +46,12 @@ config = {
         #'petri4': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
         #'petri5': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
     },
-    'jour_11': {
-        'petri1': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
-        'petri2': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
+    #'jour_11': {
+        #'petri1': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
+        #'petri2': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
         #'petri3': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
         #'petri4': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
-    },
+    #},
 }
 
 extracteur = {
@@ -77,7 +77,7 @@ for jour, petris in config.items():
                         if not liste_fichiers:
                             continue
 
-                        w, i = traiter_acquisitions_verre(liste_fichiers)  # ou gellose, selon le jour0
+                        w, i = traiter_acquisitions_verre(liste_fichiers)  # ou gelose, selon le jour0
 
                         if w is None or i is None:
                             continue
@@ -97,7 +97,8 @@ for jour, petris in config.items():
                         continue
 
                     if jour == 'jour2':
-                        w, i = traiter_acquisitions_gellose(liste_fichiers)
+                        w, i = traiter_acquisitions_verre_gelose(liste_fichiers)
+
                     else:
                         w, i = traiter_acquisitions_verre(liste_fichiers)
 
