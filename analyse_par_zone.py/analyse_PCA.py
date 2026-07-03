@@ -260,6 +260,15 @@ plt.suptitle("PCA — Score plots")
 plt.tight_layout()
 plt.show()
 
+
+
+
+
+
+
+
+
+
 # -1- décale tout pour que le minimum soit 0
 X_nmf = X - X.min()   
 # -2- applique NMF
