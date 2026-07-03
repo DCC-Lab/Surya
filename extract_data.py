@@ -176,7 +176,7 @@ def traiter_acquisitions(liste_fichiers,
         return None, None
 
     for fichier in liste_fichiers:
-        wn, intensite = formater_donnees(fichier, wn_min, wn_max)
+        wn, intensite = formater_donnees(fichier)
 
         if wn is None:  # ← saute les fichiers mal formatés
             continue
