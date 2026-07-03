@@ -394,5 +394,23 @@ def extraire_fichiers_j2_fixe(matiere, jour, petri, souris, zone, fichiers_par_z
     return fichiers_zone
 
 
+def extraire_fichiers_jour8_frais(jour, petri, souris, zone):
+    dossier = os.path.join(racine2, jour, "Raman", petri)
+    pattern = os.path.join(dossier, f"*{souris}*{zone}*")
 
-extraire_fichiers_jour_0("jour0", "petri1", "souris1", 'echantillon1', 'zone2')
+    dossiers_trouves = sorted(glob.glob(pattern))
+    
+    if not dossiers_trouves:
+        print(f"Pour le {jour} La {zone} de la {souris} du {petri} n'existe pas")
+        return []
+
+    fichiers_zone = sorted(glob.glob(os.path.join(dossiers_trouves[0], "*.txt")))
+    #print(f'Fichiers de la {zone} du {petri} du {jour} : {fichiers_zone}')
+    
+    return fichiers_zone
+
+    return
+
+
+
+extraire_fichiers_jour8_frais("Jour8", "petri1", "souris1", 'zone2')
