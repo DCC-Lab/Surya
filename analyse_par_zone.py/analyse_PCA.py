@@ -16,13 +16,13 @@ config = {
             'souris2': {'echantillon1': ['zone1','zone2','zone3'], 'echantillon2': ['zone1','zone2','zone3']},
             'souris3': {'echantillon1': ['zone1','zone2','zone3']},
         }),
-        #'petri2': ('0gy', {
-        #    'souris4': {'echantillon1': ['zone1','zone2','zone3']},
-        #    'souris5': {'echantillon1': ['zone1','zone2','zone3']},
-        #}),
-        #'petri3': ('80gy', {
-        #    'souris4': {'echantillon1': ['zone1','zone2','zone3']},
-        #}),
+        'petri2': ('0gy', {
+            'souris4': {'echantillon1': ['zone1','zone2','zone3']},
+            'souris5': {'echantillon1': ['zone1','zone2','zone3']},
+        }),
+        'petri3': ('80gy', {
+            'souris4': {'echantillon1': ['zone1','zone2','zone3']},
+        }),
     },
     
     'jour2': {
@@ -33,25 +33,25 @@ config = {
         'petri5': ('80gy',     {'souris4': ['zone1','zone2','zone3']}),
     },
     'jour4': {
-        #'petri1': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
-        #'petri2': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        'petri1': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        'petri2': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
         'petri3': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
-        #'petri4': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
+        'petri4': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
         'petri5': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3']}),
     },
     'jour_8': {
         'petri1': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
         'petri2': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
-        #'petri3': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3']}),
-        #'petri4': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
-        #'petri5': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        'petri3': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3']}),
+        'petri4': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        'petri5': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
     },
-    #'jour_11': {
-        #'petri1': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
-        #'petri2': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
-        #'petri3': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
-        #'petri4': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
-    #},
+    'jour_11': {
+        'petri1': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
+        'petri2': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
+        'petri3': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        'petri4': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+    },
 }
 
 extracteur = {
@@ -295,115 +295,115 @@ for idx in range(3):
     axes[idx, 1].set_ylabel("Loading")
     axes[idx, 1].axhline(0, color='grey', lw=0.5)
 
-plt.suptitle("NMF vs PCA — Composantes spectrales")
+plt.suptitle("NMF vs PCA — Composantes spectrales-3025-moyennées-sans scaled")
 plt.tight_layout()
 plt.show()
 
 # ── 4. Plot 3D ────────────────────────────────────────────────────────────────
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-from matplotlib.lines import Line2D
-from mpl_toolkits.mplot3d import Axes3D  # nécessaire pour projection='3d'
+#import matplotlib.pyplot as plt
+#import matplotlib.patches as mpatches
+#from matplotlib.lines import Line2D
+#from mpl_toolkits.mplot3d import Axes3D  # nécessaire pour projection='3d'
 
 # ── Définir les mappings ──────────────────────────────────────────────────────
-color_map = {
-    '0gy':      'blue',
-    '45gy':     'green',
-    '45gy + P': 'orange',
-    '60gy':     'red',
-    '80gy':     'purple',
-}
+#color_map = {
+#    '0gy':      'blue',
+#    '45gy':     'green',
+#    '45gy + P': 'orange',
+#    '60gy':     'red',
+#    '80gy':     'purple',
+#}
 
-marker_map = {
-    'souris1': '^',
-    'souris2': 's',
-    'souris3': 'o',
-    'souris4': 'D',
-    'souris5': 'P',
-}
+#marker_map = {
+#    'souris1': '^',
+#    'souris2': 's',
+#    'souris3': 'o',
+#    'souris4': 'D',
+#    'souris5': 'P',
+#}
 
-def get_marker(s):
-    for cle, marker in marker_map.items():
-        if s.startswith(cle):
-            return marker
-    return 'x'
+#def get_marker(s):
+#    for cle, marker in marker_map.items():
+#        if s.startswith(cle):
+#            return marker
+#    return 'x'
 
 # ── Extraire dose/souris/jour depuis les étiquettes ──────────────────────────
-doses  = [e.split('-')[-1] for e in etiquettes]
-souris = [e.split('-')[0]  for e in etiquettes]
+#doses  = [e.split('-')[-1] for e in etiquettes]
+#souris = [e.split('-')[0]  for e in etiquettes]
 
-zones  = []
-jours  = []
-for e in etiquettes:
-    parts = e.split('-')
-    if len(parts) == 5:  # jour0 avec échantillon
-        zones.append(parts[2])
-        jours.append(parts[3])
-    else:  # structure normale
-        zones.append(parts[1])
-        jours.append(parts[2])
+#zones  = []
+#jours  = []
+#for e in etiquettes:
+#    parts = e.split('-')
+#    if len(parts) == 5:  # jour0 avec échantillon
+#        zones.append(parts[2])
+#        jours.append(parts[3])
+#    else:  # structure normale
+#        zones.append(parts[1])
+#        jours.append(parts[2])
+#    
+#fig = plt.figure(figsize=(10, 8))
+#ax = fig.add_subplot(111, projection='3d')
 
-fig = plt.figure(figsize=(10, 8))
-ax = fig.add_subplot(111, projection='3d')
+#for idx in range(len(etiquettes)):
+#    dose  = doses[idx]
+#    jour  = jours[idx]
+#    s     = souris[idx]
+#    color = color_map[dose]
 
-for idx in range(len(etiquettes)):
-    dose  = doses[idx]
-    jour  = jours[idx]
-    s     = souris[idx]
-    color = color_map[dose]
+#    ax.scatter(
+#        X_reduced[idx, 0],
+#        X_reduced[idx, 1],
+#        X_reduced[idx, 2],
+#        color=color,
+#        marker=get_marker(s),
+#        s=50,
+#        edgecolors='none',
+#    )
+#
+#    # Étiquette : jour abrégé
+#    num_souris = s.replace('souris', '')
+#    jour_court = jour.replace('jour_', 'j').replace('jour', 'j')
+#    etiquette_point = f"j{jour_court[-1] if '_' not in jour else jour_court[1:]}"
 
-    ax.scatter(
-        X_reduced[idx, 0],
-        X_reduced[idx, 1],
-        X_reduced[idx, 2],
-        color=color,
-        marker=get_marker(s),
-        s=50,
-        edgecolors='none',
-    )
+#    ax.text(
+#        X_reduced[idx, 0],
+#        X_reduced[idx, 1],
+#        X_reduced[idx, 2],
+#        etiquette_point,
+#        fontsize=5,
+#        color='black',
+#        alpha=0.7,
+#    )
 
-    # Étiquette : jour abrégé
-    num_souris = s.replace('souris', '')
-    jour_court = jour.replace('jour_', 'j').replace('jour', 'j')
-    etiquette_point = f"j{jour_court[-1] if '_' not in jour else jour_court[1:]}"
-
-    ax.text(
-        X_reduced[idx, 0],
-        X_reduced[idx, 1],
-        X_reduced[idx, 2],
-        etiquette_point,
-        fontsize=5,
-        color='black',
-        alpha=0.7,
-    )
-
-ax.set_xlabel(f"PC1 ({pca.explained_variance_ratio_[0]:.1%})")
-ax.set_ylabel(f"PC2 ({pca.explained_variance_ratio_[1]:.1%})")
-ax.set_zlabel(f"PC3 ({pca.explained_variance_ratio_[2]:.1%})")
+#ax.set_xlabel(f"PC1 ({pca.explained_variance_ratio_[0]:.1%})")
+#ax.set_ylabel(f"PC2 ({pca.explained_variance_ratio_[1]:.1%})")
+#ax.set_zlabel(f"PC3 ({pca.explained_variance_ratio_[2]:.1%})")
 
 # ── Légendes : dose + souris ──────────────────────────────────────────────────
-handles_dose = [mpatches.Patch(color=c, label=d) for d, c in color_map.items()]
-legend_dose = ax.legend(
-    handles=handles_dose,
-    title="Dose",
-    bbox_to_anchor=(1.05, 1),
-    loc='upper left',
-    fontsize=8,
-)
-ax.add_artist(legend_dose)
+#handles_dose = [mpatches.Patch(color=c, label=d) for d, c in color_map.items()]
+#legend_dose = ax.legend(
+#    handles=handles_dose,
+#    title="Dose",
+#    bbox_to_anchor=(1.05, 1),
+#    loc='upper left',
+#    fontsize=8,
+#)
+#ax.add_artist(legend_dose)
 
-handles_souris = [
-    Line2D([0], [0], marker=m, color='grey', linestyle='', markersize=8, label=s)
-    for s, m in marker_map.items()
-]
-ax.legend(
-    handles=handles_souris,
-    title="Souris",
-    bbox_to_anchor=(1.05, 0.5),
-    loc='upper left',
-    fontsize=8,
-)
+#handles_souris = [
+#    Line2D([0], [0], marker=m, color='grey', linestyle='', markersize=8, label=s)
+#    for s, m in marker_map.items()
+#]
+#ax.legend(
+#    handles=handles_souris,
+#    title="Souris",
+#    bbox_to_anchor=(1.05, 0.5),
+#    loc='upper left',
+#    fontsize=8,
+#)
 
-plt.suptitle("PCA — Score plot 3D")
-plt.tight_layout()
-plt.show()
+#plt.suptitle("PCA — Score plot 3D")
+#plt.tight_layout()
+#plt.show()
