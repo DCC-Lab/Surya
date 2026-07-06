@@ -1,13 +1,12 @@
 import numpy as np
+from scipy.signal import savgol_filter
+from scipy.interpolate import UnivariateSpline
 import os
 from orpl.baseline_removal import bubblefill
 import glob
-import os
-import matplotlib.pyplot as plt
 from scipy.optimize import lsq_linear
 import numpy as np
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
+
 
 # ─────────────────────────────────────────────
 # 1. LECTURE ET TRONCATURE
@@ -68,8 +67,72 @@ def formater_donnees(chemin_fichier, wn_min=500, wn_max=3025):
 
 
 # ─────────────────────────────────────────────
-# 2. retr
+# 2. retrait de l'étalon
 # ─────────────────────────────────────────────
+
+def caracteriser_motif_fixe(wn_ref, intensite_ref_brute,
+                             fenetre_lissage=101, ordre_poly=3,
+                             methode='savgol'):
+    """
+    Caractérise la fonction de motif fixe t(λ) à partir d'un spectre de
+    référence spectralement lisse (ex: verre fluorescent NIST SRM 2241,
+    ou toute source dont la vraie émission ne devrait pas osciller).
+ 
+    wn_ref              : axe (longueur d'onde ou nombre d'onde, doit être
+                           le même axe utilisé pour vos acquisitions brutes,
+                           idéalement en nm avant conversion Raman)
+    intensite_ref_brute : spectre brut mesuré de la référence
+    fenetre_lissage     : taille de fenêtre Savitzky-Golay (impair, large
+                           pour ne PAS suivre les oscillations d'étalon,
+                           typiquement > 2x la période des franges)
+    ordre_poly          : ordre du polynôme local pour Savitzky-Golay
+    methode             : 'savgol' ou 'spline'
+ 
+    Retourne t(λ), la fonction de motif fixe (sans dimension, ~1 en moyenne).
+    """
+    if methode == 'savgol':
+        if fenetre_lissage % 2 == 0:
+            fenetre_lissage += 1
+        lisse = savgol_filter(intensite_ref_brute, fenetre_lissage, ordre_poly)
+    elif methode == 'spline':
+        spl = UnivariateSpline(wn_ref, intensite_ref_brute, s=len(wn_ref) * 50)
+        lisse = spl(wn_ref)
+    else:
+        raise ValueError("methode doit être 'savgol' ou 'spline'")
+ 
+    # Évite division par ~0
+    lisse = np.where(np.abs(lisse) < 1e-9, 1e-9, lisse)
+ 
+    t_lambda = intensite_ref_brute / lisse
+    return t_lambda, lisse
+ 
+ 
+def corriger_motif_fixe(wn_echantillon, intensite_echantillon,
+                         wn_ref, t_lambda):
+    """
+    Applique la correction de motif fixe à un spectre échantillon.
+    Interpole t_lambda sur la grille de l'échantillon si nécessaire.
+    """
+    if len(wn_ref) != len(wn_echantillon) or not np.allclose(wn_ref, wn_echantillon):
+        t_interp = np.interp(wn_echantillon, wn_ref, t_lambda)
+    else:
+        t_interp = t_lambda
+ 
+    return intensite_echantillon / t_interp
+
+
+def raman_shift_to_nm(shift_cm1, laser_nm):
+    nu_laser = 1e7 / laser_nm          # cm^-1
+    nu_scattered = nu_laser - shift_cm1  # Stokes
+    return 1e7 / nu_scattered           # nm
+
+
+
+
+
+
+
+
 
 
 
@@ -184,6 +247,10 @@ def corriger_fluorescence(intensite, min_bubble_widths=50, fit_order=1):
     
     return spectre_corrigé
 
+
+
+
+
 def traiter_acquisitions(liste_fichiers,
                           retirer_cosmiques=True, retirer_fluorescence=True):
     """
@@ -220,6 +287,8 @@ def traiter_acquisitions(liste_fichiers,
     # Moyennage des acquisitions : on a maintenant 1 spectre pour les 20 ou 30 acquisitions
     spectre_moyen = np.mean(spectres, axis=0)
 
+
+
     # retrait de la fluorescence
     if retirer_fluorescence:
         intensite_sans_fluorescence = corriger_fluorescence(spectre_moyen, min_bubble_widths=50, fit_order=1)
@@ -228,11 +297,17 @@ def traiter_acquisitions(liste_fichiers,
 
 dossier_verre = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya\jour_2\spectre du verre"
 liste_fichiers_verre =  sorted(glob.glob(os.path.join(dossier_verre, "*.txt")))
+wn_verre, i_verre, _ = traiter_acquisitions(liste_fichiers_verre)
 
 dossier_gellose = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya\spectre_gellose"
 liste_fichiers_gellose = sorted(glob.glob(os.path.join(dossier_gellose, "*.txt")))
+wn_gelose, i_gelose, _ = traiter_acquisitions(liste_fichiers_gellose)
 
-def traiter_acquisitions_verre(liste_fichiers, retirer_cosmiques=True):
+racine = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya\spectre_lumière_blanche"
+fichiers = sorted(glob.glob(os.path.join(racine, '*.txt')))
+wn_ref,_, intensite_ref_brute = traiter_acquisitions(fichiers)
+
+def traiter_acquisitions_verre(liste_fichiers, traiter_etalon=True):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
     Soustrait le spectre du verre et corrige la fluorescence.
@@ -240,21 +315,40 @@ def traiter_acquisitions_verre(liste_fichiers, retirer_cosmiques=True):
     Retourne (wavenumbers, spectre_centré).
     """
     
-    wn, i, _ = traiter_acquisitions(liste_fichiers, retirer_cosmiques)
-    wn_verre, i_verre, _ = traiter_acquisitions(liste_fichiers_verre, retirer_cosmiques)
-    intensite_SV = soustraire_spectre(wn, i, wn_verre, i_verre)
-    intensité_SV_SF = corriger_fluorescence(intensite_SV, min_bubble_widths=50, fit_order=1)
+    #spectre sans rayon cosmiques
+    wn, _, i = traiter_acquisitions(liste_fichiers)
+
+    t_lambda, lisse = caracteriser_motif_fixe(raman_shift_to_nm(wn, 785), i)
+
+    if traiter_etalon:
+        #spectre sans rayon cosmiques et sans étalon
+        i_corr_F = corriger_motif_fixe(raman_shift_to_nm(wn, 785), i, raman_shift_to_nm(wn_ref, 785), t_lambda)
+
+        #spectre sans rayon cosmiques, sans étalon et sans fluorescence
+        i_corr_SF = corriger_fluorescence(i_corr_F)
+
+        #spectre sans rayon cosmiques, sans étalon, sans fluorescence et sans verre
+        intensite = soustraire_spectre(wn, i_corr_SF, wn_verre, i_verre)
+
+    else:
+        i_SF = corriger_fluorescence(i)
+
+        #spectre sans rayon cosmiqueset et sans verre
+        intensite = soustraire_spectre(wn, i_SF, wn_verre, i_verre)
+
     
-    intensite_centree = intensité_SV_SF - np.mean(intensité_SV_SF)
+    intensite_centree = intensite - np.mean(intensite)
     i_nrml = intensite_centree / np.max(intensite_centree)
     
     return wn, i_nrml
 
-def traiter_acquisitions_verre_gelose(liste_fichiers, retirer_cosmiques=True):
+#!!! a faire
 
-    wn, i, _ = traiter_acquisitions(liste_fichiers, retirer_cosmiques)
-    wn_verre, i_verre, _ = traiter_acquisitions(liste_fichiers_verre, retirer_cosmiques)
-    wn_gelose, i_gelose, _ = traiter_acquisitions(liste_fichiers_gellose, retirer_cosmiques)
+def traiter_acquisitions_verre_gelose(liste_fichiers, retirer_etalon=True):
+
+    wn, i, _ = traiter_acquisitions(liste_fichiers)
+    wn_verre, i_verre, _ = traiter_acquisitions(liste_fichiers_verre)
+
     intensite_SV = soustraire_spectre(wn, i, wn_verre, i_verre)
     intensite_SV_SG = soustraire_spectre(wn, intensite_SV, wn_gelose, i_gelose)
     intensite_SV_SG_SF = corriger_fluorescence(intensite_SV_SG, min_bubble_widths=50, fit_order=1)

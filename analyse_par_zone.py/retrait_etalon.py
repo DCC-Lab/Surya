@@ -1,239 +1,172 @@
-"""
-Correction de l'effet d'étalonnage (etaloning) sur des spectres Raman.
-
-L'etaloning produit une modulation quasi-sinusoïdale de l'efficacité
-quantique du CCD, superposée au signal Raman. Ce script propose :
-
-  1. detect_fringe_frequency() : identifie la fréquence dominante des
-     franges via une FFT du spectre.
-  2. remove_etalon_fft()       : filtre coupe-bande centré sur cette
-     fréquence (rapide, bon premier passage).
-  3. fit_and_remove_sinusoid() : ajuste un modèle sinusoïdal
-     (amplitude + fréquence + phase, éventuellement variable) sur les
-     régions SANS pic Raman, puis le soustrait sur tout le spectre
-     (plus précis, recommandé pour la correction finale).
-
-Usage typique : lance d'abord detect_fringe_frequency() pour voir le
-spectre de puissance et repérer le pic des franges, puis utilise cette
-fréquence comme point de départ pour fit_and_remove_sinusoid().
-"""
-
 import numpy as np
-from extract_zone import traiter_acquisitions, extraire_fichiers_jour_0, extraire_fichiers_j2_fixe, extraire_fichiers_jour_2,  extraire_fichiers_jour_4, extraire_fichiers_jours_8_11, extraire_fichiers_jour8_frais
-from scipy.fft import rfft, irfft, rfftfreq
-from scipy.optimize import curve_fit
-from scipy.signal import find_peaks
+from scipy.signal import savgol_filter
+from scipy.interpolate import UnivariateSpline
+import glob
+from extract_zone import formater_donnees, retirer_rayons_cosmiques, extraire_fichiers_jours_8_11, soustraire_spectre, corriger_fluorescence
+
+import os
+ 
+# ─────────────────────────────────────────────────────────────
+# CORRECTION DE L'EFFET D'ÉTALON (motif fixe multiplicatif du CCD)
+# ─────────────────────────────────────────────────────────────
+#
+# Contrairement à la fluorescence (fond additif, lentement variable),
+# l'effet d'étalon module le GAIN du détecteur de façon multiplicative
+# et périodique en LONGUEUR D'ONDE (nm), pas en Raman shift (cm-1).
+# Il faut donc:
+#   1) le caractériser sur un spectre de référence lisse (avant conversion
+#      en Raman shift, idéalement dès l'acquisition en nm)
+#   2) diviser tous les spectres bruts par ce motif AVANT toute soustraction
+#      de fond (bubblefill, soustraction de verre/gellose, etc.)
 
 
-def detect_fringe_frequency(spectrum, x=None, exclude_low_freq=0.02, plot=True):
+ 
+def caracteriser_motif_fixe(wn_ref, intensite_ref_brute,
+                             fenetre_lissage=101, ordre_poly=3,
+                             methode='savgol'):
     """
-    Identifie la fréquence spatiale dominante d'une modulation périodique
-    (etaloning) dans un spectre, via analyse FFT.
-
-    Parameters
-    ----------
-    spectrum : array-like
-        Intensités du spectre (en fonction du pixel ou du nombre d'onde).
-    x : array-like, optional
-        Axe x correspondant (pixel ou cm-1). Utilisé seulement pour les
-        graphiques.
-    exclude_low_freq : float
-        Fraction des basses fréquences à ignorer (0.02 = 2%), pour ne pas
-        confondre la tendance générale du spectre (large, basse fréquence)
-        avec les franges (plus haute fréquence, périodiques).
-    plot : bool
-        Affiche le spectre et son spectre de puissance FFT.
-
-    Returns
-    -------
-    dominant_freq : float
-        Fréquence dominante détectée (en cycles / échantillon).
-    period_pixels : float
-        Période correspondante, en nombre de pixels.
+    Caractérise la fonction de motif fixe t(λ) à partir d'un spectre de
+    référence spectralement lisse (ex: verre fluorescent NIST SRM 2241,
+    ou toute source dont la vraie émission ne devrait pas osciller).
+ 
+    wn_ref              : axe (longueur d'onde ou nombre d'onde, doit être
+                           le même axe utilisé pour vos acquisitions brutes,
+                           idéalement en nm avant conversion Raman)
+    intensite_ref_brute : spectre brut mesuré de la référence
+    fenetre_lissage     : taille de fenêtre Savitzky-Golay (impair, large
+                           pour ne PAS suivre les oscillations d'étalon,
+                           typiquement > 2x la période des franges)
+    ordre_poly          : ordre du polynôme local pour Savitzky-Golay
+    methode             : 'savgol' ou 'spline'
+ 
+    Retourne t(λ), la fonction de motif fixe (sans dimension, ~1 en moyenne).
     """
-    n = len(spectrum)
-    spectrum = np.asarray(spectrum, dtype=float)
-
-    # on retire la tendance moyenne / lente pour isoler les hautes fréquences
-    detrended = spectrum - np.polyval(np.polyfit(np.arange(n), spectrum, 3), np.arange(n))
-
-    fft_vals = rfft(detrended)
-    freqs = rfftfreq(n)
-    power = np.abs(fft_vals)
-
-    # on ignore les toutes basses fréquences (tendance résiduelle)
-    low_cut = int(exclude_low_freq * n)
-    power_search = power.copy()
-    power_search[:low_cut] = 0
-
-    peak_idx = np.argmax(power_search)
-    dominant_freq = freqs[peak_idx]
-    period_pixels = 1.0 / dominant_freq if dominant_freq > 0 else np.inf
-
-    if plot:
-        import matplotlib.pyplot as plt
-        x_axis = x if x is not None else np.arange(n)
-
-        fig, axes = plt.subplots(2, 1, figsize=(9, 6))
-        axes[0].plot(x_axis, spectrum, lw=0.8)
-        axes[0].set_title("Spectre brut")
-        axes[0].set_xlabel("pixel / cm-1")
-
-        axes[1].plot(freqs, power)
-        axes[1].axvline(dominant_freq, color="red", ls="--",
-                         label=f"pic détecté: période ≈ {period_pixels:.1f} px")
-        axes[1].set_title("Spectre de puissance (FFT)")
-        axes[1].set_xlabel("fréquence spatiale (cycles/pixel)")
-        axes[1].legend()
-        plt.tight_layout()
-        plt.savefig("/home/claude/fft_diagnostic.png", dpi=120)
-        plt.close()
-
-    return dominant_freq, period_pixels
-
-
-def remove_etalon_fft(spectrum, freq_low, freq_high):
-    """
-    Filtre coupe-bande simple : met à zéro les composantes FFT dans
-    l'intervalle [freq_low, freq_high] (cycles/échantillon), là où
-    se trouvent les franges d'etaloning.
-
-    À utiliser en première approche / diagnostic rapide. Attention :
-    si un pic Raman partage la même fréquence spatiale que les franges,
-    il sera aussi atténué. Préférer fit_and_remove_sinusoid() pour un
-    résultat plus propre.
-    """
-    spectrum = np.asarray(spectrum, dtype=float)
-    n = len(spectrum)
-
-    fft_vals = rfft(spectrum)
-    freqs = rfftfreq(n)
-
-    mask = (freqs >= freq_low) & (freqs <= freq_high)
-    fft_vals[mask] = 0
-
-    return irfft(fft_vals, n=n)
-
-
-def _sinusoid_model(x, amplitude, freq, phase, offset):
-    return offset + amplitude * np.sin(2 * np.pi * freq * x + phase)
-
-
-def fit_and_remove_sinusoid(spectrum, initial_freq, raman_peak_mask=None):
-    """
-    Ajuste un modèle sinusoïdal simple sur le spectre (idéalement en
-    excluant les régions où se trouvent de vrais pics Raman) puis le
-    soustrait de l'ensemble du spectre.
-
-    Parameters
-    ----------
-    spectrum : array-like
-        Le spectre à corriger.
-    initial_freq : float
-        Estimation initiale de la fréquence des franges (cycles/pixel),
-        typiquement obtenue via detect_fringe_frequency().
-    raman_peak_mask : array-like of bool, optional
-        Masque de même longueur que spectrum, True là où il y a un vrai
-        pic Raman (à exclure du fit). Si None, le fit se fait sur tout
-        le spectre (moins précis si les pics sont larges/intenses).
-
-    Returns
-    -------
-    corrected : ndarray
-        Spectre après soustraction du modèle sinusoïdal ajusté.
-    fringe_model : ndarray
-        Le modèle de frange lui-même (utile pour vérification visuelle).
-    params : tuple
-        (amplitude, freq, phase, offset) ajustés.
-    """
-    spectrum = np.asarray(spectrum, dtype=float)
-    n = len(spectrum)
-    x = np.arange(n)
-
-    if raman_peak_mask is not None:
-        fit_x = x[~raman_peak_mask]
-        fit_y = spectrum[~raman_peak_mask]
+    if methode == 'savgol':
+        if fenetre_lissage % 2 == 0:
+            fenetre_lissage += 1
+        lisse = savgol_filter(intensite_ref_brute, fenetre_lissage, ordre_poly)
+    elif methode == 'spline':
+        spl = UnivariateSpline(wn_ref, intensite_ref_brute, s=len(wn_ref) * 50)
+        lisse = spl(wn_ref)
     else:
-        fit_x, fit_y = x, spectrum
-
-    amp0 = (np.percentile(fit_y, 95) - np.percentile(fit_y, 5)) / 2
-    offset0 = np.mean(fit_y)
-    p0 = [amp0, initial_freq, 0.0, offset0]
-
-    try:
-        params, _ = curve_fit(_sinusoid_model, fit_x, fit_y, p0=p0, maxfev=10000)
-    except RuntimeError:
-        print("Le fit n'a pas convergé — essaie d'ajuster initial_freq ou le masque.")
-        return spectrum, np.zeros_like(spectrum), tuple(p0)
-
-    fringe_model = _sinusoid_model(x, *params)
-    corrected = spectrum - fringe_model + params[3]  # on garde l'offset (ligne de base)
-
-    return corrected, fringe_model, params
-
-
-def auto_detect_raman_peaks(spectrum, prominence=None):
+        raise ValueError("methode doit être 'savgol' ou 'spline'")
+ 
+    # Évite division par ~0
+    lisse = np.where(np.abs(lisse) < 1e-9, 1e-9, lisse)
+ 
+    t_lambda = intensite_ref_brute / lisse
+    return t_lambda, lisse
+ 
+ 
+def corriger_motif_fixe(wn_echantillon, intensite_echantillon,
+                         wn_ref, t_lambda):
     """
-    Petite aide : détecte automatiquement les positions probables de
-    vrais pics Raman (pics étroits et proéminents) pour construire un
-    masque à passer à fit_and_remove_sinusoid(). À valider visuellement,
-    ce n'est qu'une heuristique de départ.
+    Applique la correction de motif fixe à un spectre échantillon.
+    Interpole t_lambda sur la grille de l'échantillon si nécessaire.
     """
-    spectrum = np.asarray(spectrum, dtype=float)
-    if prominence is None:
-        prominence = 0.1 * (spectrum.max() - spectrum.min())
+    if len(wn_ref) != len(wn_echantillon) or not np.allclose(wn_ref, wn_echantillon):
+        t_interp = np.interp(wn_echantillon, wn_ref, t_lambda)
+    else:
+        t_interp = t_lambda
+ 
+    return intensite_echantillon / t_interp, t_interp
 
-    peaks, properties = find_peaks(spectrum, prominence=prominence, width=(None, None))
-    mask = np.zeros(len(spectrum), dtype=bool)
+def traiter_acquisitions(liste_fichiers,
+                          retirer_cosmiques=True, retirer_etalon=True, retirer_fluorescence=True):
+    """
+    Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
+    Retourne (wavenumbers, spectre_somme).
+    """
+    spectres = []
+    wn_ref = None
 
-    widths = properties["widths"]
-    for peak, width in zip(peaks, widths):
-        half_width = int(np.ceil(width))
-        lo = max(0, peak - half_width)
-        hi = min(len(spectrum), peak + half_width + 1)
-        mask[lo:hi] = True
+    if not liste_fichiers:  # ← vérifie si la liste est vide
+        #print("Aucun fichier à traiter!")
+        return None, None
 
-    return mask
+    for fichier in liste_fichiers:
+        wn, intensite = formater_donnees(fichier)
+
+        if wn is None:  # ← saute les fichiers mal formatés
+            continue
+
+        if wn_ref is None:
+            wn_ref = wn
+        
+        # retrait des rayons cosmiques
+        if retirer_cosmiques:
+            intensite = retirer_rayons_cosmiques(intensite)
+
+        # Interpoler sur la grille de référence si longueur différente
+        if len(wn) != len(wn_ref):
+            intensite = np.interp(wn_ref, wn, intensite)
+
+        # ajout à la liste des spectres
+        spectres.append(intensite)
+    
+    # Moyennage des acquisitions : on a maintenant 1 spectre pour les 20 ou 30 acquisitions
+    spectre_moyen = np.mean(spectres, axis=0)
 
 
-if __name__ == "__main__":
 
-    extracteur = {
-    'jour0':   extraire_fichiers_jour_0,
-    'jour_2':   extraire_fichiers_j2_fixe,
-    'jour4':   extraire_fichiers_jour_4,
-    'jour_8':  extraire_fichiers_jours_8_11,
-    'jour_11': extraire_fichiers_jours_8_11,
-}
+    # retrait de la fluorescence
+    if retirer_fluorescence:
+        intensite_sans_fluorescence = corriger_fluorescence(spectre_moyen, min_bubble_widths=50, fit_order=1)
 
-    liste_fichiers = extracteur['jour0']('jour0', 'petri1', 'souris1','echantillon1', 'zone1')
+    return wn_ref, intensite_sans_fluorescence, spectre_moyen, spectres
 
-    w, _, i = traiter_acquisitions(liste_fichiers)
 
-    # 1. détecter la fréquence des franges
-    freq, period = detect_fringe_frequency(i, plot=False)
-    print(f"Fréquence détectée: {freq:.5f} cycles/pixel, période ≈ {period:.1f} pixels")
+def raman_shift_to_nm(shift_cm1, laser_nm):
+    nu_laser = 1e7 / laser_nm          # cm^-1
+    nu_scattered = nu_laser - shift_cm1  # Stokes
+    return 1e7 / nu_scattered           # nm
 
-    # 2. masquer les vrais pics Raman
-    mask = auto_detect_raman_peaks(i)
 
-    # 3. fitter et soustraire le modèle sinusoïdal
-    corrected, fringe_model, params = fit_and_remove_sinusoid(
-        i, initial_freq=freq, raman_peak_mask=mask
-    )
-    print(f"Paramètres ajustés (amplitude, freq, phase, offset): {params}")
+import matplotlib.pyplot as plt
 
-    # sauvegarde d'un graphique de contrôle
-    import matplotlib.pyplot as plt
-    fig, axes = plt.subplots(3, 1, figsize=(9, 8), sharex=True)
-    axes[0].plot(w, i, lw=0.8)
-    axes[0].set_title("Spectre simulé (avec franges)")
-    axes[1].plot(w, fringe_model, color="orange")
-    axes[1].set_title("Modèle de frange ajusté")
-    axes[2].plot(w, corrected, lw=0.8, color="green")
-    axes[2].plot(w, i + 20, lw=0.8, color="black", ls="--", alpha=0.5,
-                 label="signal Raman vrai (référence)")
-    axes[2].set_title("Spectre corrigé vs signal vrai")
-    axes[2].legend()
-    plt.tight_layout()
-    plt.show()
+
+racine = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya\spectre_lumière_blanche"
+fichiers = sorted(glob.glob(os.path.join(racine, '*.txt')))
+
+
+
+
+dossier_verre = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya\jour_2\spectre du verre"
+liste_fichiers_verre =  sorted(glob.glob(os.path.join(dossier_verre, "*.txt")))
+
+wn_ref,_, intensite_ref_brute, spectres = traiter_acquisitions(fichiers)
+t_lambda, lisse = caracteriser_motif_fixe(raman_shift_to_nm(wn_ref, 785), intensite_ref_brute)
+i_corr_F, t_interp = corriger_motif_fixe(raman_shift_to_nm(wn_ref, 785), intensite_ref_brute, raman_shift_to_nm(wn_ref, 785), t_lambda)
+
+
+
+
+#w, i_SF, i = traiter_acquisitions(extraire_fichiers_jours_8_11("jour_8", "petri1", "souris1", 'zone2'))
+#t_lambda, lisse = caracteriser_motif_fixe(raman_shift_to_nm(w, 785), i)
+#i_corr_F = corriger_motif_fixe(raman_shift_to_nm(w, 785), i, raman_shift_to_nm(wn_ref, 785), t_lambda)
+
+#i_corr_SF = corriger_fluorescence(i_corr_F)
+#wn_verre, i_verre, _ = traiter_acquisitions(liste_fichiers_verre)
+
+#intensite_SV_corr = soustraire_spectre(w, i_corr_SF, wn_verre, i_verre)
+#intensité_SV_SF_corr = corriger_fluorescence(intensite_SV_corr, min_bubble_widths=50, fit_order=1)
+
+#intensite_SV = soustraire_spectre(w, i_SF, wn_verre, i_verre)
+#intensité_SV_SF = corriger_fluorescence(intensite_SV, min_bubble_widths=50, fit_order=1)
+
+
+#plt.plot(w, i, label='spectre bruité initial')
+#plt.plot(w, i_corr_F+250, label='spectre corrigé avec fluo et verre')
+#plt.plot(w, lisse+350, label='motif fixe')
+#plt.plot(w, intensité_SV_SF, label='spectre non corrigé sans verre')
+#plt.plot(w, intensité_SV_SF_corr, label='spectre corrigé sans verre')
+#for i, spectre in enumerate(spectres):
+ #   plt.plot(spectre, label=f'Spectre {i+1}')
+
+plt.plot(raman_shift_to_nm(wn_ref, 785), intensite_ref_brute, label='spectre de référence')
+plt.plot(raman_shift_to_nm(wn_ref, 785), i_corr_F, label='spectre corrigé avec fluo et verre')
+plt.xlabel('Longueur d\'onde (nm)')
+plt.ylabel('Intensité')
+plt.title('Correction de l\'effet d\'étalon')
+plt.legend()
+plt.show()
