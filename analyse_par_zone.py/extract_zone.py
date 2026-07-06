@@ -364,33 +364,37 @@ def traiter_acquisitions_verre_gelose(liste_fichiers, retirer_etalon=True):
 
 
 
-def traiter_acquisitions_gellose(liste_fichiers, retirer_cosmiques=True):
+def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
-    Soustrait le spectre de la gellose et corrige la fluorescence.
+    Soustrait le spectre du verre et corrige la fluorescence.
     Centrage des données en soustrayant la moyenne.
     Retourne (wavenumbers, spectre_centré).
     """
-    wn, i, _= traiter_acquisitions(liste_fichiers, retirer_cosmiques)
-    wn_gellose, i_gellose, _ = traiter_acquisitions(liste_fichiers_gellose, retirer_cosmiques)
-    # ── Vérification avant soustraction ──────────────────────────────────────
-    if wn is None or i is None:
-        print("❌ Échantillon : None")
-        return None, None
-    if wn_gellose is None or i_gellose is None:
-        print("❌ Gellose : None")
-        return None, None
-    if not np.isfinite(i).all():
-        print(f"❌ NaN/Inf dans l'échantillon : {np.sum(~np.isfinite(i))} points")
-        return None, None
-    if not np.isfinite(i_gellose).all():
-        print(f"❌ NaN/Inf dans la gellose : {np.sum(~np.isfinite(i_gellose))} points")
-        return None, None
-    # ─────────────────────────────────────────────────────────────────────────
-    intensite_SG = soustraire_spectre(wn, i, wn_gellose, i_gellose)
-    intensité_SG_SF = corriger_fluorescence(intensite_SG, min_bubble_widths=50, fit_order=1)
     
-    intensite_centree = intensité_SG_SF - np.mean(intensité_SG_SF)
+    #spectre sans rayon cosmiques
+    wn, _, i = traiter_acquisitions(liste_fichiers)
+
+    t_lambda, lisse = caracteriser_motif_fixe(raman_shift_to_nm(wn, 785), i)
+
+    if traiter_etalon:
+        #spectre sans rayon cosmiques et sans étalon
+        i_corr_F = corriger_motif_fixe(raman_shift_to_nm(wn, 785), i, raman_shift_to_nm(wn_ref, 785), t_lambda)
+
+        #spectre sans rayon cosmiques, sans étalon et sans fluorescence
+        i_corr_SF = corriger_fluorescence(i_corr_F)
+
+        #spectre sans rayon cosmiques, sans étalon, sans fluorescence et sans verre
+        intensite = soustraire_spectre(wn, i_corr_SF, wn_gelose, i_gelose)
+
+    else:
+        i_SF = corriger_fluorescence(i)
+
+        #spectre sans rayon cosmiqueset et sans verre
+        intensite = soustraire_spectre(wn, i_SF, wn_verre, i_verre)
+
+    
+    intensite_centree = intensite - np.mean(intensite)
     i_nrml = intensite_centree / np.max(intensite_centree)
     
     return wn, i_nrml
