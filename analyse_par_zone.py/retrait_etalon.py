@@ -2,7 +2,7 @@ import numpy as np
 from scipy.signal import savgol_filter
 from scipy.interpolate import UnivariateSpline
 import glob
-from extract_zone import formater_donnees, retirer_rayons_cosmiques, extraire_fichiers_jours_8_11, soustraire_spectre, corriger_fluorescence
+from extract_zone import formater_donnees, retirer_rayons_cosmiques, extraire_fichiers_jours_8_11, extraire_fichiers_jour_4, extraire_fichiers_j2_fixe,  soustraire_spectre, corriger_fluorescence
 
 import os
  
@@ -69,7 +69,7 @@ def corriger_motif_fixe(wn_echantillon, intensite_echantillon,
     else:
         t_interp = t_lambda
  
-    return intensite_echantillon / t_interp, t_interp
+    return intensite_echantillon / t_interp
 
 def traiter_acquisitions(liste_fichiers,
                           retirer_cosmiques=True, retirer_etalon=True, retirer_fluorescence=True):
@@ -136,37 +136,39 @@ liste_fichiers_verre =  sorted(glob.glob(os.path.join(dossier_verre, "*.txt")))
 
 wn_ref,_, intensite_ref_brute, spectres = traiter_acquisitions(fichiers)
 t_lambda, lisse = caracteriser_motif_fixe(raman_shift_to_nm(wn_ref, 785), intensite_ref_brute)
-i_corr_F, t_interp = corriger_motif_fixe(raman_shift_to_nm(wn_ref, 785), intensite_ref_brute, raman_shift_to_nm(wn_ref, 785), t_lambda)
+i_corr_F= corriger_motif_fixe(raman_shift_to_nm(wn_ref, 785), intensite_ref_brute, raman_shift_to_nm(wn_ref, 785), t_lambda)
+
+
+w_j2s4p4, _, i_j2s4p4, s = traiter_acquisitions(extraire_fichiers_j2_fixe('verre', 'jour2', 'petri4', 'souris4', 'zone1')) #petri4 = 60gy
+i_j2s4p4_corr = corriger_motif_fixe(raman_shift_to_nm(wn_ref, 785), i_j2s4p4, raman_shift_to_nm(w_j2s4p4, 785), t_lambda)
+w_j2s5p4, _, i_j2s5p4, s = traiter_acquisitions(extraire_fichiers_j2_fixe('verrre', 'jour2', 'petri4', 'souris5', 'zone1'))
+i_j2s5p4_corr = corriger_motif_fixe(raman_shift_to_nm(wn_ref, 785), i_j2s5p4, raman_shift_to_nm(w_j2s5p4, 785), t_lambda)
 
 
 
 
-#w, i_SF, i = traiter_acquisitions(extraire_fichiers_jours_8_11("jour_8", "petri1", "souris1", 'zone2'))
-#t_lambda, lisse = caracteriser_motif_fixe(raman_shift_to_nm(w, 785), i)
-#i_corr_F = corriger_motif_fixe(raman_shift_to_nm(w, 785), i, raman_shift_to_nm(wn_ref, 785), t_lambda)
-
-#i_corr_SF = corriger_fluorescence(i_corr_F)
-#wn_verre, i_verre, _ = traiter_acquisitions(liste_fichiers_verre)
-
-#intensite_SV_corr = soustraire_spectre(w, i_corr_SF, wn_verre, i_verre)
-#intensité_SV_SF_corr = corriger_fluorescence(intensite_SV_corr, min_bubble_widths=50, fit_order=1)
-
-#intensite_SV = soustraire_spectre(w, i_SF, wn_verre, i_verre)
-#intensité_SV_SF = corriger_fluorescence(intensite_SV, min_bubble_widths=50, fit_order=1)
 
 
-#plt.plot(w, i, label='spectre bruité initial')
-#plt.plot(w, i_corr_F+250, label='spectre corrigé avec fluo et verre')
-#plt.plot(w, lisse+350, label='motif fixe')
-#plt.plot(w, intensité_SV_SF, label='spectre non corrigé sans verre')
-#plt.plot(w, intensité_SV_SF_corr, label='spectre corrigé sans verre')
-#for i, spectre in enumerate(spectres):
- #   plt.plot(spectre, label=f'Spectre {i+1}')
 
-plt.plot(raman_shift_to_nm(wn_ref, 785), intensite_ref_brute, label='spectre de référence')
-plt.plot(raman_shift_to_nm(wn_ref, 785), i_corr_F, label='spectre corrigé avec fluo et verre')
+
+
+fig, axes = plt.subplots(2, 1, figsize=(10, 10))  # ← syntaxe correcte
+
+ax1 = axes[0]   # ← pas des listes, des vrais axes
+ax2 = axes[1]
+
+
+ax1.plot(w_j2s4p4, i_j2s4p4, 'b-', label='référence')
+ax1.plot(w_j2s4p4, i_j2s4p4_corr, 'r-', label='corrigé')
+ax1.set_title('Spectre raman souris 4 irradiée 60 Gy')
+ax2.plot(w_j2s5p4, i_j2s5p4, 'b-', label='référence')
+ax2.plot(w_j2s5p4, i_j2s5p4_corr, 'r-', label='corrigé')
+ax2.set_title('Spectre raman souris 5 irradiée 60 Gy')
 plt.xlabel('Longueur d\'onde (nm)')
 plt.ylabel('Intensité')
 plt.title('Correction de l\'effet d\'étalon')
 plt.legend()
 plt.show()
+
+#w_j4s4p1, _, i_j4s4p1 = traiter_acquisitions(extraire_fichiers_jour_4('jour4', 'petri1', 'souris4')) #petri1 = 60gy
+#w_j4s5p1,_, i_j4s5p1 = traiter_acquisitions(extraire_fichiers_jour_4('jour4', 'petri1', 'souris5'))
