@@ -94,25 +94,28 @@ for jour, petris in config.items():
                     spectres.append(i)
                     etiquettes.append(f"{souris}-{jour}-{dose}")
             continue
-        souris_valides = souris_data        
-        for souris in souris_valides:
-            liste_fichiers = lecteurs[jour](jour, petri, souris)
-            if not liste_fichiers:
-                continue
-            if jour == 'jour2':
-                w, i = traiter_acquisitions_gellose(liste_fichiers)
-            elif jour == 'jour_8' or jour == 'jour_11' or jour == 'jour4':
-                w, i = traiter_acquisitions_verre(liste_fichiers)
-            else:
-                print(f"⚠️ Jour inconnu : {jour}")
-                continue          # ← évite le NameError
-            if w is None or i is None:
-                continue
-            if not np.isfinite(i).all():
-                print(f"NaN/Inf : {souris}, {petri}, {jour} — ignoré")
-                continue
-            spectres.append(i)
-            etiquettes.append(f"{souris}-{jour}-{dose}")
+        else:
+
+            souris_valides = souris_data        
+            
+            for souris in souris_valides:
+                liste_fichiers = lecteurs[jour](jour, petri, souris)
+                if not liste_fichiers:
+                    continue
+                if jour == 'jour2':
+                    w, i = traiter_acquisitions_gellose(liste_fichiers)
+                elif jour == 'jour_8' or jour == 'jour_11' or jour == 'jour4':
+                    w, i = traiter_acquisitions_verre(liste_fichiers)
+                else:
+                    print(f"⚠️ Jour inconnu : {jour}")
+                    continue          # ← évite le NameError
+                if w is None or i is None:
+                    continue
+                if not np.isfinite(i).all():
+                    print(f"NaN/Inf : {souris}, {petri}, {jour} — ignoré")
+                    continue
+                spectres.append(i)
+                etiquettes.append(f"{souris}-{jour}-{dose}")
 
 # Cas spéciaux souris1.1 et souris2.1 (j8, petri3)
 for souris_sp in ['souris1.1', 'souris2.1']:
