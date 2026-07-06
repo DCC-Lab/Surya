@@ -133,19 +133,25 @@ fichiers = sorted(glob.glob(os.path.join(racine, '*.txt')))
 
 dossier_verre = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya\jour_2\spectre du verre"
 liste_fichiers_verre =  sorted(glob.glob(os.path.join(dossier_verre, "*.txt")))
+wn_verre, i_verre, _ = traiter_acquisitions(liste_fichiers_verre)
 
 wn_ref,_, intensite_ref_brute, spectres = traiter_acquisitions(fichiers)
 t_lambda, lisse = caracteriser_motif_fixe(raman_shift_to_nm(wn_ref, 785), intensite_ref_brute)
 i_corr_F= corriger_motif_fixe(raman_shift_to_nm(wn_ref, 785), intensite_ref_brute, raman_shift_to_nm(wn_ref, 785), t_lambda)
 
 
-w_j2s4p4, _, i_j2s4p4, s = traiter_acquisitions(extraire_fichiers_j2_fixe('verre', 'jour2', 'petri4', 'souris4', 'zone1')) #petri4 = 60gy
+w_j2s4p4, _, i_j2s4p4, s = traiter_acquisitions(extraire_fichiers_j2_fixe('verre', 'jour_2', 'petri4', 'souris4', 'zone1')) #petri4 = 60gy
 i_j2s4p4_corr = corriger_motif_fixe(raman_shift_to_nm(wn_ref, 785), i_j2s4p4, raman_shift_to_nm(w_j2s4p4, 785), t_lambda)
-w_j2s5p4, _, i_j2s5p4, s = traiter_acquisitions(extraire_fichiers_j2_fixe('verrre', 'jour2', 'petri4', 'souris5', 'zone1'))
+w_j2s5p4, _, i_j2s5p4, s = traiter_acquisitions(extraire_fichiers_j2_fixe('verre', 'jour_2', 'petri4', 'souris5', 'zone1'))
 i_j2s5p4_corr = corriger_motif_fixe(raman_shift_to_nm(wn_ref, 785), i_j2s5p4, raman_shift_to_nm(w_j2s5p4, 785), t_lambda)
 
+#spectre sans rayon cosmiques, sans étalon et sans fluorescence
+i_j2s4p4_corr_SF =corriger_fluorescence(i_j2s4p4_corr)
 
 
+wn_verre_corr, i_verre_corr = corriger_motif_fixe(raman_shift_to_nm(wn_verre, 785), i_verre, raman_shift_to_nm(wn_ref, 785), t_lambda)
+#spectre sans rayon cosmiques, sans étalon, sans fluorescence et sans verre
+intensite = soustraire_spectre(w_j2s4p4, i_j2s4p4_corr_SF, wn_verre_corr, i_verre_corr)
 
 
 
@@ -166,7 +172,6 @@ ax2.plot(w_j2s5p4, i_j2s5p4_corr, 'r-', label='corrigé')
 ax2.set_title('Spectre raman souris 5 irradiée 60 Gy')
 plt.xlabel('Longueur d\'onde (nm)')
 plt.ylabel('Intensité')
-plt.title('Correction de l\'effet d\'étalon')
 plt.legend()
 plt.show()
 

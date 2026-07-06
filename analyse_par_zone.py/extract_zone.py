@@ -319,6 +319,7 @@ def traiter_acquisitions_verre(liste_fichiers, traiter_etalon=True):
     wn, _, i = traiter_acquisitions(liste_fichiers)
 
     t_lambda, lisse = caracteriser_motif_fixe(raman_shift_to_nm(wn, 785), i)
+    wn_verre_corr, i_verre_corr = corriger_motif_fixe(raman_shift_to_nm(wn_verre, 785), i_verre, raman_shift_to_nm(wn_ref, 785), t_lambda)
 
     if traiter_etalon:
         #spectre sans rayon cosmiques et sans étalon
@@ -328,13 +329,13 @@ def traiter_acquisitions_verre(liste_fichiers, traiter_etalon=True):
         i_corr_SF = corriger_fluorescence(i_corr_F)
 
         #spectre sans rayon cosmiques, sans étalon, sans fluorescence et sans verre
-        intensite = soustraire_spectre(wn, i_corr_SF, wn_verre, i_verre)
+        intensite = soustraire_spectre(wn, i_corr_SF, wn_verre_corr, i_verre_corr)
 
     else:
         i_SF = corriger_fluorescence(i)
 
         #spectre sans rayon cosmiqueset et sans verre
-        intensite = soustraire_spectre(wn, i_SF, wn_verre, i_verre)
+        intensite = soustraire_spectre(wn, i_SF, wn_verre_corr, i_verre_corr)
 
     
     intensite_centree = intensite - np.mean(intensite)
