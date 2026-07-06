@@ -319,7 +319,7 @@ def traiter_acquisitions_verre(liste_fichiers, traiter_etalon=True):
     wn, _, i = traiter_acquisitions(liste_fichiers)
 
     t_lambda, lisse = caracteriser_motif_fixe(raman_shift_to_nm(wn, 785), i)
-    wn_verre_corr, i_verre_corr = corriger_motif_fixe(raman_shift_to_nm(wn_verre, 785), i_verre, raman_shift_to_nm(wn_ref, 785), t_lambda)
+    i_verre_corr = corriger_motif_fixe(raman_shift_to_nm(wn_verre, 785), i_verre, raman_shift_to_nm(wn_ref, 785), t_lambda)
 
     if traiter_etalon:
         #spectre sans rayon cosmiques et sans étalon
@@ -329,13 +329,13 @@ def traiter_acquisitions_verre(liste_fichiers, traiter_etalon=True):
         i_corr_SF = corriger_fluorescence(i_corr_F)
 
         #spectre sans rayon cosmiques, sans étalon, sans fluorescence et sans verre
-        intensite = soustraire_spectre(wn, i_corr_SF, wn_verre_corr, i_verre_corr)
+        intensite = soustraire_spectre(wn, i_corr_SF, wn_verre, i_verre_corr)
 
     else:
         i_SF = corriger_fluorescence(i)
 
         #spectre sans rayon cosmiqueset et sans verre
-        intensite = soustraire_spectre(wn, i_SF, wn_verre_corr, i_verre_corr)
+        intensite = soustraire_spectre(wn, i_SF, wn_verre, i_verre_corr)
 
     
     intensite_centree = intensite - np.mean(intensite)
@@ -343,21 +343,7 @@ def traiter_acquisitions_verre(liste_fichiers, traiter_etalon=True):
     
     return wn, i_nrml
 
-#!!! a faire
 
-def traiter_acquisitions_verre_gelose(liste_fichiers, retirer_etalon=True):
-
-    wn, i, _ = traiter_acquisitions(liste_fichiers)
-    wn_verre, i_verre, _ = traiter_acquisitions(liste_fichiers_verre)
-
-    intensite_SV = soustraire_spectre(wn, i, wn_verre, i_verre)
-    intensite_SV_SG = soustraire_spectre(wn, intensite_SV, wn_gelose, i_gelose)
-    intensite_SV_SG_SF = corriger_fluorescence(intensite_SV_SG, min_bubble_widths=50, fit_order=1)
-
-    intensite_centree = intensite_SV_SG_SF - np.mean(intensite_SV_SG_SF)
-    i_nrml = intensite_centree / np.max(intensite_centree)
-    
-    return wn, i_nrml
 
 # ────────────────────────────────────────────────────────────────────────
 # 6. RETRAITS DE LA GELLOSE + CENTRAGE DES DONNÉES: JOUR 2 ET 4
@@ -377,6 +363,8 @@ def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True):
     wn, _, i = traiter_acquisitions(liste_fichiers)
 
     t_lambda, lisse = caracteriser_motif_fixe(raman_shift_to_nm(wn, 785), i)
+    i_gelose_corr = corriger_motif_fixe(raman_shift_to_nm(wn_gelose, 785), i_gelose, raman_shift_to_nm(wn_ref, 785), t_lambda)
+
 
     if traiter_etalon:
         #spectre sans rayon cosmiques et sans étalon
@@ -386,16 +374,33 @@ def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True):
         i_corr_SF = corriger_fluorescence(i_corr_F)
 
         #spectre sans rayon cosmiques, sans étalon, sans fluorescence et sans verre
-        intensite = soustraire_spectre(wn, i_corr_SF, wn_gelose, i_gelose)
+        intensite = soustraire_spectre(wn, i_corr_SF, wn_gelose, i_gelose_corr)
 
     else:
         i_SF = corriger_fluorescence(i)
 
         #spectre sans rayon cosmiqueset et sans verre
-        intensite = soustraire_spectre(wn, i_SF, wn_verre, i_verre)
+        intensite = soustraire_spectre(wn, i_SF, wn_gelose, i_gelose)
 
     
     intensite_centree = intensite - np.mean(intensite)
+    i_nrml = intensite_centree / np.max(intensite_centree)
+    
+    return wn, i_nrml
+
+#!!! a faire
+
+def traiter_acquisitions_verre_gelose(liste_fichiers, retirer_etalon=True):
+
+    wn, i, _ = traiter_acquisitions(liste_fichiers)
+    wn_verre, i_verre, _ = traiter_acquisitions(liste_fichiers_verre)
+    
+
+    intensite_SV = soustraire_spectre(wn, i, wn_verre, i_verre)
+    intensite_SV_SG = soustraire_spectre(wn, intensite_SV, wn_gelose, i_gelose)
+    intensite_SV_SG_SF = corriger_fluorescence(intensite_SV_SG, min_bubble_widths=50, fit_order=1)
+
+    intensite_centree = intensite_SV_SG_SF - np.mean(intensite_SV_SG_SF)
     i_nrml = intensite_centree / np.max(intensite_centree)
     
     return wn, i_nrml
