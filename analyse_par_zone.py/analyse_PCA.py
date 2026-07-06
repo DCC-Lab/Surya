@@ -292,7 +292,7 @@ plt.show()
 
 
 # -1- décale tout pour que le minimum soit 0
-X_nmf = X - X.min()   
+X_nmf = X - X.min()  
 # -2- applique NMF
 nmf = NMF(n_components=3, random_state=0)
 X_reduced_nmf = nmf.fit_transform(X_nmf)   # ← pas de StandardScaler ! NMF exige des valeurs >= 0
