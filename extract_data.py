@@ -454,11 +454,11 @@ def lecteur_fichiers_j2_fixe_verre(jour, petri, souris):
         #print(f"Aucun fichier trouvé avec le pattern : {pattern}")
         return []
     
-    print(tous_les_fichiers[:15])
+    #print(tous_les_fichiers[:15])
     
     return tous_les_fichiers
 
-lecteur_fichiers_j2_fixe_verre('jour_2', 'petri1', 'souris1')
+#lecteur_fichiers_j2_fixe_verre('jour_2', 'petri1', 'souris1')
 
 
 #J4
