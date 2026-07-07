@@ -30,27 +30,42 @@ config = {
             'souris2': ['ecantillon1', 'echantillon2'],
             'souris3': ['echantillon1']}),
             
+        'petri2': ('0gy', {
+            'souris4': ['echantillon1'],
+            'souris5': ['echantillon1'],
+        }),
+        'petri3': ('80gy', {
+            'souris4': ['echantillon1'],
+        }),
     },
     'jour2': {
         'petri1': ('0gy',      ['souris1', 'souris2', 'souris3']),
         'petri2': ('45gy',     ['souris1', 'souris2']),
+        'petri3': ('45gy + P', ['souris1', 'souris2', 'souris3']),
+        'petri4': ('60gy',     ['souris4', 'souris5']),
+        'petri5': ('80gy',     ['souris4']),
     },
     'jour4': {
+        'petri1': ('60gy',     ['souris4', 'souris5']),
+        'petri2': ('80gy',     ['souris4', 'souris5']),
         'petri3': ('0gy',      ['souris1', 'souris2', 'souris3']),
+        'petri4': ('45gy + P', ['souris1', 'souris2', 'souris3']),
         'petri5': ('45gy',     ['souris1', 'souris2']),
     },
     'jour_8': {
         'petri1': ('0gy',      ['souris1', 'souris2', 'souris3']),
         'petri2': ('45gy',     ['souris1', 'souris2', 'souris3']),
+        'petri3': ('45gy + P', ['souris1', 'souris2']),  # souris1.1 et 2.1 gérés séparément
+        'petri4': ('60gy',     ['souris4', 'souris5']),
+        'petri5': ('80gy',     ['souris4', 'souris5']),
     },
-    #'jour_11': {
-    #    'petri1': ('0gy',      ['souris1', 'souris2', 'souris3']),
-    #    'petri2': ('45gy',     ['souris1', 'souris2', 'souris3']),
-    #    'petri3': ('60gy',     ['souris4', 'souris5']),
-    #    'petri4': ('80gy',     ['souris4', 'souris5']),
-    #},
+    'jour_11': {
+        'petri1': ('0gy',      ['souris1', 'souris2', 'souris3']),
+        'petri2': ('45gy',     ['souris1', 'souris2', 'souris3']),
+        'petri3': ('60gy',     ['souris4', 'souris5']),
+        'petri4': ('80gy',     ['souris4', 'souris5']),
+    },
 }
-
 lecteurs = {
     'jour2':  lecteur_fichiers_j2_fixe_verre,
     'jour4':  lecteur_fichier_j4,
@@ -192,6 +207,7 @@ for ax, (pc_x, pc_y) in zip(axes, [(0, 1), (1, 2)]):
 #            etiquette_point = f"#2 \n{jour}"
 #        else:
 #            # toutes les autres souris → juste le jour
+
         etiquette_point = jour
 
         ax.annotate(
