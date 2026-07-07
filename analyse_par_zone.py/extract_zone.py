@@ -228,7 +228,7 @@ def soustraire_spectre(wn_echantillon, intensite_echantillon,
     return intensite_corrigee
 
 
-def corriger_fluorescence(intensite, min_bubble_widths=50, fit_order=1):
+def corriger_fluorescence(intensite, min_bubble_widths=90, fit_order=1):
     """
     Supprime l'autofluorescence avec l'algorithme BubbleFill (ORPL).
     
@@ -307,6 +307,7 @@ racine = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_S
 fichiers = sorted(glob.glob(os.path.join(racine, '*.txt')))
 wn_ref,_, intensite_ref_brute = traiter_acquisitions(fichiers)
 
+
 def traiter_acquisitions_verre(liste_fichiers, traiter_etalon=True):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
@@ -318,7 +319,7 @@ def traiter_acquisitions_verre(liste_fichiers, traiter_etalon=True):
     #spectre sans rayon cosmiques
     wn, _, i = traiter_acquisitions(liste_fichiers)
 
-    t_lambda, lisse = caracteriser_motif_fixe(raman_shift_to_nm(wn, 785), i)
+    t_lambda, lisse = caracteriser_motif_fixe(raman_shift_to_nm(wn_ref, 785), i)
     i_verre_corr = corriger_motif_fixe(raman_shift_to_nm(wn_verre, 785), i_verre, raman_shift_to_nm(wn_ref, 785), t_lambda)
 
     if traiter_etalon:
