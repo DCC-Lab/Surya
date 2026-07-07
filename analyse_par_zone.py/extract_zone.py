@@ -386,7 +386,7 @@ def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True):
     intensite_centree = intensite - np.mean(intensite)
     i_nrml = intensite_centree / np.max(intensite_centree)
     
-    return wn, i_nrml
+    return raman_shift_to_nm(wn, 785), i_nrml
 
 #!!! a faire
 
@@ -403,7 +403,7 @@ def traiter_acquisitions_verre_gelose(liste_fichiers, retirer_etalon=True):
     intensite_centree = intensite_SV_SG_SF - np.mean(intensite_SV_SG_SF)
     i_nrml = intensite_centree / np.max(intensite_centree)
     
-    return wn, i_nrml
+    return raman_shift_to_nm(wn, 785), i_nrml
 
 # ───────────────────────────────────────────────────
 # on va créer des fonctions 
