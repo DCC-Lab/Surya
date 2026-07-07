@@ -168,32 +168,30 @@ i_j2s5p4_SF = corriger_fluorescence(i_j2s5p4)
 i_j2s4p4_SF_SV = soustraire_spectre(w_j2s4p4, i_j2s4p4_SF, wn_verre, i_verre_SF)
 i_j2s5p4_SF_SV = soustraire_spectre(w_j2s5p4, i_j2s5p4_SF, wn_verre, i_verre_SF)
 
-# AVANT bubblefill : les deux devraient différer visiblement
+diff_finale = i_j2s4p4_SF_SV - i_j2s4p4_corr_SF_SV
 plt.figure()
-plt.plot(w_j2s4p4, i_j2s4p4_corr, label='avec correction étalon')
-plt.plot(w_j2s4p4, i_j2s4p4, label='sans correction étalon')
-plt.legend(); plt.title("Avant BubbleFill")
-
-# APRÈS bubblefill (ce que fait ton pipeline final) : comparer l'écart-type résiduel
-diff_apres = i_j2s4p4_corr_SF - i_j2s4p4_SF
-print("std diff après fluorescence :", np.std(diff_apres))
+plt.plot(w_j2s4p4, diff_finale)
+plt.title("Effet net de la correction d'étalon (après tout le pipeline)")
+plt.xlabel("Raman shift (cm⁻¹)")
+print("std de la diff finale :", np.std(diff_finale))
+print("amplitude du pic Raman (SF_SV) :", np.max(i_j2s4p4_corr_SF_SV) - np.median(i_j2s4p4_corr_SF_SV))
 
 
-fig, axes = plt.subplots(2, 1, figsize=(10, 10))  # ← syntaxe correcte
+#fig, axes = plt.subplots(2, 1, figsize=(10, 10))  # ← syntaxe correcte
 
-ax1 = axes[0]   # ← pas des listes, des vrais axes
-ax2 = axes[1]
+#ax1 = axes[0]   # ← pas des listes, des vrais axes
+#ax2 = axes[1]
 
 
-ax1.plot(raman_shift_to_nm(w_j2s4p4, 785), i_j2s4p4_corr_SF_SV, 'b-', label='corr')
-ax1.plot(raman_shift_to_nm(w_j2s4p4, 785), i_j2s4p4_SF_SV+200, 'r-', label='ref')
-ax1.set_title('Spectre raman souris 4 irradiée 60 Gy')
-ax2.plot(raman_shift_to_nm(w_j2s5p4, 785), i_j2s5p4_corr_SF_SV, 'b-', label='corr')
-ax2.plot(raman_shift_to_nm(w_j2s5p4, 785), i_j2s5p4_SF_SV+200, 'r-', label='ref')
-ax2.set_title('Spectre raman souris 5 irradiée 60 Gy')
-plt.xlabel('Longueur d\'onde (nm)')
-plt.ylabel('Intensité')
-plt.legend()
+#ax1.plot(raman_shift_to_nm(w_j2s4p4, 785), i_j2s4p4_corr_SF_SV, 'b-', label='corr')
+#ax1.plot(raman_shift_to_nm(w_j2s4p4, 785), i_j2s4p4_SF_SV+200, 'r-', label='ref')
+#ax1.set_title('Spectre raman souris 4 irradiée 60 Gy')
+#ax2.plot(raman_shift_to_nm(w_j2s5p4, 785), i_j2s5p4_corr_SF_SV, 'b-', label='corr')
+#ax2.plot(raman_shift_to_nm(w_j2s5p4, 785), i_j2s5p4_SF_SV+200, 'r-', label='ref')
+#ax2.set_title('Spectre raman souris 5 irradiée 60 Gy')
+#plt.xlabel('Longueur d\'onde (nm)')
+#plt.ylabel('Intensité')
+#plt.legend()
 plt.show()
 
 

@@ -306,6 +306,7 @@ wn_gelose, i_gelose, _ = traiter_acquisitions(liste_fichiers_gellose)
 racine = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya\spectre_lumière_blanche"
 fichiers = sorted(glob.glob(os.path.join(racine, '*.txt')))
 wn_ref,_, intensite_ref_brute = traiter_acquisitions(fichiers)
+t_lambda, lisse = caracteriser_motif_fixe(raman_shift_to_nm(wn_ref, 785), intensite_ref_brute)
 
 
 def traiter_acquisitions_verre(liste_fichiers, traiter_etalon=True):
@@ -319,7 +320,6 @@ def traiter_acquisitions_verre(liste_fichiers, traiter_etalon=True):
     #spectre sans rayon cosmiques
     wn, _, i = traiter_acquisitions(liste_fichiers)
 
-    t_lambda, lisse = caracteriser_motif_fixe(raman_shift_to_nm(wn_ref, 785), i)
     i_verre_corr = corriger_motif_fixe(raman_shift_to_nm(wn_verre, 785), i_verre, raman_shift_to_nm(wn_ref, 785), t_lambda)
 
     if traiter_etalon:
@@ -363,7 +363,6 @@ def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True):
     #spectre sans rayon cosmiques
     wn, _, i = traiter_acquisitions(liste_fichiers)
 
-    t_lambda, lisse = caracteriser_motif_fixe(raman_shift_to_nm(wn, 785), i)
     i_gelose_corr = corriger_motif_fixe(raman_shift_to_nm(wn_gelose, 785), i_gelose, raman_shift_to_nm(wn_ref, 785), t_lambda)
 
 
