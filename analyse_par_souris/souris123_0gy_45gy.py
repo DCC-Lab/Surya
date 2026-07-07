@@ -16,30 +16,48 @@ config = {
             'souris2': {'echantillon1': ['zone1','zone2','zone3'], 'echantillon2': ['zone1','zone2','zone3']},
             'souris3': {'echantillon1': ['zone1','zone2','zone3']},
         }),
-
+        'petri2': ('0gy', {
+            'souris4': {'echantillon1': ['zone1','zone2','zone3']},
+            'souris5': {'echantillon1': ['zone1','zone2','zone3']},
+        }),
+        #'petri3': ('80gy', {
+        #    'souris4': {'echantillon1': ['zone1','zone2','zone3']},
+        #}),
     },
     
     'jour_2': {
         'petri1': ('0gy',      {'souris1': ['zone1'], 'souris2': ['zone1','zone2'], 'souris3': ['zone1','zone2','zone3']}),
         'petri2': ('45gy',     {'souris1': ['zone1','zone2'], 'souris2': ['zone1','zone2','zone3']}),
-        },
+        'petri3': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
+        'petri4': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        'petri5': ('80gy',     {'souris4': ['zone1','zone2','zone3']}),
+    },
     'jour4': {
+        'petri1': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        'petri2': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
         'petri3': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
+        'petri4': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
         'petri5': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3']}),
     },
     'jour_8': {
         'petri1': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
         'petri2': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
+        'petri3': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3']}),
+        'petri4': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        'petri5': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
     },
     
     #'Jour8': {
     #    'petri1': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
     #    'petri2': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
+    #    'petri4': ('60gy',     {'souris4': ['zone1','zone2'], 'souris5': ['zone1','zone2','zone3']}),
 
     #},    
     'jour_11': {
         'petri1': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
         'petri2': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
+        'petri3': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        'petri4': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
     },
 }
 
@@ -73,6 +91,7 @@ for jour, petris in config.items():
                         if not np.isfinite(i).all():
                             print(f"NaN/Inf : {souris} {echantillon} {zone}, {petri}, {jour} — ignoré")
                             continue
+
 
                         spectres.append(i)
                         etiquettes.append(f"{souris}-{echantillon}-{zone}-{jour}-{dose}")
@@ -274,7 +293,7 @@ plt.show()
 
 
 # -1- décale tout pour que le minimum soit 0
-X_nmf = X - X.min()   
+X_nmf = X - X.min()  
 # -2- applique NMF
 nmf = NMF(n_components=3, random_state=0)
 X_reduced_nmf = nmf.fit_transform(X_nmf)   # ← pas de StandardScaler ! NMF exige des valeurs >= 0
@@ -303,4 +322,9 @@ plt.suptitle("NMF vs PCA — Composantes spectrales-3025-moyennées-sans scaled"
 plt.tight_layout()
 plt.show()
 
-
+from scipy.fft import rfft, rfftfreq
+zone = (w >= 2000) & (w <= 2700)
+signal = pca.components[1][zone]
+freqs = rfftfreq(len(signal), d=np.mean(np.diff(w[zone])))
+spectre_freq = np.abs(rfft(signal - signal.mean()))
+plt.plot(freqs, spectre_freq)

@@ -168,10 +168,15 @@ i_j2s5p4_SF = corriger_fluorescence(i_j2s5p4)
 i_j2s4p4_SF_SV = soustraire_spectre(w_j2s4p4, i_j2s4p4_SF, wn_verre, i_verre_SF)
 i_j2s5p4_SF_SV = soustraire_spectre(w_j2s5p4, i_j2s5p4_SF, wn_verre, i_verre_SF)
 
-diff = i_j2s4p4_corr - i_j2s4p4
-print("écart-type de la correction :", np.std(diff))
-print("amplitude max de t_lambda-1 :", np.max(np.abs(t_lambda - 1)))
-plt.plot(w_j2s4p4, diff)  # regarde si un vrai motif périodique apparaît, même minuscule
+plt.plot(raman_shift_to_nm(w_j2s4p4, 785), i_j2s4p4_corr, 'b-', label='corr')
+plt.plot(raman_shift_to_nm(w_j2s4p4, 785), i_j2s4p4 + 250, 'r-', label='ref')
+plt.xlabel('Longueur d\'onde (nm)')
+plt.ylabel('Intensité')
+plt.title('Spectre raman j2s4p4 avant d\'enlever la fluorescence et le spectre du verre')
+plt.legend()
+plt.show()
+
+
 
 
 #fig, axes = plt.subplots(2, 1, figsize=(10, 10))  # ← syntaxe correcte
@@ -191,7 +196,7 @@ plt.plot(w_j2s4p4, diff)  # regarde si un vrai motif périodique apparaît, mêm
 #ax2.set_xlabel('Longueur d\'onde (nm)')
 #ax2.set_ylabel('Intensité')
 #plt.legend()
-plt.show()
+#plt.show()
 
 
 
