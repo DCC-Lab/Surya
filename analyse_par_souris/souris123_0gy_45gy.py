@@ -10,29 +10,51 @@ import numpy as np
 
 config = {
 
-    'jour0': {
-        'petri1': ('0gy', {
-            'souris1': {'echantillon1': ['zone1','zone2','zone3'], 'echantillon2': ['zone1','zone2','zone3']},
-            'souris2': {'echantillon1': ['zone1','zone2','zone3'], 'echantillon2': ['zone1','zone2','zone3']},
-            'souris3': {'echantillon1': ['zone1','zone2','zone3']},
-        }),
-    },
+    #'jour0': {
+    #    'petri1': ('0gy', {
+    #        'souris1': {'echantillon1': ['zone1','zone2','zone3'], 'echantillon2': ['zone1','zone2','zone3']},
+    #        #'souris2': {'echantillon1': ['zone1','zone2','zone3'], 'echantillon2': ['zone1','zone2','zone3']},
+    #        'souris3': {'echantillon1': ['zone1','zone2','zone3']},
+    #    }),
+    #},
     
     'jour_2': {
-        'petri1': ('0gy',      {'souris1': ['zone1'], 'souris2': ['zone1','zone2'], 'souris3': ['zone1','zone2','zone3']}),
-        'petri2': ('45gy',     {'souris1': ['zone1','zone2'], 'souris2': ['zone1','zone2','zone3']}),
+        #'petri1': ('0gy',      {'souris1': ['zone1'], 'souris2': ['zone1','zone2'], 'souris3': ['zone1','zone2','zone3']}),
+        'petri2': ('45gy',     {'souris1': ['zone1','zone2'], 
+                               # 'souris2': ['zone1','zone2','zone3']
+                                }),
+        'petri3': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 
+                                #'souris2': ['zone1','zone2','zone3'], 
+                                'souris3': ['zone1','zone2','zone3']}),
     },
+
     'jour4': {
-        'petri3': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
-        'petri5': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3']}),
+        #'petri3': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 
+                                #'souris2': ['zone1','zone2','zone3'], 
+                                #'souris3': ['zone1','zone2','zone3']}),
+        'petri4': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 
+                                #'souris2': ['zone1','zone2','zone3'], 
+                                'souris3': ['zone1','zone2','zone3']
+                    }),
+        'petri5': ('45gy',     {'souris1': ['zone1','zone2','zone3'],
+                                # 'souris2': ['zone1','zone2','zone3']
+                    }),
     },
-    'jour_8': {
-        'petri1': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
-        'petri2': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
-    }, 
+    #'jour_8': {
+    #    'petri1': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 
+    #                            #'souris2': ['zone1','zone2','zone3'], 
+    #                            'souris3': ['zone1','zone2','zone3']}),
+    #    'petri2': ('45gy',     {'souris1': ['zone1','zone2','zone3'],
+    #                            #'souris2': ['zone1','zone2','zone3'],
+    #                            'souris3': ['zone1','zone2','zone3']}),
+    #}, 
     #'jour_11': {
-    #    'petri1': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
-    #    'petri2': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
+    #    'petri1': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 
+    #                            #'souris2': ['zone1','zone2','zone3'], 
+    #                            'souris3': ['zone1','zone2','zone3']}),
+    #    'petri2': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 
+    #                            #'souris2': ['zone1','zone2','zone3'], 
+    #                            'souris3': ['zone1','zone2','zone3']}),
     #},
 }
 
@@ -293,7 +315,6 @@ for idx in range(3):
     axes[idx, 1].set_ylabel("Loading")
     axes[idx, 1].axhline(0, color='grey', lw=0.5)
 
-plt.suptitle("NMF vs PCA — Composantes spectrales-3025-moyennées-sans scaled")
 plt.tight_layout()
 plt.show()
 

@@ -322,12 +322,6 @@ plt.suptitle("NMF vs PCA — Composantes spectrales-3025-moyennées-sans scaled"
 plt.tight_layout()
 plt.show()
 
-from scipy.fft import rfft, rfftfreq
-zone = (w >= 2000) & (w <= 2700)
-signal = pca.components[1][zone]
-freqs = rfftfreq(len(signal), d=np.mean(np.diff(w[zone])))
-spectre_freq = np.abs(rfft(signal - signal.mean()))
-plt.plot(freqs, spectre_freq)
 
 # ── 4. Plot 3D ────────────────────────────────────────────────────────────────
 #import matplotlib.pyplot as plt

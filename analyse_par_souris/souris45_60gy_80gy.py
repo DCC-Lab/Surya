@@ -10,32 +10,32 @@ import numpy as np
 
 config = {
 
-    'jour0': {
-        'petri2': ('0gy', {
-            'souris4': {'echantillon1': ['zone1','zone2','zone3']},
-            'souris5': {'echantillon1': ['zone1','zone2','zone3']},
-        }),
-        #'petri3': ('80gy', {
-        #    'souris4': {'echantillon1': ['zone1','zone2','zone3']},
-        #}),
-    },
+    #'jour0': {
+    #    'petri2': ('0gy', {
+    #        'souris4': {'echantillon1': ['zone1','zone2','zone3']},
+    #        'souris5': {'echantillon1': ['zone1','zone2','zone3']},
+    #    }),
+    #    'petri3': ('80gy', {
+    #        'souris4': {'echantillon1': ['zone2','zone3']},
+    #    }),
+    #},
     
     'jour_2': {
-        'petri4': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        #'petri4': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
         'petri5': ('80gy',     {'souris4': ['zone1','zone2','zone3']}),
     },
     'jour4': {
-        'petri1': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        #'petri1': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
         'petri2': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
         },
     'jour_8': {
-        'petri4': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        #'petri4': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
         'petri5': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
     },  
-    #'jour_11': {
-    #    'petri3': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
-    #    'petri4': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
-    #},
+    'jour_11': {
+        #'petri3': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        'petri4': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+    },
 }
 
 extracteur = {
@@ -124,7 +124,7 @@ X = np.array(spectres)
 #X_scaled = scaler.fit_transform(X)
 
 # ── 3. PCA → 3 composantes ───────────────────────────────────────────────────
-#pca = PCA(n_components=5)
+#pca = PCA(n_components=3)
 #X_reduced = pca.fit_transform(X_scaled)
 
 
