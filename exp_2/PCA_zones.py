@@ -18,35 +18,35 @@ config = {
         'petri6':  ('S40-D', 0, 'FNT'),
         'petri7':  ('S47-G', 45, 'FNT'),
         'petri8':  ('S47-D', 0, 'FNT'),
-        'petri9':  ('S39-G', 0,  'FNT'),
+        #'petri9':  ('S39-G', 0,  'FNT'),
         #'petri10': ('S39-D', 0,  'FNT'),
     },
-    'batch#2': {
-        'petri11': ('S45-G', 45, 'F+P'),
-        'petri12': ('S45-D', 0,  'F+P'),
-        'petri13': ('S41-G', 45, 'F+P'),
-        'petri14': ('S41-D', 0,  'F+P'),
-        'petri15': ('S42-G', 0,  'F+P'),
-        'petri16': ('S42-D', 0,  'F+P'),
-        'petri17': ('S44-G', 0,  'F+P'),
-        'petri18': ('S44-D', 0,  'F+P'),
-        'petri19': ('S46-G', 0,  'F+P'),
-        'petri20': ('S46-D', 0,  'F+P'),
-    },
-    #'batch#3': {
-    #    'petri21': ('S33-G', 45, 'MNT'),
-    #    'petri22': ('S33-D', 0,  'MNT'),
-    #    'petri23': ('S37-G', 45, 'MNT'),
-    #    'petri24': ('S37-D', 0,  'MNT'),
-    #    'petri25': ('S30-G', 45, 'MNT'),
-    #    'petri26': ('S30-D', 0,  'MNT'),
+    #'batch#2': {
+    #    'petri11': ('S45-G', 45, 'F+P'),
+    #    'petri12': ('S45-D', 0,  'F+P'),
+    #    'petri13': ('S41-G', 45, 'F+P'),
+    #    'petri14': ('S41-D', 0,  'F+P'),
+    #    'petri15': ('S42-G', 0,  'F+P'),
+    #    'petri16': ('S42-D', 0,  'F+P'),
+    #    'petri17': ('S44-G', 0,  'F+P'),
+    #    'petri18': ('S44-D', 0,  'F+P'),
+    #    'petri19': ('S46-G', 0,  'F+P'),
+    #    'petri20': ('S46-D', 0,  'F+P'),
+    #},
+    'batch#3': {
+        'petri21': ('S33-G', 45, 'MNT'),
+        'petri22': ('S33-D', 0,  'MNT'),
+        'petri23': ('S37-G', 45, 'MNT'),
+        'petri24': ('S37-D', 0,  'MNT'),
+        'petri25': ('S30-G', 45, 'MNT'),
+        'petri26': ('S30-D', 0,  'MNT'),
     #    'petri27': ('S32-G', 45, 'M+P'),
     #    'petri28': ('S32-D', 0,  'M+P'),
     #    'petri29': ('S36-G', 45, 'M+P'),
     #    'petri30': ('S36-D', 0,  'M+P'),
     #    'petri31': ('S27-G', 45, 'M+P'),
     #    'petri32': ('S27-D', 0,  'M+P'),
-    #},
+    },
 }
 
 spectres = []
@@ -69,7 +69,7 @@ for batch, petris in config.items():
                 continue
 
             spectres.append(i)
-            etiquettes.append(f"{echantillon}_{zone}_{dose}{type_}")            
+            etiquettes.append(f"{echantillon}_{dose}{type_}")            
         else:
             for zone in ['z1', 'z2', 'z3']:
                 liste_fichiers = lecteur_données_zones(batch, petri, zone)
@@ -92,7 +92,9 @@ X = np.array(spectres)
 # ─────────────────────────────────────────────
 # ANALYSE DE LA PCA
 # ─────────────────────────────────────────────
-
+# ── 2. Standardiser X (recommandé pour les spectres) ─────────────────────────
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
 
 # ── 3. PCA → 3 composantes ───────────────────────────────────────────────────
 pca = PCA(n_components=3)
@@ -131,8 +133,11 @@ traitements  = []
 for e in etiquettes:
     parts = e.split('_')            # ["S48-G", "z1", "45FNT"]
     echantillon = parts[0]
-    zone        = parts[1]
-    reste       = parts[2]          # "45FNT" ou "0F+P"
+    if moyenné:
+        reste       = parts[1]
+    else:
+        zone        = parts[1]
+        reste       = parts[2]          # "45FNT" ou "0F+P"
 
     m = re.match(r'(\d+)([A-Z])(.*)', reste)
     dose       = int(m.group(1))    # 0 ou 45
@@ -140,9 +145,14 @@ for e in etiquettes:
     traitement = m.group(3)         # 'NT' ou '+P'
 
     echantillons.append(echantillon)
-    zones.append(zone)
-    doses.append(dose)
-    sexes.append(sexe)
+    if moyenné:
+        doses.append(dose)
+        sexes.append(sexe) 
+    else:       
+            
+        zones.append(zone)
+        doses.append(dose)
+        sexes.append(sexe)
     traitements.append(traitement)
 
 fig, axes = plt.subplots(1, 2, figsize=(16, 7))
