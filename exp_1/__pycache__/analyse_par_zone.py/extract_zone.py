@@ -153,24 +153,33 @@ def raman_shift_to_nm(shift_cm1, laser_nm):
 
     
 
-def retirer_rayons_cosmiques(intensite, seuil=10.0, fenetre=5):
+def retirer_rayons_cosmiques(wn, intensite, seuil=10.0, fenetre=5, zones_protegees=None):
     """
     Détecte et remplace les spikes de rayons cosmiques.
-    Méthode : un point est cosmique si son écart à la médiane locale
-    dépasse (seuil × MAD locale).
+    
+    zones_protegees : liste de tuples (wn_min, wn_max) à exclure du filtrage,
+                       pour préserver de vrais pics Raman étroits et 
+                       reproductibles (ex: [(2790, 2820)]).
     """
     intensite_corr = intensite.copy()
     n = len(intensite)
     demi = fenetre // 2
 
+    if zones_protegees is not None:
+        masque_protege = np.zeros(n, dtype=bool)
+        for (lo, hi) in zones_protegees:
+            masque_protege |= (wn >= lo) & (wn <= hi)
+    else:
+        masque_protege = np.zeros(n, dtype=bool)
+
     for i in range(demi, n - demi):
+        if masque_protege[i]:
+            continue  # on ne touche pas à cette zone
         voisins = np.concatenate([intensite[i-demi:i], intensite[i+1:i+demi+1]])
         mediane = np.median(voisins)
-        mad = np.median(np.abs(voisins - mediane)) + 1e-10  # évite division par zéro
+        mad = np.median(np.abs(voisins - mediane)) + 1e-10
         if abs(intensite[i] - mediane) > seuil * mad:
-            # Remplace par interpolation linéaire des voisins
-            intensite_corr[i] = np.interp(i,
-                                           [i - demi, i + demi],
+            intensite_corr[i] = np.interp(i, [i - demi, i + demi],
                                            [intensite[i - demi], intensite[i + demi]])
     return intensite_corr
 
@@ -247,12 +256,43 @@ def corriger_fluorescence(intensite, min_bubble_widths=90, fit_order=1):
     
     return spectre_corrigé
 
+from scipy import sparse
+from scipy.sparse.linalg import spsolve
+
+def corriger_fluorescence_als(intensite, lam=1e7, p=0.01, n_iter=10):
+    """
+    Supprime l'autofluorescence avec l'algorithme ALS 
+    (Asymmetric Least Squares, Eilers & Boersma 2005).
+    """
+    intensite = np.asarray(intensite, dtype=float)
+    n = len(intensite)
+
+    # Matrice de différences secondes, shape (n-2, n)
+    D = sparse.diags([1, -2, 1], [0, 1, 2], shape=(n - 2, n), dtype=float)
+    # Dᵀ @ D donne une matrice (n, n) qui pénalise la courbure
+    DtD = lam * (D.transpose().dot(D))
+
+    poids = np.ones(n)
+    W = sparse.spdiags(poids, 0, n, n)
+
+    baseline = np.zeros(n)
+    for _ in range(n_iter):
+        W.setdiag(poids)
+        Z = W + DtD
+        baseline = spsolve(Z.tocsc(), poids * intensite)
+
+        poids = p * (intensite > baseline) + (1 - p) * (intensite <= baseline)
+
+    intensite_corrigee = intensite - baseline
+
+    return intensite_corrigee
+
 
 
 
 
 def traiter_acquisitions(liste_fichiers,
-                          retirer_cosmiques=True, retirer_fluorescence=True):
+                          retirer_cosmiques=True, retirer_fluorescence=True, zones_protegees=[(1050, 1070),(2780, 2820)]):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
     Retourne (wavenumbers, spectre_somme).
@@ -275,7 +315,7 @@ def traiter_acquisitions(liste_fichiers,
         
         # retrait des rayons cosmiques
         if retirer_cosmiques:
-            intensite = retirer_rayons_cosmiques(intensite)
+            intensite = retirer_rayons_cosmiques(wn_ref, intensite, zones_protegees=zones_protegees)
 
         # Interpoler sur la grille de référence si longueur différente
         if len(wn) != len(wn_ref):
@@ -291,25 +331,27 @@ def traiter_acquisitions(liste_fichiers,
 
     # retrait de la fluorescence
     if retirer_fluorescence:
-        intensite_sans_fluorescence = corriger_fluorescence(spectre_moyen, min_bubble_widths=50, fit_order=1)
+        intensite_sans_fluorescence = corriger_fluorescence_als(spectre_moyen)
 
     return wn_ref, intensite_sans_fluorescence, spectre_moyen
 
-dossier_verre = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya\jour_2\spectre du verre"
+dossier_verre = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\exp_1\jour_2\spectre du verre"
 liste_fichiers_verre =  sorted(glob.glob(os.path.join(dossier_verre, "*.txt")))
 wn_verre, i_verre, _ = traiter_acquisitions(liste_fichiers_verre)
 
-dossier_gellose = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya\spectre_gellose"
+dossier_gellose = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\exp_1\spectre_gellose"
 liste_fichiers_gellose = sorted(glob.glob(os.path.join(dossier_gellose, "*.txt")))
 wn_gelose, i_gelose, _ = traiter_acquisitions(liste_fichiers_gellose)
 
-racine = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya\spectre_lumière_blanche"
+racine = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\exp_1\spectre_lumière_blanche"
 fichiers = sorted(glob.glob(os.path.join(racine, '*.txt')))
 wn_ref,_, intensite_ref_brute = traiter_acquisitions(fichiers)
 t_lambda, lisse = caracteriser_motif_fixe(raman_shift_to_nm(wn_ref, 785), intensite_ref_brute)
 
 
-def traiter_acquisitions_verre(liste_fichiers, traiter_etalon=True):
+
+
+def traiter_acquisitions_verre(liste_fichiers, traiter_etalon=True, als=True, bubblewidth=None, lam=1e6):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
     Soustrait le spectre du verre et corrige la fluorescence.
@@ -326,16 +368,21 @@ def traiter_acquisitions_verre(liste_fichiers, traiter_etalon=True):
         #spectre sans rayon cosmiques et sans étalon
         i_corr_F = corriger_motif_fixe(raman_shift_to_nm(wn, 785), i, raman_shift_to_nm(wn_ref, 785), t_lambda)
 
-        #spectre sans rayon cosmiques, sans étalon et sans fluorescence
-        i_corr_SF = corriger_fluorescence(i_corr_F)
+        if als==True:
+            #spectre sans rayon cosmiques, sans étalon et sans fluorescence
+            i_corr_SF = corriger_fluorescence_als(i_corr_F, lam=lam)
+        else:
+            i_corr_SF = corriger_fluorescence(i_corr_F, min_bubble_widths=bubblewidth)
 
         #spectre sans rayon cosmiques, sans étalon, sans fluorescence et sans verre
         intensite = soustraire_spectre(wn, i_corr_SF, wn_verre, i_verre_corr)
 
     else:
-        i_SF = corriger_fluorescence(i)
+        if als ==True:
+            i_SF = corriger_fluorescence_als(i)
 
-        #spectre sans rayon cosmiqueset et sans verre
+        else:
+            i_SF = corriger_fluorescence(i)
         intensite = soustraire_spectre(wn, i_SF, wn_verre, i_verre_corr)
 
     
@@ -351,8 +398,7 @@ def traiter_acquisitions_verre(liste_fichiers, traiter_etalon=True):
 # ────────────────────────────────────────────────────────────────────────
 
 
-
-def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True):
+def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True, als=True, bubblewidth=None, lam=1e6):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
     Soustrait le spectre du verre et corrige la fluorescence.
@@ -370,15 +416,22 @@ def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True):
         #spectre sans rayon cosmiques et sans étalon
         i_corr_F = corriger_motif_fixe(raman_shift_to_nm(wn, 785), i, raman_shift_to_nm(wn_ref, 785), t_lambda)
 
-        #spectre sans rayon cosmiques, sans étalon et sans fluorescence
-        i_corr_SF = corriger_fluorescence(i_corr_F)
+        if als==True:
+            #spectre sans rayon cosmiques, sans étalon et sans fluorescence
+            i_corr_SF = corriger_fluorescence_als(i_corr_F, lam=lam)
+        else:
+            i_corr_SF = corriger_fluorescence(i_corr_F, min_bubble_widths=bubblewidth)
+
 
         #spectre sans rayon cosmiques, sans étalon, sans fluorescence et sans verre
         intensite = soustraire_spectre(wn, i_corr_SF, wn_gelose, i_gelose_corr)
 
     else:
-        i_SF = corriger_fluorescence(i)
+        if als ==True:
+            i_SF = corriger_fluorescence_als(i)
 
+        else:
+            i_SF = corriger_fluorescence(i)
         #spectre sans rayon cosmiqueset et sans verre
         intensite = soustraire_spectre(wn, i_SF, wn_gelose, i_gelose)
 
@@ -386,8 +439,7 @@ def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True):
     intensite_centree = intensite - np.mean(intensite)
     i_nrml = intensite_centree / np.max(intensite_centree)
     
-    return raman_shift_to_nm(wn, 785), i_nrml
-
+    return wn, i_nrml
 #!!! a faire
 
 def traiter_acquisitions_verre_gelose(liste_fichiers, retirer_etalon=True):
