@@ -412,8 +412,8 @@ def lecteur_données_zones(batch, petri, zone):
     return tous_les_fichiers
 
 def lecteur_données_moy(batch, petri):
-    dossier = os.path.joint(racine8, batch, petri)
-    pattern = os.path.joint(dossier, f'*z*.txt')
+    dossier = os.path.join(racine8, batch, petri)
+    pattern = os.path.join(dossier, f'*z*.txt')
     tous_les_fichiers= sorted(glob.glob(pattern))
     if not tous_les_fichiers:
         return []
