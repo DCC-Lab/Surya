@@ -153,24 +153,33 @@ def raman_shift_to_nm(shift_cm1, laser_nm):
 
     
 
-def retirer_rayons_cosmiques(intensite, seuil=10.0, fenetre=5):
+def retirer_rayons_cosmiques(wn, intensite, seuil=10.0, fenetre=5, zones_protegees=None):
     """
     Détecte et remplace les spikes de rayons cosmiques.
-    Méthode : un point est cosmique si son écart à la médiane locale
-    dépasse (seuil × MAD locale).
+    
+    zones_protegees : liste de tuples (wn_min, wn_max) à exclure du filtrage,
+                       pour préserver de vrais pics Raman étroits et 
+                       reproductibles (ex: [(2790, 2820)]).
     """
     intensite_corr = intensite.copy()
     n = len(intensite)
     demi = fenetre // 2
 
+    if zones_protegees is not None:
+        masque_protege = np.zeros(n, dtype=bool)
+        for (lo, hi) in zones_protegees:
+            masque_protege |= (wn >= lo) & (wn <= hi)
+    else:
+        masque_protege = np.zeros(n, dtype=bool)
+
     for i in range(demi, n - demi):
+        if masque_protege[i]:
+            continue  # on ne touche pas à cette zone
         voisins = np.concatenate([intensite[i-demi:i], intensite[i+1:i+demi+1]])
         mediane = np.median(voisins)
-        mad = np.median(np.abs(voisins - mediane)) + 1e-10  # évite division par zéro
+        mad = np.median(np.abs(voisins - mediane)) + 1e-10
         if abs(intensite[i] - mediane) > seuil * mad:
-            # Remplace par interpolation linéaire des voisins
-            intensite_corr[i] = np.interp(i,
-                                           [i - demi, i + demi],
+            intensite_corr[i] = np.interp(i, [i - demi, i + demi],
                                            [intensite[i - demi], intensite[i + demi]])
     return intensite_corr
 
@@ -250,7 +259,7 @@ def corriger_fluorescence(intensite, min_bubble_widths=90, fit_order=1):
 from scipy import sparse
 from scipy.sparse.linalg import spsolve
 
-def corriger_fluorescence_als(intensite, lam=1e5, p=0.01, n_iter=10):
+def corriger_fluorescence_als(intensite, lam=1e7, p=0.01, n_iter=10):
     """
     Supprime l'autofluorescence avec l'algorithme ALS 
     (Asymmetric Least Squares, Eilers & Boersma 2005).
@@ -283,7 +292,7 @@ def corriger_fluorescence_als(intensite, lam=1e5, p=0.01, n_iter=10):
 
 
 def traiter_acquisitions(liste_fichiers,
-                          retirer_cosmiques=True, retirer_fluorescence=True):
+                          retirer_cosmiques=True, retirer_fluorescence=True, zones_protegees=[(1050, 1070),(2780, 2820)]):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
     Retourne (wavenumbers, spectre_somme).
@@ -306,7 +315,7 @@ def traiter_acquisitions(liste_fichiers,
         
         # retrait des rayons cosmiques
         if retirer_cosmiques:
-            intensite = retirer_rayons_cosmiques(intensite)
+            intensite = retirer_rayons_cosmiques(wn_ref, intensite, zones_protegees=zones_protegees)
 
         # Interpoler sur la grille de référence si longueur différente
         if len(wn) != len(wn_ref):
@@ -340,40 +349,6 @@ wn_ref,_, intensite_ref_brute = traiter_acquisitions(fichiers)
 t_lambda, lisse = caracteriser_motif_fixe(raman_shift_to_nm(wn_ref, 785), intensite_ref_brute)
 
 
-def traiter_acquisitions_verre(liste_fichiers, traiter_etalon=True):
-    """
-    Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
-    Soustrait le spectre du verre et corrige la fluorescence.
-    Centrage des données en soustrayant la moyenne.
-    Retourne (wavenumbers, spectre_centré).
-    """
-    
-    #spectre sans rayon cosmiques
-    wn, _, i = traiter_acquisitions(liste_fichiers)
-
-    i_verre_corr = corriger_motif_fixe(raman_shift_to_nm(wn_verre, 785), i_verre, raman_shift_to_nm(wn_ref, 785), t_lambda)
-
-    if traiter_etalon:
-        #spectre sans rayon cosmiques et sans étalon
-        i_corr_F = corriger_motif_fixe(raman_shift_to_nm(wn, 785), i, raman_shift_to_nm(wn_ref, 785), t_lambda)
-
-        #spectre sans rayon cosmiques, sans étalon et sans fluorescence
-        i_corr_SF = corriger_fluorescence_als(i_corr_F)
-
-        #spectre sans rayon cosmiques, sans étalon, sans fluorescence et sans verre
-        intensite = soustraire_spectre(wn, i_corr_SF, wn_verre, i_verre_corr)
-
-    else:
-        i_SF = corriger_fluorescence_als(i)
-
-        #spectre sans rayon cosmiqueset et sans verre
-        intensite = soustraire_spectre(wn, i_SF, wn_verre, i_verre_corr)
-
-    
-    intensite_centree = intensite - np.mean(intensite)
-    i_nrml = intensite_centree / np.max(intensite_centree)
-    
-    return wn, i_nrml
 
 
 
@@ -383,7 +358,7 @@ def traiter_acquisitions_verre(liste_fichiers, traiter_etalon=True):
 
 
 
-def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True, als=True, bubblewidth=None, lam=None):
+def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True, als=True, bubblewidth=None, lam=1e7):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
     Soustrait le spectre du verre et corrige la fluorescence.
@@ -427,7 +402,7 @@ def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True, als=True, 
 racine8 = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\exp_2"
 def lecteur_données(batch, petri, zone):
     dossier = os.path.join(racine8, batch, petri)
-    pattern = os.path.join(dossier, f"*z{zone[-1]}*.txt")
+    pattern = os.path.join(dossier, f"*{zone}*.txt")
     tous_les_fichiers = sorted(glob.glob(pattern))
     
     if not tous_les_fichiers:
@@ -438,23 +413,62 @@ def lecteur_données(batch, petri, zone):
 
 
 
-w_als, i_als = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri2", "zone2"), als=True, lam=1e5)
-w2, i2 = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri2", "zone2"), als=True, lam=1e6)
-w3, i3 = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri2", "zone2"), als=True, lam=1e7)
-w5, i5 = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri2", "zone2"), als=True, lam=1e8)
-w4, i4 = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri2", "zone2"), als=False, bubblewidth=100)
+#w_als, i_als = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri2", "z2"), als=True, lam=1e5)
+#w2, i2 = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri2", "z2"), als=True, lam=1e6)
+#w3, i3 = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri2", "z2"), als=True, lam=1e7)
+#w5, i5 = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri2", "z2"), als=True, lam=1e8)
+#w4, i4 = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri2", "z2"), als=False, bubblewidth=100)
 
-import matplotlib.pyplot as plt
-plt.plot(w_als, i_als, '-k', label='ALS lam=1e5', linewidth=2)
-plt.plot(w2, i2, label='ALS lam=1e6', linewidth=0.8)
-plt.plot(w3, i3, label='ALS lam=1e7', linewidth=0.8)
-plt.plot(w5, i5, label='ALS lam=1e8', linewidth=0.8)
-plt.plot(w4, i4, label='bubblefill100', linewidth=0.8)
-plt.xlabel('Wavenumber (cm^-1)')
-plt.ylabel('Intensity')
-plt.title('Raman Spectra')
-plt.legend()
-plt.show()
+#import matplotlib.pyplot as plt
+#plt.plot(w_als, i_als, '-k', label='ALS lam=1e5', linewidth=2)
+#plt.plot(w2, i2, label='ALS lam=1e6', linewidth=0.8)
+#plt.plot(w3, i3, label='ALS lam=1e7', linewidth=0.8)
+#plt.plot(w5, i5, label='ALS lam=1e8', linewidth=0.8)
+#plt.plot(w4, i4, label='bubblefill100', linewidth=0.8)
+#plt.xlabel('Wavenumber (cm^-1)')
+#plt.ylabel('Intensity')
+#plt.title('Raman Spectra')
+#plt.legend()
+#plt.show()
 
 
+#w2, i2 = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri2", "petri"), als=True, lam=1e7)
+#w3, i3 = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri4", "petri"), als=True, lam=1e7)
+#w4, i4 = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri6", "petri"), als=True, lam=1e7)
 
+#import matplotlib.pyplot as plt
+#plt.plot(w2, i2, label='petri2', linewidth=0.8)
+#plt.plot(w3, i3, label='petri4', linewidth=0.8)
+#plt.plot(w4, i4, label='petri6', linewidth=0.8)
+#plt.xlabel('Wavenumber (cm^-1)')
+#plt.ylabel('Intensity')
+#plt.title('Spectre des gélose+pétri pour différents pétris')
+#plt.legend()
+#plt.show()
+
+#w2, i2 = formater_donnees(lecteur_données("batch#1", "petri2", "z1")[0])
+#w3, i3 = formater_donnees(lecteur_données("batch#1", "petri4", "z1")[0])
+#w4, i4 = formater_donnees(lecteur_données("batch#1", "petri6", "z2")[0])
+
+#import matplotlib.pyplot as plt
+#plt.plot(w2, i2, label='petri2', linewidth=0.8)
+#plt.plot(w3, i3, label='petri4', linewidth=0.8)
+#plt.plot(w4, i4, label='petri6', linewidth=0.8)
+#plt.xlabel('Wavenumber (cm^-1)')
+#plt.ylabel('Intensity')
+#plt.title('on vérifie les pics cosmiques')
+#plt.legend()
+#plt.show()
+
+#wn, intensite_brute = formater_donnees(lecteur_données("batch#1", "petri2", "z1")[0])
+#intensite_sans_filtre = intensite_brute.copy()
+#intensite_avec_filtre = retirer_rayons_cosmiques(wn, intensite_brute, zones_protegees=[(1050, 1070),(2780, 2820)])
+
+#masque = (wn >= 500) & (wn <= 2000)
+#plt.plot(wn[masque], intensite_sans_filtre[masque], label='brut (sans filtre)')
+#plt.plot(wn[masque], intensite_avec_filtre[masque], label='après retirer_rayons_cosmiques')
+#plt.xlabel('wavenumber(cm^-1)')
+#plt.ylabel('Intensité')
+#plt.title("Spectre avec le retrait ou non des « rayons comsiques»")
+#plt.legend()
+#plt.show()
