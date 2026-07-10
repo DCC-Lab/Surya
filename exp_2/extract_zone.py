@@ -400,7 +400,7 @@ def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True, als=True, 
 
 
 racine8 = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\exp_2"
-def lecteur_données(batch, petri, zone):
+def lecteur_données_zones(batch, petri, zone):
     dossier = os.path.join(racine8, batch, petri)
     pattern = os.path.join(dossier, f"*{zone}*.txt")
     tous_les_fichiers = sorted(glob.glob(pattern))
@@ -411,6 +411,13 @@ def lecteur_données(batch, petri, zone):
 
     return tous_les_fichiers
 
+def lecteur_données_moy(batch, petri):
+    dossier = os.path.joint(racine8, batch, petri)
+    pattern = os.path.joint(dossier, f'*z*.txt')
+    tous_les_fichiers= sorted(glob.glob(pattern))
+    if not tous_les_fichiers:
+        return []
+    return tous_les_fichiers
 
 
 #w_als, i_als = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri2", "z2"), als=True, lam=1e5)

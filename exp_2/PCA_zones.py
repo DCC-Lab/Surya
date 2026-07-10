@@ -1,4 +1,4 @@
-from extract_zone import traiter_acquisitions_gellose, lecteur_données
+from extract_zone import traiter_acquisitions_gellose, lecteur_données_zones, lecteur_données_moy
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.decomposition import NMF
@@ -19,7 +19,7 @@ config = {
         'petri7':  ('S47-G', 45, 'FNT'),
         'petri8':  ('S47-D', 0, 'FNT'),
         'petri9':  ('S39-G', 0,  'FNT'),
-        'petri10': ('S39-D', 0,  'FNT'),
+        #'petri10': ('S39-D', 0,  'FNT'),
     },
     'batch#2': {
         'petri11': ('S45-G', 45, 'F+P'),
@@ -33,29 +33,30 @@ config = {
         'petri19': ('S46-G', 0,  'F+P'),
         'petri20': ('S46-D', 0,  'F+P'),
     },
-    'batch#3': {
-        'petri21': ('S33-G', 45, 'MNT'),
-        'petri22': ('S33-D', 0,  'MNT'),
-        'petri23': ('S37-G', 45, 'MNT'),
-        'petri24': ('S37-D', 0,  'MNT'),
-        'petri25': ('S30-G', 45, 'MNT'),
-        'petri26': ('S30-D', 0,  'MNT'),
-        'petri27': ('S32-G', 45, 'M+P'),
-        'petri28': ('S32-D', 0,  'M+P'),
-        'petri29': ('S36-G', 45, 'M+P'),
-        'petri30': ('S36-D', 0,  'M+P'),
-        'petri31': ('S27-G', 45, 'M+P'),
-        'petri32': ('S27-D', 0,  'M+P'),
-    },
+    #'batch#3': {
+    #    'petri21': ('S33-G', 45, 'MNT'),
+    #    'petri22': ('S33-D', 0,  'MNT'),
+    #    'petri23': ('S37-G', 45, 'MNT'),
+    #    'petri24': ('S37-D', 0,  'MNT'),
+    #    'petri25': ('S30-G', 45, 'MNT'),
+    #    'petri26': ('S30-D', 0,  'MNT'),
+    #    'petri27': ('S32-G', 45, 'M+P'),
+    #    'petri28': ('S32-D', 0,  'M+P'),
+    #    'petri29': ('S36-G', 45, 'M+P'),
+    #    'petri30': ('S36-D', 0,  'M+P'),
+    #    'petri31': ('S27-G', 45, 'M+P'),
+    #    'petri32': ('S27-D', 0,  'M+P'),
+    #},
 }
 
 spectres = []
 etiquettes = []
+moyenné = True
 
 for batch, petris in config.items():
     for petri, (echantillon, dose, type_) in petris.items():
-        for zone in ['z1', 'z2', 'z3']:
-            liste_fichiers = lecteur_données(batch, petri, zone)
+        if moyenné:
+            liste_fichiers = lecteur_données_moy(batch, petri)
             if not liste_fichiers:
                 continue
 
@@ -64,11 +65,27 @@ for batch, petris in config.items():
             if w is None or i is None:
                 continue
             if not np.isfinite(i).all():
-                print(f"NaN/Inf : {echantillon} {zone}, {petri}, {batch} — ignoré")
+                print(f"NaN/Inf : {echantillon}, {petri}, {batch} — ignoré")
                 continue
 
             spectres.append(i)
-            etiquettes.append(f"{echantillon}_{zone}_{dose}{type_}")
+            etiquettes.append(f"{echantillon}_{zone}_{dose}{type_}")            
+        else:
+            for zone in ['z1', 'z2', 'z3']:
+                liste_fichiers = lecteur_données_zones(batch, petri, zone)
+                if not liste_fichiers:
+                    continue
+
+                w, i = traiter_acquisitions_gellose(liste_fichiers)
+
+                if w is None or i is None:
+                    continue
+                if not np.isfinite(i).all():
+                    print(f"NaN/Inf : {echantillon} {zone}, {petri}, {batch} — ignoré")
+                    continue
+
+                spectres.append(i)
+                etiquettes.append(f"{echantillon}_{zone}_{dose}{type_}")
 
 X = np.array(spectres)
 
@@ -89,25 +106,19 @@ print(f"  Total : {sum(pca.explained_variance_ratio_):.1%}")
 # ── 4. Plot 3D ────────────────────────────────────────────────────────────────
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-
-# ── Définir les mappings ──────────────────────────────────────────────────────
+from matplotlib.lines import Line2D
 import re
 
-# ── 3. PCA → 3 composantes ───────────────────────────────────────────────────
-pca = PCA(n_components=3)
-X_reduced = pca.fit_transform(X)
-
-print("Variance expliquée par chaque composante :")
-for i, v in enumerate(pca.explained_variance_ratio_):
-    print(f"  PC{i+1} : {v:.1%}")
-print(f"  Total : {sum(pca.explained_variance_ratio_):.1%}")
-
-# ── 4. Plot 3D ────────────────────────────────────────────────────────────────
-
-# ── Mapping couleur selon traitement (NT vs +P) ───────────────────────────────
+# ── Mapping couleur selon dose ────────────────────────────────────────────────
 color_map = {
-    'NT': 'blue',
-    '+P': 'orange',
+    0:  'blue',
+    45: 'red',
+}
+
+# ── Mapping marqueur selon traitement (NT vs +P) ──────────────────────────────
+marker_map = {
+    'NT': 'o',   # rond
+    '+P': 'D',   # losange
 }
 
 # ── Parsing des étiquettes : "S48-G_z1_45FNT" → echantillon, zone, dose, sexe, traitement
@@ -138,13 +149,14 @@ fig, axes = plt.subplots(1, 2, figsize=(16, 7))
 
 for ax, (pc_x, pc_y) in zip(axes, [(0, 1), (1, 2)]):
     for idx in range(len(etiquettes)):
-        color = color_map[traitements[idx]]
+        color  = color_map[doses[idx]]
+        marker = marker_map[traitements[idx]]
 
         ax.scatter(
             X_reduced[idx, pc_x],
             X_reduced[idx, pc_y],
             color=color,
-            marker='o',
+            marker=marker,
             s=50,
             edgecolors='none',
         )
@@ -167,12 +179,26 @@ for ax, (pc_x, pc_y) in zip(axes, [(0, 1), (1, 2)]):
     ax.axhline(0, color='grey', lw=0.5)
     ax.axvline(0, color='grey', lw=0.5)
 
-# ── Légende : seulement le traitement (NT vs +P) ─────────────────────────────
-handles_traitement = [mpatches.Patch(color=c, label=t) for t, c in color_map.items()]
+# ── Légende : dose (couleur) ──────────────────────────────────────────────────
+handles_dose = [mpatches.Patch(color=c, label=f"{d}gy") for d, c in color_map.items()]
+legend_dose = axes[1].legend(
+    handles=handles_dose,
+    title="Dose",
+    bbox_to_anchor=(1.05, 1),
+    loc='upper left',
+    fontsize=8,
+)
+axes[1].add_artist(legend_dose)
+
+# ── Légende : traitement (marqueur) ───────────────────────────────────────────
+handles_traitement = [
+    Line2D([0], [0], marker=m, color='grey', linestyle='', markersize=8, label=t)
+    for t, m in marker_map.items()
+]
 axes[1].legend(
     handles=handles_traitement,
     title="Traitement",
-    bbox_to_anchor=(1.05, 1),
+    bbox_to_anchor=(1.05, 0.6),
     loc='upper left',
     fontsize=8,
 )
@@ -180,12 +206,6 @@ axes[1].legend(
 plt.suptitle("PCA — Score plots")
 plt.tight_layout()
 plt.show()
-
-
-
-
-
-
 
 
 # -1- décale tout pour que le minimum soit 0
