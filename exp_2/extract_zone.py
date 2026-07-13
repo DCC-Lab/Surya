@@ -49,23 +49,6 @@ def formater_donnees(chemin_fichier, wn_min=500, wn_max=3025):
     masque = (wn >= wn_min) & (wn <= wn_max)
     return wn[masque], intensite[masque]
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # ─────────────────────────────────────────────
 # 2. retrait de l'étalon
 # ─────────────────────────────────────────────
@@ -126,32 +109,6 @@ def raman_shift_to_nm(shift_cm1, laser_nm):
     nu_scattered = nu_laser - shift_cm1  # Stokes
     return 1e7 / nu_scattered           # nm
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
 
 def retirer_rayons_cosmiques(wn, intensite, seuil=10.0, fenetre=5, zones_protegees=None):
     """
@@ -259,7 +216,7 @@ def corriger_fluorescence(intensite, min_bubble_widths=90, fit_order=1):
 from scipy import sparse
 from scipy.sparse.linalg import spsolve
 
-def corriger_fluorescence_als(intensite, lam=1e7, p=0.01, n_iter=10):
+def corriger_fluorescence_als(intensite, lam=1e6, p=0.01, n_iter=15):
     """
     Supprime l'autofluorescence avec l'algorithme ALS 
     (Asymmetric Least Squares, Eilers & Boersma 2005).
@@ -285,14 +242,14 @@ def corriger_fluorescence_als(intensite, lam=1e7, p=0.01, n_iter=10):
 
     intensite_corrigee = intensite - baseline
 
-    return intensite_corrigee
+    return intensite_corrigee, baseline
 
 
 
 
 
 def traiter_acquisitions(liste_fichiers,
-                          retirer_cosmiques=True, retirer_fluorescence=True, zones_protegees=[(1050, 1070),(2780, 2820)]):
+                          retirer_cosmiques=True, retirer_fluorescence=True, zones_protegees=None):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
     Retourne (wavenumbers, spectre_somme).
@@ -331,7 +288,9 @@ def traiter_acquisitions(liste_fichiers,
 
     # retrait de la fluorescence
     if retirer_fluorescence:
-        intensite_sans_fluorescence = corriger_fluorescence_als(spectre_moyen)
+        intensite_sans_fluorescence, baseline = corriger_fluorescence_als(spectre_moyen)
+    else:
+        intensite_sans_fluorescence = spectre_moyen  # sinon la variable n'existe pas!
 
     return wn_ref, intensite_sans_fluorescence, spectre_moyen
 
@@ -358,7 +317,7 @@ t_lambda, lisse = caracteriser_motif_fixe(raman_shift_to_nm(wn_ref, 785), intens
 
 
 
-def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True, als=True, bubblewidth=None, lam=1e6):
+def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True, als=True, bubblewidth=None, lam=1e6, p=0.01):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
     Soustrait le spectre du verre et corrige la fluorescence.
@@ -378,7 +337,7 @@ def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True, als=True, 
 
         if als==True:
             #spectre sans rayon cosmiques, sans étalon et sans fluorescence
-            i_corr_SF = corriger_fluorescence_als(i_corr_F, lam=lam)
+            i_corr_SF, baseline= corriger_fluorescence_als(i_corr_F, lam=lam, p=p)
         else:
             i_corr_SF = corriger_fluorescence(i_corr_F, min_bubble_widths=bubblewidth)
 
@@ -387,7 +346,7 @@ def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True, als=True, 
         intensite = soustraire_spectre(wn, i_corr_SF, wn_gelose, i_gelose_corr)
 
     else:
-        i_SF = corriger_fluorescence_als(i)
+        i_SF, baseline= corriger_fluorescence_als(i, lam=lam, p=p)
 
         #spectre sans rayon cosmiqueset et sans verre
         intensite = soustraire_spectre(wn, i_SF, wn_gelose, i_gelose)
@@ -396,7 +355,7 @@ def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True, als=True, 
     intensite_centree = intensite - np.mean(intensite)
     i_nrml = intensite_centree / np.max(intensite_centree)
     
-    return wn, i_nrml
+    return wn, i_nrml, baseline
 
 
 racine8 = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\exp_2"
@@ -419,32 +378,67 @@ def lecteur_données_moy(batch, petri):
         return []
     return tous_les_fichiers
 
+wn_2 = []
+intensite_2 = []
+for fichier in lecteur_données_zones("batch#1", "petri2", "z2"):
+    w, i = formater_donnees(fichier)
+    wn_2.append(w)
+    intensite_2.append(i)
+intensite_moy_2 = np.mean(intensite_2, axis=0)
 
-#w_als, i_als = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri2", "z2"), als=True, lam=1e5)
+
+
+w1, i1, baseline1 = traiter_acquisitions_gellose(lecteur_données_zones("batch#1", "petri2", "z2"), als=True, lam=1e6, p=0.005)
+w2, i2, baseline2 = traiter_acquisitions_gellose(lecteur_données_zones("batch#1", "petri2", "z2"), als=True, lam=1e6, p=0.01)
+#w_als, i_als, baseline3 = traiter_acquisitions_gellose(lecteur_données_zones("batch#1", "petri2", "z2"), als=True, lam=1e6, p=0.005)
+#w_als, i_als, baseline4 = traiter_acquisitions_gellose(lecteur_données_zones("batch#1", "petri2", "z2"), als=True, lam=1e6, p=0.003)
 #w2, i2 = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri2", "z2"), als=True, lam=1e6)
 #w3, i3 = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri2", "z2"), als=True, lam=1e7)
 #w5, i5 = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri2", "z2"), als=True, lam=1e8)
 #w4, i4 = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri2", "z2"), als=False, bubblewidth=100)
 
+import matplotlib.pyplot as plt
+plt.plot(w1, intensite_moy_2, '-k', label='spectre brut', linewidth=2)
+plt.plot(w1, baseline1, label='baseline 1 lambda=1e6 et p=0,005', linewidth=0.8)
+plt.plot(w1, baseline2, label='baseline 2 lambda=1e6 et p=0,01', linewidth=0.8)
+plt.plot(w1, i1*100 +550, label='corrigé 1')
+plt.plot(w2, i2*100 +550, label='corrigé 2')
+#plt.plot(w_als, baseline2, label='ALS lam=1e6 p=0,001', linewidth=0.8)
+#plt.plot(w_als, baseline3, label='ALS lam=1e6 p=0,005', linewidth=0.8)
+#plt.plot(w_als, baseline4, label='ALS lam=1e6 p=0,003', linewidth=0.8)
+plt.xlabel('Wavenumber (cm^-1)')
+plt.ylabel('Intensity')
+plt.title('Spectre raman pétri2')
+plt.legend()
+plt.show()
+
+
+
+wn_4 = []
+intensite_4 = []
+for fichier in lecteur_données_zones("batch#1", "petri4", "petri"):
+    w, i = formater_donnees(fichier)
+    wn_4.append(w)
+    intensite_4.append(i)
+intensite_moy_4 = np.mean(intensite_4, axis=0)
+
+wn_6 = []
+intensite_6 = []
+for fichier in lecteur_données_zones("batch#1", "petri6", "petri"):
+    w, i = formater_donnees(fichier)
+    wn_6.append(w)
+    intensite_6.append(i)
+intensite_moy_6 = np.mean(intensite_6, axis=0)
+
+
+#w2, i2, base2 = traiter_acquisitions_gellose(lecteur_données_zones("batch#1", "petri2", "petri"), als=True)
+#w3, i3, base4 = traiter_acquisitions_gellose(lecteur_données_zones("batch#1", "petri4", "petri"), als=True)
+#w4, i4, base6 = traiter_acquisitions_gellose(lecteur_données_zones("batch#1", "petri6", "petri"), als=True)
+
 #import matplotlib.pyplot as plt
-#plt.plot(w_als, i_als, '-k', label='ALS lam=1e5', linewidth=2)
-#plt.plot(w2, i2, label='ALS lam=1e6', linewidth=0.8)
-#plt.plot(w3, i3, label='ALS lam=1e7', linewidth=0.8)
-#plt.plot(w5, i5, label='ALS lam=1e8', linewidth=0.8)
-#plt.plot(w4, i4, label='bubblefill100', linewidth=0.8)
-#plt.xlabel('Wavenumber (cm^-1)')
-#plt.ylabel('Intensity')
-#plt.title('Raman Spectra')
-#plt.legend()
-#plt.show()
-
-
-#w2, i2 = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri2", "petri"), als=True, lam=1e7)
-#w3, i3 = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri4", "petri"), als=True, lam=1e7)
-#w4, i4 = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri6", "petri"), als=True, lam=1e7)
-
-#import matplotlib.pyplot as plt
-#plt.plot(w2, i2, label='petri2', linewidth=0.8)
+#plt.plot(w2, intensite_moy_2, label='spectre brut', linewidth=0.8)
+#plt.plot(w2, base2, label='baseline2')
+#plt.plot(w2, i2*1000 + 850, label='corrigé')
 #plt.plot(w3, i3, label='petri4', linewidth=0.8)
 #plt.plot(w4, i4, label='petri6', linewidth=0.8)
 #plt.xlabel('Wavenumber (cm^-1)')

@@ -261,8 +261,8 @@ from scipy.sparse.linalg import spsolve
 
 def corriger_fluorescence_als(intensite, lam=1e7, p=0.01, n_iter=10):
     """
-    Supprime l'autofluorescence avec l'algorithme ALS 
-    (Asymmetric Least Squares, Eilers & Boersma 2005).
+    Supprime l'autofluorescence avec l'algorithme ALS ss
+    (Asymmetric Least Squaress, Eilers & Boersma 2005).
     """
     intensite = np.asarray(intensite, dtype=float)
     n = len(intensite)
