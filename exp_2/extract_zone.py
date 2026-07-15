@@ -388,8 +388,8 @@ intensite_moy_2 = np.mean(intensite_2, axis=0)
 
 
 
-w1, i1, baseline1 = traiter_acquisitions_gellose(lecteur_données_zones("batch#1", "petri2", "z2"), als=True, lam=1e6, p=0.005)
-w2, i2, baseline2 = traiter_acquisitions_gellose(lecteur_données_zones("batch#1", "petri2", "z2"), als=True, lam=1e6, p=0.01)
+#w1, i1, baseline1 = traiter_acquisitions_gellose(lecteur_données_zones("batch#1", "petri2", "z2"), als=True, lam=1e6, p=0.005)
+#w2, i2, baseline2 = traiter_acquisitions_gellose(lecteur_données_zones("batch#1", "petri2", "z2"), als=True, lam=1e6, p=0.01)
 #w_als, i_als, baseline3 = traiter_acquisitions_gellose(lecteur_données_zones("batch#1", "petri2", "z2"), als=True, lam=1e6, p=0.005)
 #w_als, i_als, baseline4 = traiter_acquisitions_gellose(lecteur_données_zones("batch#1", "petri2", "z2"), als=True, lam=1e6, p=0.003)
 #w2, i2 = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri2", "z2"), als=True, lam=1e6)
@@ -397,38 +397,38 @@ w2, i2, baseline2 = traiter_acquisitions_gellose(lecteur_données_zones("batch#1
 #w5, i5 = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri2", "z2"), als=True, lam=1e8)
 #w4, i4 = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri2", "z2"), als=False, bubblewidth=100)
 
-import matplotlib.pyplot as plt
-plt.plot(w1, intensite_moy_2, '-k', label='spectre brut', linewidth=2)
-plt.plot(w1, baseline1, label='baseline 1 lambda=1e6 et p=0,005', linewidth=0.8)
-plt.plot(w1, baseline2, label='baseline 2 lambda=1e6 et p=0,01', linewidth=0.8)
-plt.plot(w1, i1*100 +550, label='corrigé 1')
-plt.plot(w2, i2*100 +550, label='corrigé 2')
+#import matplotlib.pyplot as plt
+#plt.plot(w1, intensite_moy_2, '-k', label='spectre brut', linewidth=2)
+#plt.plot(w1, baseline1, label='baseline 1 lambda=1e6 et p=0,005', linewidth=0.8)
+#plt.plot(w1, baseline2, label='baseline 2 lambda=1e6 et p=0,01', linewidth=0.8)
+#plt.plot(w1, i1*100 +550, label='corrigé 1')
+#plt.plot(w2, i2*100 +550, label='corrigé 2')
 #plt.plot(w_als, baseline2, label='ALS lam=1e6 p=0,001', linewidth=0.8)
 #plt.plot(w_als, baseline3, label='ALS lam=1e6 p=0,005', linewidth=0.8)
 #plt.plot(w_als, baseline4, label='ALS lam=1e6 p=0,003', linewidth=0.8)
-plt.xlabel('Wavenumber (cm^-1)')
-plt.ylabel('Intensity')
-plt.title('Spectre raman pétri2')
-plt.legend()
-plt.show()
+#plt.xlabel('Wavenumber (cm^-1)')
+#plt.ylabel('Intensity')
+#plt.title('Spectre raman pétri2')
+#plt.legend()
+#plt.show()
 
 
 
-wn_4 = []
-intensite_4 = []
-for fichier in lecteur_données_zones("batch#1", "petri4", "petri"):
-    w, i = formater_donnees(fichier)
-    wn_4.append(w)
-    intensite_4.append(i)
-intensite_moy_4 = np.mean(intensite_4, axis=0)
+#wn_4 = []
+#intensite_4 = []
+#for fichier in lecteur_données_zones("batch#1", "petri4", "petri"):
+#    w, i = formater_donnees(fichier)
+#    wn_4.append(w)
+#    intensite_4.append(i)
+#intensite_moy_4 = np.mean(intensite_4, axis=0)
 
-wn_6 = []
-intensite_6 = []
-for fichier in lecteur_données_zones("batch#1", "petri6", "petri"):
-    w, i = formater_donnees(fichier)
-    wn_6.append(w)
-    intensite_6.append(i)
-intensite_moy_6 = np.mean(intensite_6, axis=0)
+#wn_6 = []
+#intensite_6 = []
+#for fichier in lecteur_données_zones("batch#1", "petri6", "petri"):
+#    w, i = formater_donnees(fichier)
+#    wn_6.append(w)
+#    intensite_6.append(i)
+##intensite_moy_6 = np.mean(intensite_6, axis=0)
 
 
 #w2, i2, base2 = traiter_acquisitions_gellose(lecteur_données_zones("batch#1", "petri2", "petri"), als=True)
