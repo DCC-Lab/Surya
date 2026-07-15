@@ -360,18 +360,19 @@ def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True, als=True, 
 
 racine8 = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\exp_2"
 def lecteur_données_zones(batch, petri, zone):
-    dossier = os.path.join(racine8, batch, petri)
+    dossier = os.path.join(racine8, batch, 'frais', petri)
     pattern = os.path.join(dossier, f"*{zone}*.txt")
     tous_les_fichiers = sorted(glob.glob(pattern))
     
     if not tous_les_fichiers:
-        #print(f"Aucun fichier trouvé avec le pattern : {pattern}")
+        print(f"Aucun fichier trouvé avec le pattern : {pattern}")
         return []
 
     return tous_les_fichiers
 
+
 def lecteur_données_moy(batch, petri):
-    dossier = os.path.join(racine8, batch, petri)
+    dossier = os.path.join(racine8, batch, 'frais', petri)
     pattern = os.path.join(dossier, f'*z*.txt')
     tous_les_fichiers= sorted(glob.glob(pattern))
     if not tous_les_fichiers:
