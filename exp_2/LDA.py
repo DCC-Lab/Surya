@@ -100,7 +100,7 @@ def charger_spectres(config, moyenne=False):
                 if not liste_fichiers:
                     continue
 
-                w_local, i = traiter_acquisitions_gellose(liste_fichiers)
+                w_local, i, _ = traiter_acquisitions_gellose(liste_fichiers)
                 if w_local is None or i is None:
                     continue
                 if not np.isfinite(i).all():
@@ -148,7 +148,7 @@ def parser_etiquettes(etiquettes):
 # ────────────────────────────────────────────────────────────────────────────
 # OUTILS
 # ────────────────────────────────────────────────────────────────────────────
-def choisir_n_composantes(X, y, groupes, n_max=15, titre="Choix du nombre de composantes"):
+def choisir_n_composantes(X, y, groupes, n_max=19, titre="Choix du nombre de composantes"):
     """Balaie le nombre de composantes PCA et évalue la balanced accuracy en
     validation croisée LeaveOneGroupOut, pour aider à choisir combien en
     garder avant le LDA final."""
@@ -201,6 +201,10 @@ echantillons, doses, sexes, traitements, souris_id = parser_etiquettes(etiquette
 
 groupes_dose = np.array([f"{d}gy" for d in doses])
 
+groupes_4 = np.array([f"{d}gy_{t}" for d, t in zip(doses, traitements)])
+# ex: ['0gy_NT', '45gy_NT', '0gy_+P', '45gy_+P', ...]
+print(np.unique(groupes_4, return_counts=True))
+
 print("Répartition :")
 for g in np.unique(groupes_dose):
     m = groupes_dose == g
@@ -213,6 +217,7 @@ print()
 # ── Sélection du nombre de composantes PCA, pour chaque analyse ──────────────
 n_pca_dose = choisir_n_composantes(X, groupes_dose, souris_id, N_MAX_COMPOSANTES, "Choix N_PCA — Dose")
 n_pca_trt = choisir_n_composantes(X, traitements, souris_id, N_MAX_COMPOSANTES, "Choix N_PCA — Traitement")
+n_pca_4 = choisir_n_composantes(X, groupes_4, souris_id, N_MAX_COMPOSANTES, "Choix N_PCA — 4 groupes")
 
 # ── LDA — Dose seule (0gy vs 45gy), peu importe le traitement ────────────────
 pca_dose = PCA(n_components=n_pca_dose)
@@ -230,12 +235,23 @@ y_pred_trt, ba_trt = evaluer_lda(X_pca_trt, traitements, souris_id, "TRAITEMENT 
 lda_trt = LinearDiscriminantAnalysis()
 X_lda_trt = lda_trt.fit_transform(X_pca_trt, traitements)
 
+
+# ── LDA ─ dose et traitement (0gy vs 45gy vs NT vs +P) ────────────────────────
+pca_4 = PCA(n_components=n_pca_4)
+X_pca_4 = pca_4.fit_transform(X)
+y_pred_4, ba_4 = evaluer_lda(X_pca_4, groupes_4, souris_id, "4 GROUPES (dose × traitement)")
+
+lda_4 = LinearDiscriminantAnalysis()
+X_lda_4 = lda_4.fit_transform(X_pca_4, groupes_4)  # jusqu'à 3 axes (k-1 = 4-1 = 3)
+
 # ── Matrices de confusion côte à côte ─────────────────────────────────────────
-fig, axes = plt.subplots(1, 2, figsize=(12, 5.5))
+fig, axes = plt.subplots(1, 3, figsize=(12, 5.5))
 ConfusionMatrixDisplay.from_predictions(groupes_dose, y_pred_dose, ax=axes[0], colorbar=False, normalize='true')
 axes[0].set_title("Dose seule")
 ConfusionMatrixDisplay.from_predictions(traitements, y_pred_trt, ax=axes[1], colorbar=False, normalize='true')
 axes[1].set_title("Traitement seul")
+ConfusionMatrixDisplay.from_predictions( groupes_4, y_pred_4, ax=ax, colorbar=True, normalize='true', xticks_rotation=45,) # ── Matrice de confusion (4 groupes)
+axes[2].set_title("Matrice de confusion — 4 groupes (CV LeaveOneGroupOut)")
 plt.tight_layout()
 plt.show()
 
