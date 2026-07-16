@@ -359,7 +359,7 @@ def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True, als=True, 
 
 
 racine8 = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\exp_2"
-def lecteur_donnees_zones(batch, petri, zone):
+def lecteur_données_zones(batch, petri, zone):
     dossier = os.path.join(racine8, batch, 'fixe', petri)
     pattern = os.path.join(dossier, f"*{zone}*.txt")
     tous_les_fichiers = sorted(glob.glob(pattern))
@@ -379,9 +379,9 @@ def lecteur_données_moy(batch, petri):
         return []
     return tous_les_fichiers
 
-w, i = traiter_acquisitions_gellose(lecteur_donnees_zones('batch#1', 'petri1', 'z1'))
+w, i = traiter_acquisitions_gellose(lecteur_données_zones('batch#1', 'petri1', 'z1'))
 
-def lecteur_donnees_frais(batch, petri, zone):
+def lecteur_données_frais(batch, petri, zone):
     dossier = os.path.join(racine8, batch, 'frais', petri)
     pattern = os.path.join(dossier, f"*{zone}*.txt")
     tous_les_fichiers = sorted(glob.glob(pattern))
@@ -392,7 +392,7 @@ def lecteur_donnees_frais(batch, petri, zone):
 
     return tous_les_fichiers
 
-w_p, i_p = traiter_acquisitions_gellose(lecteur_donnees_frais ('batch#1', 'petri1', 'petri'))
+w_p, i_p = traiter_acquisitions_gellose(lecteur_données_frais ('batch#1', 'petri1', 'petri'))
 i_corr = soustraire_spectre(w, i, w_p, i_p)
 
 import matplotlib.pyplot as plt
