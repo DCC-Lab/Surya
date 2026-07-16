@@ -292,7 +292,7 @@ def corriger_fluorescence_als(intensite, lam=1e6, p=0.005, n_iter=10):
 
 
 def traiter_acquisitions(liste_fichiers,
-                          retirer_cosmiques=True, retirer_fluorescence=True, zones_protegees=[(1050, 1070),(2780, 2820)]):
+                          retirer_cosmiques=True, retirer_fluorescence=True):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
     Retourne (wavenumbers, spectre_somme).
@@ -315,7 +315,7 @@ def traiter_acquisitions(liste_fichiers,
         
         # retrait des rayons cosmiques
         if retirer_cosmiques:
-            intensite = retirer_rayons_cosmiques(wn_ref, intensite, zones_protegees=zones_protegees)
+            intensite = retirer_rayons_cosmiques(wn_ref, intensite)
 
         # Interpoler sur la grille de référence si longueur différente
         if len(wn) != len(wn_ref):
@@ -351,7 +351,7 @@ t_lambda, lisse = caracteriser_motif_fixe(raman_shift_to_nm(wn_ref, 785), intens
 
 
 
-def traiter_acquisitions_verre(liste_fichiers, traiter_etalon=True, als=True, bubblewidth=None, lam=1e7):
+def traiter_acquisitions_verre(liste_fichiers, traiter_etalon=True, als=True, bubblewidth=None, lam=1e6):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
     Soustrait le spectre du verre et corrige la fluorescence.
@@ -390,6 +390,7 @@ def traiter_acquisitions_verre(liste_fichiers, traiter_etalon=True, als=True, bu
     i_nrml = intensite_centree / np.max(intensite_centree)
     
     return wn, i_nrml
+
 
 
 
@@ -590,6 +591,13 @@ def extraire_fichiers_j2_fixe(matiere, jour, petri, souris, zone, fichiers_par_z
     return fichiers_zone
 
 
+import matplotlib.pyplot as plt
+w, i = traiter_acquisitions_verre(extraire_fichiers_j2_fixe('verre', 'jour_2', 'petri1', 'souris1', 'zone1'))
+plt.plot(w, i)
+plt.show()
+
+
+
 def extraire_fichiers_jour8_frais(jour, petri, souris, zone):
     dossier = os.path.join(racine2, jour, "Raman", petri)
     pattern = os.path.join(dossier, f"*{souris}*{zone}*")
@@ -605,8 +613,3 @@ def extraire_fichiers_jour8_frais(jour, petri, souris, zone):
     
     return fichiers_zone
 
-    return
-
-
-
-extraire_fichiers_jour8_frais("Jour8", "petri1", "souris1", 'zone2')

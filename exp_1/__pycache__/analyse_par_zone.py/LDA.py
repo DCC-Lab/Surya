@@ -28,10 +28,10 @@ from extract_zone import traiter_acquisitions_verre, extraire_fichiers_j2_fixe
 # CONFIGURATION — jour_2, seulement 0gy et 45gy
 # ────────────────────────────────────────────────────────────────────────────
 CONFIG_JOUR2 = {
-    'petri1': ('0gy',  {'souris1': ['zone1'],
-                        'souris2': ['zone1', 'zone2'],
+    'petri1': ('0gy',  {'souris1': ['zone1', 'zone2', 'zone3'],
+                        'souris2': ['zone1', 'zone2', 'zone3'],
                         'souris3': ['zone1', 'zone2', 'zone3']}),
-    'petri2': ('45gy', {'souris1': ['zone1', 'zone2'],
+    'petri2': ('45gy', {'souris1': ['zone1', 'zone2', 'zone3'],
                         'souris2': ['zone1', 'zone2', 'zone3']}),
 }
 
