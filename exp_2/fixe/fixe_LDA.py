@@ -20,12 +20,12 @@ from matplotlib.lines import Line2D
 from sklearn.pipeline import Pipeline
 
 
-from sklearn.decomposition import NMF
+from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.model_selection import LeaveOneGroupOut, cross_val_predict
 from sklearn.metrics import classification_report, balanced_accuracy_score, ConfusionMatrixDisplay
 
-from extract_zone import traiter_acquisitions_gellose, lecteur_données_zones, lecteur_données_moy
+from fixe_extract import traiter_acquisitions_gellose, lecteur_données_zones, lecteur_données_moy
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -151,31 +151,44 @@ def parser_etiquettes(etiquettes):
 # OUTILS
 # ────────────────────────────────────────────────────────────────────────────
 def choisir_n_composantes(X, y, groupes, n_max=19, titre="Choix du nombre de composantes"):
-    """Balaie le nombre de composantes NMF et évalue la balanced accuracy en
+    """Balaie le nombre de composantes PCA et évalue la balanced accuracy en
     validation croisée LeaveOneGroupOut, pour aider à choisir combien en
-    garder avant le LDA final."""
+    garder avant le LDA final.
+    Ce que fait la fonction
+Objectif : trouver combien de composantes PCA garder avant d'entraîner un LDA final, en testant plusieurs valeurs et en comparant leurs performances.
+Étape par étape :
+
+valeurs_n = list(range(1, n_max + 1)) → elle va tester 1 composante, puis 2, puis 3... jusqu'à n_max (19 par défaut).
+Pour chaque valeur n de composantes :
+
+elle construit un pipeline : d'abord une PCA qui réduit X à n dimensions, puis un LDA (Linear Discriminant Analysis) qui classe les données à partir de ces n dimensions.
+elle évalue ce pipeline avec cross_val_predict et une validation croisée LeaveOneGroupOut (LOGO) : à chaque tour, un groupe entier (par exemple un sujet, une session...) est mis de côté comme test, et le modèle est entraîné sur tous les autres groupes. Ça évite les fuites de données si plusieurs échantillons viennent de la même source.
+elle calcule le balanced accuracy score entre les vraies étiquettes y et les prédictions, et stocke ce score.
+
+
+Elle trace un graphique : score en fonction du nombre de composantes, avec une ligne horizontale à 0.5 (niveau du hasard pour un problème à 2 classes).
+Elle retourne le n qui donne le meilleur score, et l'affiche.
+
+En résumé : c'est une recherche du nombre optimal de composantes PCA, en observant à partir de combien de composantes l'ajout de dimensions supplémentaires n'améliore plus (ou dégrade) la performance de classification.
+"""
     #n_max = min(n_max, X.shape[0] - 1, X.shape[1])
     valeurs_n = list(range(1, n_max + 1))
     scores = []
     logo = LeaveOneGroupOut()
-    X_nmf = X - X.min()   
-    # -2- applique NMF
-    #nmf = NMF(n_components=3, random_state=0)
-    #X_reduced_nmf = nmf.fit_transform(X_nmf)   # ← pas de StandardScaler ! NMF exige des valeurs >= 0    
 
     for n in valeurs_n:
         pipe = Pipeline([
-            ('NMF', NMF(n_components=n)),
+            ('pca', PCA(n_components=n)),
             ('lda', LinearDiscriminantAnalysis()),
         ])
-        y_pred = cross_val_predict(pipe, X_nmf, y, groups=groupes, cv=logo)
+        y_pred = cross_val_predict(pipe, X, y, groups=groupes, cv=logo)
         scores.append(balanced_accuracy_score(y, y_pred))
 
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.plot(valeurs_n, scores, marker='o')
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
     ax.axhline(0.5, color='grey', lw=0.5, linestyle='--', label='hasard (2 classes)')
-    ax.set_xlabel("Nombre de composantes NMF")
+    ax.set_xlabel("Nombre de composantes PCA")
     ax.set_ylabel("Balanced accuracy (CV LeaveOneGroupOut)")
     ax.set_title(titre)
     ax.legend(fontsize=8)
@@ -187,10 +200,10 @@ def choisir_n_composantes(X, y, groupes, n_max=19, titre="Choix du nombre de com
     return meilleur_n
 
 
-def evaluer_lda(X_NMF, y, groupes, titre):
+def evaluer_lda(X_pca, y, groupes, titre):
     """LDA + validation croisée LeaveOneGroupOut (par souris) + rapport de classification."""
     logo = LeaveOneGroupOut()
-    y_pred = cross_val_predict(LinearDiscriminantAnalysis(), X_NMF, y, groups=groupes, cv=logo)
+    y_pred = cross_val_predict(LinearDiscriminantAnalysis(), X_pca, y, groups=groupes, cv=logo)
 
     ba = balanced_accuracy_score(y, y_pred)
     print(f"── {titre} ──")
@@ -203,8 +216,7 @@ def evaluer_lda(X_NMF, y, groupes, titre):
 # ════════════════════════════════════════════════════════════════════════════
 # PIPELINE PRINCIPAL
 # ════════════════════════════════════════════════════════════════════════════
-X_pas_nmf, etiquettes, w = charger_spectres(CONFIG, moyenne=MOYENNE)
-X = X_pas_nmf - X_pas_nmf.min()  
+X, etiquettes, w = charger_spectres(CONFIG, moyenne=MOYENNE)
 echantillons, doses, sexes, traitements, souris_id = parser_etiquettes(etiquettes)
 
 groupes_dose = np.array([f"{d}gy" for d in doses])
@@ -222,44 +234,44 @@ for t in np.unique(traitements):
     print(f"  {t} : {m.sum()} spectres, {len(np.unique(souris_id[m]))} souris")
 print()
 
-# ── Sélection du nombre de composantes NMF, pour chaque analyse ──────────────
-n_nmf_dose = choisir_n_composantes(X, groupes_dose, souris_id, N_MAX_COMPOSANTES, "Choix N_NMF — Dose")
-n_nmf_trt = choisir_n_composantes(X, traitements, souris_id, N_MAX_COMPOSANTES, "Choix N_NMF — Traitement")
-n_nmf_4 = choisir_n_composantes(X, groupes_4, souris_id, N_MAX_COMPOSANTES, "Choix N_NMF — 4 groupes")
+# ── Sélection du nombre de composantes PCA, pour chaque analyse ──────────────
+n_pca_dose = choisir_n_composantes(X, groupes_dose, souris_id, N_MAX_COMPOSANTES, "Choix N_PCA — Dose")
+n_pca_trt = choisir_n_composantes(X, traitements, souris_id, N_MAX_COMPOSANTES, "Choix N_PCA — Traitement")
+n_pca_4 = choisir_n_composantes(X, groupes_4, souris_id, N_MAX_COMPOSANTES, "Choix N_PCA — 4 groupes")
 
 # ── LDA — Dose seule (0gy vs 45gy), peu importe le traitement ────────────────
-nmf_dose = NMF(n_components=n_nmf_dose)
-X_nmf_dose = nmf_dose.fit_transform(X)
-y_pred_dose, ba_dose = evaluer_lda(X_nmf_dose, groupes_dose, souris_id, "DOSE SEULE (0gy vs 45gy)")
+pca_dose = PCA(n_components=n_pca_dose)
+X_pca_dose = pca_dose.fit_transform(X)
+y_pred_dose, ba_dose = evaluer_lda(X_pca_dose, groupes_dose, souris_id, "DOSE SEULE (0gy vs 45gy)")
 
 lda_dose = LinearDiscriminantAnalysis()
-X_lda_dose = lda_dose.fit_transform(X_nmf_dose, groupes_dose)  # 1 axe (2 classes)
+X_lda_dose = lda_dose.fit_transform(X_pca_dose, groupes_dose)  # 1 axe (2 classes)
 
 # ── LDA — Traitement seul (NT vs +P), peu importe la dose ────────────────────
-nmf_trt = NMF(n_components=n_nmf_trt)
-X_nmf_trt = nmf_trt.fit_transform(X)
-y_pred_trt, ba_trt = evaluer_lda(X_nmf_trt, traitements, souris_id, "TRAITEMENT SEUL (NT vs +P)")
+pca_trt = PCA(n_components=n_pca_trt)
+X_pca_trt = pca_trt.fit_transform(X)
+y_pred_trt, ba_trt = evaluer_lda(X_pca_trt, traitements, souris_id, "TRAITEMENT SEUL (NT vs +P)")
 
 lda_trt = LinearDiscriminantAnalysis()
-X_lda_trt = lda_trt.fit_transform(X_nmf_trt, traitements)
+X_lda_trt = lda_trt.fit_transform(X_pca_trt, traitements)
 
 
 # ── LDA ─ dose et traitement (0gy vs 45gy vs NT vs +P) ────────────────────────
-nmf_4 = NMF(n_components=n_nmf_4)
-X_nmf_4 = nmf_4.fit_transform(X)
-y_pred_4, ba_4 = evaluer_lda(X_nmf_4, groupes_4, souris_id, "4 GROUPES (dose × traitement)")
+pca_4 = PCA(n_components=n_pca_4)
+X_pca_4 = pca_4.fit_transform(X)
+y_pred_4, ba_4 = evaluer_lda(X_pca_4, groupes_4, souris_id, "4 GROUPES (dose × traitement)")
 
 lda_4 = LinearDiscriminantAnalysis()
-X_lda_4 = lda_4.fit_transform(X_nmf_4, groupes_4)  # jusqu'à 3 axes (k-1 = 4-1 = 3)
+X_lda_4 = lda_4.fit_transform(X_pca_4, groupes_4)  # jusqu'à 3 axes (k-1 = 4-1 = 3)
 
 # ── Matrices de confusion côte à côte ─────────────────────────────────────────
 fig, axes = plt.subplots(1, 3, figsize=(12, 5.5))
 ConfusionMatrixDisplay.from_predictions(groupes_dose, y_pred_dose, ax=axes[0], colorbar=False, normalize='true')
-axes[0].set_title(f"Dose seule ({n_nmf_dose} composantes)")
+axes[0].set_title(f"Dose seule ({n_pca_dose} composantes)")
 ConfusionMatrixDisplay.from_predictions(traitements, y_pred_trt, ax=axes[1], colorbar=False, normalize='true')
-axes[1].set_title(f"Traitement seul ({n_nmf_trt} composantes)")
+axes[1].set_title(f"Traitement seul ({n_pca_trt} composantes)")
 ConfusionMatrixDisplay.from_predictions( groupes_4, y_pred_4, ax=axes[2], colorbar=True, normalize='true', xticks_rotation=45,) # ── Matrice de confusion (4 groupes)
-axes[2].set_title(f"4 groupes ({n_nmf_4} composantes)")
+axes[2].set_title(f"4 groupes ({n_pca_4} composantes)")
 plt.tight_layout()
 plt.show()
 
@@ -326,8 +338,8 @@ plt.tight_layout()
 plt.show()
 
 # ── Spectres discriminants (poids LD1) pour chaque analyse ────────────────────
-discriminant_dose = nmf_dose.components_.T @ lda_dose.scalings_[:, 0]
-discriminant_trt = nmf_trt.components_.T @ lda_trt.scalings_[:, 0]
+discriminant_dose = pca_dose.components_.T @ lda_dose.scalings_[:, 0]
+discriminant_trt = pca_trt.components_.T @ lda_trt.scalings_[:, 0]
 
 fig, axes = plt.subplots(2, 1, figsize=(10, 7), sharex=True)
 axes[0].plot(w, discriminant_dose, color='darkred')
@@ -345,7 +357,7 @@ plt.tight_layout()
 plt.show()
 
 # ── Spectre discriminant LD1 (4 groupes) ──────────────────────────────────
-discriminant_4_ld1 = nmf_4.components_.T @ lda_4.scalings_[:, 0]
+discriminant_4_ld1 = pca_4.components_.T @ lda_4.scalings_[:, 0]
 
 fig, ax = plt.subplots(figsize=(10, 4.5))
 ax.plot(w, discriminant_4_ld1, color='darkviolet')

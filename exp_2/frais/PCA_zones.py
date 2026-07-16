@@ -1,4 +1,4 @@
-from extract_zone import traiter_acquisitions_gellose, lecteur_données_zones, lecteur_données_moy
+from exp_2.frais.extract_zone import traiter_acquisitions_gellose, lecteur_données_zones, lecteur_données_moy
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.decomposition import NMF
