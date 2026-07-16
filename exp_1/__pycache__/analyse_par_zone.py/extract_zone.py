@@ -259,7 +259,7 @@ def corriger_fluorescence(intensite, min_bubble_widths=90, fit_order=1):
 from scipy import sparse
 from scipy.sparse.linalg import spsolve
 
-def corriger_fluorescence_als(intensite, lam=1e7, p=0.01, n_iter=10):
+def corriger_fluorescence_als(intensite, lam=1e6, p=0.005, n_iter=10):
     """
     Supprime l'autofluorescence avec l'algorithme ALS ss
     (Asymmetric Least Squaress, Eilers & Boersma 2005).
@@ -351,7 +351,7 @@ t_lambda, lisse = caracteriser_motif_fixe(raman_shift_to_nm(wn_ref, 785), intens
 
 
 
-def traiter_acquisitions_verre(liste_fichiers, traiter_etalon=True, als=True, bubblewidth=None, lam=1e6):
+def traiter_acquisitions_verre(liste_fichiers, traiter_etalon=True, als=True, bubblewidth=None, lam=1e7):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
     Soustrait le spectre du verre et corrige la fluorescence.
