@@ -564,7 +564,7 @@ def extraire_fichiers_jour_0(jour, petri, souris, echantillon, zone, fichiers_pa
     #print(f"{zone} — {len(fichiers_zone)} fichiers trouvés")
     return fichiers_zone    
 
-racine1 = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya"
+racine1 = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\exp_1"
 
 def extraire_fichiers_j2_fixe(matiere, jour, petri, souris, zone, fichiers_par_zone=10):
 
