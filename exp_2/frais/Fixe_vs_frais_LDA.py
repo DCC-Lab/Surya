@@ -25,7 +25,7 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.model_selection import LeaveOneGroupOut, cross_val_predict
 from sklearn.metrics import classification_report, balanced_accuracy_score, ConfusionMatrixDisplay
 
-from exp_2.frais.extract_data import traiter_acquisitions_gellose, lecteur_données_frais, lecteur_données_fixes, lecteur_données_moy
+from extract_data import traiter_acquisitions_gellose, lecteur_données_frais, lecteur_données_fixe, lecteur_données_moy
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -95,7 +95,7 @@ def charger_spectres(config, etat, moyenne=False):
         for petri, (echantillon, dose, type_) in petris.items():
             if moyenne:
                 a_lire = [(None, lecteur_données_moy(batch, petri))]
-            elif etat = 'frais':
+            elif etat == 'frais':
                 a_lire = [(z, lecteur_données_frais(batch, petri, z)) for z in ['z1', 'z2', 'z3']]
             else:
                 a_lire = [(z, lecteur_données_fixe(batch, petri, z)) for z in ['z1', 'z2', 'z3']]
