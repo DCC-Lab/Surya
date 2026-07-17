@@ -359,7 +359,7 @@ def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True, als=True, 
 
 
 racine8 = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\exp_2"
-def lecteur_données_zones(batch, petri, zone):
+def lecteur_données_frais(batch, petri, zone):
     dossier = os.path.join(racine8, batch, 'frais', petri)
     pattern = os.path.join(dossier, f"*{zone}*.txt")
     tous_les_fichiers = sorted(glob.glob(pattern))
@@ -368,6 +368,17 @@ def lecteur_données_zones(batch, petri, zone):
         print(f"Aucun fichier trouvé avec le pattern : {pattern}")
         return []
 
+    return tous_les_fichiers
+
+def lecteur_données_fixes(batch, petri, zone):
+    dossier = os.path.join(racine8, batch, 'fixe', petri)
+    pattern = os.path.join(dossier, f"*{zone}*.txt")
+    tous_les_fichiers = sorted(glob.glob(pattern))
+    
+    if not tous_les_fichiers:
+        print(f"Aucun fichier trouvé avec le pattern : {pattern}")
+        return []
+    
     return tous_les_fichiers
 
 
@@ -379,13 +390,17 @@ def lecteur_données_moy(batch, petri):
         return []
     return tous_les_fichiers
 
-wn_2 = []
-intensite_2 = []
-for fichier in lecteur_données_zones("batch#1", "petri2", "z2"):
-    w, i = formater_donnees(fichier)
-    wn_2.append(w)
-    intensite_2.append(i)
-intensite_moy_2 = np.mean(intensite_2, axis=0)
+
+
+
+
+#wn_2 = []
+#intensite_2 = []
+#for fichier in lecteur_données_zones("batch#1", "petri2", "z2"):
+#    w, i = formater_donnees(fichier)
+#    wn_2.append(w)
+#    intensite_2.append(i)
+#intensite_moy_2 = np.mean(intensite_2, axis=0)
 
 
 

@@ -25,57 +25,57 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.model_selection import LeaveOneGroupOut, cross_val_predict
 from sklearn.metrics import classification_report, balanced_accuracy_score, ConfusionMatrixDisplay
 
-from exp_2.frais.extract_zone import traiter_acquisitions_gellose, lecteur_données_zones, lecteur_données_moy
+from exp_2.frais.extract_data import traiter_acquisitions_gellose, lecteur_données_zones, lecteur_données_moy
 
 
 # ────────────────────────────────────────────────────────────────────────────
 # CONFIGURATION
 # ────────────────────────────────────────────────────────────────────────────
 CONFIG = {
-    'batch#1': {
-        'petri1':  ('S48-G', 45, 'FNT'),
-        'petri2':  ('S48-D', 0,  'FNT'),
-        'petri3':  ('S38-G', 45, 'FNT'),
-        'petri4':  ('S38-D', 0,  'FNT'),
-        'petri5':  ('S40-G', 45, 'FNT'),
-        'petri6':  ('S40-D', 0,  'FNT'),
-        'petri7':  ('S47-G', 45, 'FNT'),
-        'petri8':  ('S47-D', 0,  'FNT'),
-        # 'petri9':  ('S39-G', 0,  'FNT'),
-        # 'petri10': ('S39-D', 0,  'FNT'),
-    },
-    'batch#2': {
-        'petri11': ('S45-G', 45, 'F+P'),
-        'petri12': ('S45-D', 0,  'F+P'),
-        'petri13': ('S41-G', 45, 'F+P'),
-        'petri14': ('S41-D', 0,  'F+P'),
-        'petri15': ('S42-G', 45, 'F+P'),
-        'petri16': ('S42-D', 0,  'F+P'),
-        'petri17': ('S44-G', 45, 'F+P'),
-        'petri18': ('S44-D', 0,  'F+P'),
-        'petri19': ('S46-G', 45, 'F+P'),
-        'petri20': ('S46-D', 0,  'F+P'),
-    },
-    # 'batch#3': {
-    #     'petri21': ('S33-G', 45, 'MNT'),
-    #     'petri22': ('S33-D', 0,  'MNT'),
-    #     'petri23': ('S37-G', 45, 'MNT'),
-    #     'petri24': ('S37-D', 0,  'MNT'),
-    #     'petri25': ('S30-G', 45, 'MNT'),
-    #     'petri26': ('S30-D', 0,  'MNT'),
-    #     'petri27': ('S32-G', 45, 'M+P'),
-    #     'petri28': ('S32-D', 0,  'M+P'),
-    #     'petri29': ('S36-G', 45, 'M+P'),
-    #     'petri30': ('S36-D', 0,  'M+P'),
-    #     'petri31': ('S27-G', 45, 'M+P'),
-    #     'petri32': ('S27-D', 0,  'M+P'),
-    # },
+    #'batch#1': {
+    #    'petri1':  ('S48-G', 45, 'FNT'),
+    #    'petri2':  ('S48-D', 0,  'FNT'),
+    #    'petri3':  ('S38-G', 45, 'FNT'),
+    #    'petri4':  ('S38-D', 0,  'FNT'),
+    #    'petri5':  ('S40-G', 45, 'FNT'),
+    #    'petri6':  ('S40-D', 0,  'FNT'),
+    #    'petri7':  ('S47-G', 45, 'FNT'),
+    #    'petri8':  ('S47-D', 0,  'FNT'),
+    #    'petri9':  ('S39-G', 0,  'FNT'),
+    #    'petri10': ('S39-D', 0,  'FNT'),
+    #},
+    #'batch#2': {
+    #    'petri11': ('S45-G', 45, 'F+P'),
+    #    'petri12': ('S45-D', 0,  'F+P'),
+    #    'petri13': ('S41-G', 45, 'F+P'),
+    #    'petri14': ('S41-D', 0,  'F+P'),
+    #    'petri15': ('S42-G', 45, 'F+P'),
+    #    'petri16': ('S42-D', 0,  'F+P'),
+    #    'petri17': ('S44-G', 45, 'F+P'),
+    #    'petri18': ('S44-D', 0,  'F+P'),
+    #    'petri19': ('S46-G', 45, 'F+P'),
+    #    'petri20': ('S46-D', 0,  'F+P'),
+    #},
+    'batch#3': {
+         'petri21': ('S33-G', 45, 'MNT'),
+         'petri22': ('S33-D', 0,  'MNT'),
+         'petri23': ('S37-G', 45, 'MNT'),
+         'petri24': ('S37-D', 0,  'MNT'),
+         'petri25': ('S30-G', 45, 'MNT'),
+         'petri26': ('S30-D', 0,  'MNT'),
+         'petri27': ('S32-G', 45, 'M+P'),
+         'petri28': ('S32-D', 0,  'M+P'),
+         'petri29': ('S36-G', 45, 'M+P'),
+         'petri30': ('S36-D', 0,  'M+P'),
+         'petri31': ('S27-G', 45, 'M+P'),
+         'petri32': ('S27-D', 0,  'M+P'),
+     },
 }
 
 MOYENNE = False   # True -> une valeur moyennée par pétri (lecteur_données_moy)
                   # False -> 3 spectres par pétri, un par zone (z1/z2/z3)
 
-N_MAX_COMPOSANTES = 19  # borne supérieure explorée par le test de sélection
+N_MAX_COMPOSANTES = 15  # borne supérieure explorée par le test de sélection
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -268,30 +268,7 @@ color_map_dose = {0: 'blue', 45: 'red'}
 marker_map_trt = {'NT': 'o', '+P': 'D'}
 etiquettes_points = [f"{echantillons[i]}{sexes[i]}" for i in range(len(etiquettes))]
 
-#fig, ax = plt.subplots(figsize=(8, 7))
-#for idx in range(len(etiquettes)):
-#    ax.scatter(
-#        X_lda_dose[idx, 0], X_lda_trt[idx, 0],
-#        color=color_map_dose[doses[idx]], marker=marker_map_trt[traitements[idx]],
-#        s=60, edgecolors='none',
-#    )
-#    ax.annotate(etiquettes_points[idx], xy=(X_lda_dose[idx, 0], X_lda_trt[idx, 0]),
-#                xytext=(3, 3), textcoords='offset points', fontsize=5, alpha=0.7)
-#
-#ax.set_xlabel("LD1 — dose")
-#ax.set_ylabel("LD1 — traitement")
-#ax.set_title("Projection combinée : composante dose vs composante traitement")
-#ax.axhline(0, color='grey', lw=0.5)
-#ax.axvline(0, color='grey', lw=0.5)
-#
-#handles_dose = [mpatches.Patch(color=c, label=f"{d}gy") for d, c in color_map_dose.items()]
-#legend1 = ax.legend(handles=handles_dose, title="Dose", bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=8)
-#ax.add_artist(legend1)
-#handles_trt = [Line2D([0], [0], marker=m, color='grey', linestyle='', markersize=8, label=t)
-#               for t, m in marker_map_trt.items()]
-#ax.legend(handles=handles_trt, title="Traitement", bbox_to_anchor=(1.02, 0.55), loc='upper left', fontsize=8)
-#plt.tight_layout()
-#plt.show()
+
 
 # ── Graphiques LD1 vs LD2, et LD2 vs LD3 ──────────────────────────────────
 color_map_groupes = {
@@ -325,6 +302,41 @@ axes[1].legend(handles=handles_groupes, title="Groupe", bbox_to_anchor=(1.02, 1)
 plt.tight_layout()
 plt.show()
 
+
+
+
+
+
+
+from scipy.signal import find_peaks
+
+def annoter_pics(ax, w, spectre, n_pics=5, couleur='black'):
+    """Détecte les n_pics plus grands pics (en valeur absolue) et les annote
+    avec leur position en cm-1."""
+    # on cherche les pics positifs ET négatifs séparément
+    idx_pos, _ = find_peaks(spectre)
+    idx_neg, _ = find_peaks(-spectre)
+    idx_tous = np.concatenate([idx_pos, idx_neg])
+
+    # on garde les n_pics avec la plus grande amplitude absolue
+    amplitudes = np.abs(spectre[idx_tous])
+    ordre = np.argsort(amplitudes)[::-1][:n_pics]
+    idx_principaux = idx_tous[ordre]
+
+    for idx in idx_principaux:
+        x, y = w[idx], spectre[idx]
+        ax.annotate(
+            f"{x:.0f}",
+            xy=(x, y),
+            xytext=(0, 10 if y >= 0 else -15),  # décale le texte au-dessus/dessous
+            textcoords='offset points',
+            ha='center', fontsize=8, color=couleur,
+            arrowprops=dict(arrowstyle='-', lw=0.5, color=couleur),
+        )
+
+
+
+
 # ── Spectres discriminants (poids LD1) pour chaque analyse ────────────────────
 discriminant_dose = nmf_dose.components_.T @ lda_dose.scalings_[:, 0]
 discriminant_trt = nmf_trt.components_.T @ lda_trt.scalings_[:, 0]
@@ -334,12 +346,14 @@ axes[0].plot(w, discriminant_dose, color='darkred')
 axes[0].axhline(0, color='grey', lw=0.5)
 axes[0].set_ylabel("Poids LD1 (dose)")
 axes[0].set_title("Spectre discriminant — Dose (0gy vs 45gy)")
+annoter_pics(axes[0], w, discriminant_dose, n_pics=5, couleur='darkred')
 
 axes[1].plot(w, discriminant_trt, color='darkgreen')
 axes[1].axhline(0, color='grey', lw=0.5)
 axes[1].set_ylabel("Poids LD1 (traitement)")
 axes[1].set_xlabel("Raman shift (cm$^{-1}$)")
 axes[1].set_title("Spectre discriminant — Traitement (NT vs +P)")
+annoter_pics(axes[1], w, discriminant_dose, n_pics=5, couleur='darkred')
 
 plt.tight_layout()
 plt.show()
@@ -353,5 +367,6 @@ ax.axhline(0, color='grey', lw=0.5)
 ax.set_xlabel("Raman shift (cm$^{-1}$)")
 ax.set_ylabel("Poids LD1")
 ax.set_title("Spectre discriminant — LD1 (4 groupes : dose × traitement)")
+annoter_pics(ax, w, discriminant_4_ld1, n_pics=6)
 plt.tight_layout()
 plt.show()

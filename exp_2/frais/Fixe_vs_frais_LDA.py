@@ -25,7 +25,7 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.model_selection import LeaveOneGroupOut, cross_val_predict
 from sklearn.metrics import classification_report, balanced_accuracy_score, ConfusionMatrixDisplay
 
-from fixe_extract import traiter_acquisitions_gellose, lecteur_données_zones, lecteur_données_moy
+from exp_2.frais.extract_data import traiter_acquisitions_gellose, lecteur_données_frais, lecteur_données_fixes, lecteur_données_moy
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -81,7 +81,7 @@ N_MAX_COMPOSANTES = 19  # borne supérieure explorée par le test de sélection
 # ────────────────────────────────────────────────────────────────────────────
 # CHARGEMENT DES DONNÉES
 # ────────────────────────────────────────────────────────────────────────────
-def charger_spectres(config, moyenne=False):
+def charger_spectres(config, etat, moyenne=False):
     """Charge tous les spectres et construit les étiquettes associées.
 
     Si moyenne=False, chaque échantillon donne 3 spectres (z1, z2, z3) qui
@@ -95,8 +95,10 @@ def charger_spectres(config, moyenne=False):
         for petri, (echantillon, dose, type_) in petris.items():
             if moyenne:
                 a_lire = [(None, lecteur_données_moy(batch, petri))]
+            elif etat = 'frais':
+                a_lire = [(z, lecteur_données_frais(batch, petri, z)) for z in ['z1', 'z2', 'z3']]
             else:
-                a_lire = [(z, lecteur_données_zones(batch, petri, z)) for z in ['z1', 'z2', 'z3']]
+                a_lire = [(z, lecteur_données_fixe(batch, petri, z)) for z in ['z1', 'z2', 'z3']]
 
             for zone, liste_fichiers in a_lire:
                 if not liste_fichiers:
@@ -211,159 +213,3 @@ def evaluer_lda(X_pca, y, groupes, titre):
     print(f"Balanced accuracy : {ba:.1%}\n")
 
     return y_pred, ba
-
-
-# ════════════════════════════════════════════════════════════════════════════
-# PIPELINE PRINCIPAL
-# ════════════════════════════════════════════════════════════════════════════
-X, etiquettes, w = charger_spectres(CONFIG, moyenne=MOYENNE)
-echantillons, doses, sexes, traitements, souris_id = parser_etiquettes(etiquettes)
-
-groupes_dose = np.array([f"{d}gy" for d in doses])
-
-groupes_4 = np.array([f"{d}gy_{t}" for d, t in zip(doses, traitements)])
-# ex: ['0gy_NT', '45gy_NT', '0gy_+P', '45gy_+P', ...]
-print(np.unique(groupes_4, return_counts=True))
-
-print("Répartition :")
-for g in np.unique(groupes_dose):
-    m = groupes_dose == g
-    print(f"  {g} : {m.sum()} spectres, {len(np.unique(souris_id[m]))} souris")
-for t in np.unique(traitements):
-    m = traitements == t
-    print(f"  {t} : {m.sum()} spectres, {len(np.unique(souris_id[m]))} souris")
-print()
-
-# ── Sélection du nombre de composantes PCA, pour chaque analyse ──────────────
-n_pca_dose = choisir_n_composantes(X, groupes_dose, souris_id, N_MAX_COMPOSANTES, "Choix N_PCA — Dose")
-n_pca_trt = choisir_n_composantes(X, traitements, souris_id, N_MAX_COMPOSANTES, "Choix N_PCA — Traitement")
-n_pca_4 = choisir_n_composantes(X, groupes_4, souris_id, N_MAX_COMPOSANTES, "Choix N_PCA — 4 groupes")
-
-# ── LDA — Dose seule (0gy vs 45gy), peu importe le traitement ────────────────
-pca_dose = PCA(n_components=n_pca_dose)
-X_pca_dose = pca_dose.fit_transform(X)
-y_pred_dose, ba_dose = evaluer_lda(X_pca_dose, groupes_dose, souris_id, "DOSE SEULE (0gy vs 45gy)")
-
-lda_dose = LinearDiscriminantAnalysis()
-X_lda_dose = lda_dose.fit_transform(X_pca_dose, groupes_dose)  # 1 axe (2 classes)
-
-# ── LDA — Traitement seul (NT vs +P), peu importe la dose ────────────────────
-pca_trt = PCA(n_components=n_pca_trt)
-X_pca_trt = pca_trt.fit_transform(X)
-y_pred_trt, ba_trt = evaluer_lda(X_pca_trt, traitements, souris_id, "TRAITEMENT SEUL (NT vs +P)")
-
-lda_trt = LinearDiscriminantAnalysis()
-X_lda_trt = lda_trt.fit_transform(X_pca_trt, traitements)
-
-
-# ── LDA ─ dose et traitement (0gy vs 45gy vs NT vs +P) ────────────────────────
-pca_4 = PCA(n_components=n_pca_4)
-X_pca_4 = pca_4.fit_transform(X)
-y_pred_4, ba_4 = evaluer_lda(X_pca_4, groupes_4, souris_id, "4 GROUPES (dose × traitement)")
-
-lda_4 = LinearDiscriminantAnalysis()
-X_lda_4 = lda_4.fit_transform(X_pca_4, groupes_4)  # jusqu'à 3 axes (k-1 = 4-1 = 3)
-
-# ── Matrices de confusion côte à côte ─────────────────────────────────────────
-fig, axes = plt.subplots(1, 3, figsize=(12, 5.5))
-ConfusionMatrixDisplay.from_predictions(groupes_dose, y_pred_dose, ax=axes[0], colorbar=False, normalize='true')
-axes[0].set_title(f"Dose seule ({n_pca_dose} composantes)")
-ConfusionMatrixDisplay.from_predictions(traitements, y_pred_trt, ax=axes[1], colorbar=False, normalize='true')
-axes[1].set_title(f"Traitement seul ({n_pca_trt} composantes)")
-ConfusionMatrixDisplay.from_predictions( groupes_4, y_pred_4, ax=axes[2], colorbar=True, normalize='true', xticks_rotation=45,) # ── Matrice de confusion (4 groupes)
-axes[2].set_title(f"4 groupes ({n_pca_4} composantes)")
-plt.tight_layout()
-plt.show()
-
-# ── Graphique combiné 2D : composante dose (x) vs composante traitement (y) ──
-color_map_dose = {0: 'blue', 45: 'red'}
-marker_map_trt = {'NT': 'o', '+P': 'D'}
-etiquettes_points = [f"{echantillons[i]}{sexes[i]}" for i in range(len(etiquettes))]
-
-#fig, ax = plt.subplots(figsize=(8, 7))
-#for idx in range(len(etiquettes)):
-#    ax.scatter(
-#        X_lda_dose[idx, 0], X_lda_trt[idx, 0],
-#        color=color_map_dose[doses[idx]], marker=marker_map_trt[traitements[idx]],
-#        s=60, edgecolors='none',
-#    )
-#    ax.annotate(etiquettes_points[idx], xy=(X_lda_dose[idx, 0], X_lda_trt[idx, 0]),
-#                xytext=(3, 3), textcoords='offset points', fontsize=5, alpha=0.7)
-#
-#ax.set_xlabel("LD1 — dose")
-#ax.set_ylabel("LD1 — traitement")
-#ax.set_title("Projection combinée : composante dose vs composante traitement")
-#ax.axhline(0, color='grey', lw=0.5)
-#ax.axvline(0, color='grey', lw=0.5)
-#
-#handles_dose = [mpatches.Patch(color=c, label=f"{d}gy") for d, c in color_map_dose.items()]
-#legend1 = ax.legend(handles=handles_dose, title="Dose", bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=8)
-#ax.add_artist(legend1)
-#handles_trt = [Line2D([0], [0], marker=m, color='grey', linestyle='', markersize=8, label=t)
-#               for t, m in marker_map_trt.items()]
-#ax.legend(handles=handles_trt, title="Traitement", bbox_to_anchor=(1.02, 0.55), loc='upper left', fontsize=8)
-#plt.tight_layout()
-#plt.show()
-
-# ── Graphiques LD1 vs LD2, et LD2 vs LD3 ──────────────────────────────────
-color_map_groupes = {
-    '0gy_NT':  'tab:blue',
-    '45gy_NT': 'tab:red',
-    '0gy_+P':  'tab:cyan',
-    '45gy_+P': 'tab:orange',
-}
-
-def tracer_lda(ax, x_axis, y_axis, xlabel, ylabel, titre):
-    for idx in range(len(etiquettes)):
-        g = groupes_4[idx]
-        ax.scatter(
-            X_lda_4[idx, x_axis], X_lda_4[idx, y_axis],
-            color=color_map_groupes[g], s=60, edgecolors='k', linewidths=0.3,
-        )
-        ax.annotate(etiquettes_points[idx], xy=(X_lda_4[idx, x_axis], X_lda_4[idx, y_axis]),
-                    xytext=(3, 3), textcoords='offset points', fontsize=5, alpha=0.7)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    ax.set_title(titre)
-    ax.axhline(0, color='grey', lw=0.5)
-    ax.axvline(0, color='grey', lw=0.5)
-
-fig, axes = plt.subplots(1, 2, figsize=(13, 6))
-tracer_lda(axes[0], 0, 1, "LD1", "LD2", "LD1 vs LD2")
-tracer_lda(axes[1], 1, 2, "LD2", "LD3", "LD2 vs LD3")
-
-handles_groupes = [mpatches.Patch(color=c, label=g) for g, c in color_map_groupes.items()]
-axes[1].legend(handles=handles_groupes, title="Groupe", bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=8)
-plt.tight_layout()
-plt.show()
-
-# ── Spectres discriminants (poids LD1) pour chaque analyse ────────────────────
-discriminant_dose = pca_dose.components_.T @ lda_dose.scalings_[:, 0]
-discriminant_trt = pca_trt.components_.T @ lda_trt.scalings_[:, 0]
-
-fig, axes = plt.subplots(2, 1, figsize=(10, 7), sharex=True)
-axes[0].plot(w, discriminant_dose, color='darkred')
-axes[0].axhline(0, color='grey', lw=0.5)
-axes[0].set_ylabel("Poids LD1 (dose)")
-axes[0].set_title("Spectre discriminant — Dose (0gy vs 45gy)")
-
-axes[1].plot(w, discriminant_trt, color='darkgreen')
-axes[1].axhline(0, color='grey', lw=0.5)
-axes[1].set_ylabel("Poids LD1 (traitement)")
-axes[1].set_xlabel("Raman shift (cm$^{-1}$)")
-axes[1].set_title("Spectre discriminant — Traitement (NT vs +P)")
-
-plt.tight_layout()
-plt.show()
-
-# ── Spectre discriminant LD1 (4 groupes) ──────────────────────────────────
-discriminant_4_ld1 = pca_4.components_.T @ lda_4.scalings_[:, 0]
-
-fig, ax = plt.subplots(figsize=(10, 4.5))
-ax.plot(w, discriminant_4_ld1, color='darkviolet')
-ax.axhline(0, color='grey', lw=0.5)
-ax.set_xlabel("Raman shift (cm$^{-1}$)")
-ax.set_ylabel("Poids LD1")
-ax.set_title("Spectre discriminant — LD1 (4 groupes : dose × traitement)")
-plt.tight_layout()
-plt.show()

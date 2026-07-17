@@ -25,7 +25,7 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.model_selection import LeaveOneGroupOut, cross_val_predict
 from sklearn.metrics import classification_report, balanced_accuracy_score, ConfusionMatrixDisplay
 
-from extract_zone import traiter_acquisitions_gellose, lecteur_données_zones, lecteur_données_moy
+from exp_2.frais.extract_data import traiter_acquisitions_gellose, lecteur_données_zones, lecteur_données_moy
 
 
 # ────────────────────────────────────────────────────────────────────────────
