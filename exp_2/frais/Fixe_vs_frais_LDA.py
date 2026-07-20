@@ -25,7 +25,7 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.model_selection import LeaveOneGroupOut, cross_val_predict
 from sklearn.metrics import classification_report, balanced_accuracy_score, ConfusionMatrixDisplay
 
-from extract_data import traiter_acquisitions_gellose, lecteur_données_frais, lecteur_données_fixe, lecteur_données_moy
+from extract_data import traiter_acquisitions_gellose, lecteur_données_frais, lecteur_données_fixes, lecteur_données_moy
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -75,7 +75,7 @@ CONFIG = {
 MOYENNE = False   # True -> une valeur moyennée par pétri (lecteur_données_moy)
                   # False -> 3 spectres par pétri, un par zone (z1/z2/z3)
 
-N_MAX_COMPOSANTES = 19  # borne supérieure explorée par le test de sélection
+N_MAX_COMPOSANTES = 15  # borne supérieure explorée par le test de sélection
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -97,8 +97,10 @@ def charger_spectres(config, etat, moyenne=False):
                 a_lire = [(None, lecteur_données_moy(batch, petri))]
             elif etat == 'frais':
                 a_lire = [(z, lecteur_données_frais(batch, petri, z)) for z in ['z1', 'z2', 'z3']]
+                etat = 'frais'
             else:
-                a_lire = [(z, lecteur_données_fixe(batch, petri, z)) for z in ['z1', 'z2', 'z3']]
+                a_lire = [(z, lecteur_données_fixes(batch, petri, z)) for z in ['z1', 'z2', 'z3']]
+                etat = 'fixe'
 
             for zone, liste_fichiers in a_lire:
                 if not liste_fichiers:
@@ -114,44 +116,56 @@ def charger_spectres(config, etat, moyenne=False):
                 w = w_local
                 suffixe = f"_{zone}" if zone else ""
                 spectres.append(i)
-                etiquettes.append(f"{echantillon}{suffixe}_{dose}{type_}")
+                etiquettes.append(f"{echantillon}{suffixe}_{dose}{type_}_{etat}")
 
     return np.array(spectres), etiquettes, w
 
 
 def parser_etiquettes(etiquettes):
-    """Extrait échantillon, dose, sexe, traitement, id souris depuis les étiquettes.
-
-    Gère les deux formats possibles :
-      - "S48-G_z1_45FNT"  (3 segments, moyenne=False)
-      - "S48-G_45FNT"     (2 segments, moyenne=True)
-    """
-    echantillons, doses, sexes, traitements, souris_id = [], [], [], [], []
+    """Extrait échantillon, dose, sexe, traitement, id souris, état (frais/fixe)."""
+    echantillons, doses, sexes, traitements, souris_id, etats = [], [], [], [], [], []
 
     for e in etiquettes:
         parts = e.split('_')
         echantillon = parts[0]
-        reste = parts[-1]
+        reste = parts[-2]   # ex: "45FNT" (l'avant-dernier segment, avant l'état)
 
         m = re.match(r'(\d+)([A-Z])(.*)', reste)
         dose, sexe, traitement = int(m.group(1)), m.group(2), m.group(3)
-        mouse = echantillon.split('-')[0]   # "S48-G" -> "S48"
+        mouse = echantillon.split('-')[0]
 
         echantillons.append(echantillon)
         doses.append(dose)
         sexes.append(sexe)
         traitements.append(traitement)
         souris_id.append(mouse)
+        etats.append(parts[-1])  # "frais" ou "fixe"
 
     return (
         np.array(echantillons), np.array(doses),
-        np.array(sexes), np.array(traitements), np.array(souris_id),
+        np.array(sexes), np.array(traitements),
+        np.array(souris_id), np.array(etats),
     )
 
 
-# ────────────────────────────────────────────────────────────────────────────
-# OUTILS
-# ────────────────────────────────────────────────────────────────────────────
+# ── Chargement des deux états ──────────────────────────────────────────────
+X_frais, etiquettes_frais, w_frais = charger_spectres(CONFIG, 'frais', moyenne=MOYENNE)
+X_fixe, etiquettes_fixe, w_fixe = charger_spectres(CONFIG, 'fixe', moyenne=MOYENNE)
+
+X = np.concatenate([X_frais, X_fixe], axis=0)
+etiquettes = etiquettes_frais + etiquettes_fixe   # ce sont des listes Python, "+" les concatène
+w = w_frais   # en supposant que w_frais == w_fixe (mêmes wavenumbers pour les deux états)
+
+echantillons, doses, sexes, traitements, souris_id, etats = parser_etiquettes(etiquettes)
+
+# ── Vérification rapide de la répartition ──────────────────────────────────
+print("Répartition NT, par état :")
+for e in np.unique(etats):
+    for d in np.unique(doses):
+        m = (traitements == '+P') & (etats == e) & (doses == d)
+        if m.sum() > 0:
+            print(f"  {e}, {d}gy : {m.sum()} spectres, {len(np.unique(souris_id[m]))} souris")
+
 def choisir_n_composantes(X, y, groupes, n_max=19, titre="Choix du nombre de composantes"):
     """Balaie le nombre de composantes PCA et évalue la balanced accuracy en
     validation croisée LeaveOneGroupOut, pour aider à choisir combien en
@@ -213,3 +227,121 @@ def evaluer_lda(X_pca, y, groupes, titre):
     print(f"Balanced accuracy : {ba:.1%}\n")
 
     return y_pred, ba
+
+# ════════════════════════════════════════════════════════════════════════════
+# Analyse dose (0gy vs 45gy) au sein de NT, séparément pour frais et fixe
+# ════════════════════════════════════════════════════════════════════════════
+def analyser_dose_par_etat(X, doses, souris_id, masque, titre_suffixe):
+    X_sub = X[masque]
+    y_sub = np.array([f"{d}gy" for d in doses[masque]])
+    groupes_sub = souris_id[masque]
+
+    n_pca = choisir_n_composantes(X_sub, y_sub, groupes_sub, N_MAX_COMPOSANTES,
+                                   f"Choix N_PCA — NT, {titre_suffixe}")
+
+    pca = PCA(n_components=n_pca)
+    X_pca = pca.fit_transform(X_sub)
+    y_pred, ba = evaluer_lda(X_pca, y_sub, groupes_sub, f"DOSE — NT, {titre_suffixe}")
+
+    return y_sub, y_pred, ba, n_pca
+
+def analyser_traitement_par_dose(X, traitements, souris_id, masque, titre_suffixe):
+    X_sub = X[masque]
+    y_sub = traitements[masque]          # ← on compare NT vs +P, pas 0gy vs 45gy
+    groupes_sub = souris_id[masque]
+
+    n_pca = choisir_n_composantes(X_sub, y_sub, groupes_sub, N_MAX_COMPOSANTES,
+                                   f"Choix N_PCA — {titre_suffixe}")
+
+    pca = PCA(n_components=n_pca)
+    X_pca = pca.fit_transform(X_sub)
+    y_pred, ba = evaluer_lda(X_pca, y_sub, groupes_sub, f"TRAITEMENT — {titre_suffixe}")
+
+    return y_sub, y_pred, ba, n_pca
+
+
+
+#masque_nt_frais = (traitements == '+P') & (etats == 'frais')
+#masque_nt_fixe = (traitements == '+P') & (etats == 'fixe')
+
+#y_nt_frais, y_pred_nt_frais, ba_nt_frais, n_pca_frais = analyser_dose_par_etat(
+#    X, doses, souris_id, masque_nt_frais, "frais"
+#)
+#y_nt_fixe, y_pred_nt_fixe, ba_nt_fixe, n_pca_fixe = analyser_dose_par_etat(
+#    X, doses, souris_id, masque_nt_fixe, "fixe"
+#)
+
+
+
+masque_0gy = (doses == 0)
+masque_45gy = (doses == 45)
+
+y_0gy, y_pred_0gy, ba_0gy, n_pca_0gy = analyser_traitement_par_dose(
+    X, traitements, souris_id, masque_0gy, "0gy (NT vs +P)"
+)
+y_45gy, y_pred_45gy, ba_45gy, n_pca_45gy = analyser_traitement_par_dose(
+    X, traitements, souris_id, masque_45gy, "45gy (NT vs +P)"
+)
+
+#print("Répartition NT — dose × état :")
+#for e in np.unique(etats):
+#    for d in np.unique(doses):
+#        m = (traitements == '+P') & (etats == e) & (doses == d)
+#        if m.sum() > 0:
+#            souris = np.unique(souris_id[m])
+#            print(f"  {e}, {d}gy : {m.sum()} spectres, {len(souris)} souris → {sorted(souris)}")
+
+
+print("Répartition complète — traitement × dose × état :")
+for t in np.unique(traitements):
+    for e in np.unique(etats):
+        for d in np.unique(doses):
+            m = (traitements == t) & (etats == e) & (doses == d)
+            if m.sum() > 0:
+                souris = np.unique(souris_id[m])
+                print(f"  {t}, {e}, {d}gy : {m.sum()} spectres, {len(souris)} souris → {sorted(souris)}")
+
+# ── Les deux matrices de confusion côte à côte ─────────────────────────────
+#fig, axes = plt.subplots(1, 2, figsize=(11, 5))
+
+#ConfusionMatrixDisplay.from_predictions(y_nt_frais, y_pred_nt_frais, ax=axes[0],
+#                                          colorbar=False, normalize='true')
+#axes[0].set_title(f"NT — Frais\n({n_pca_frais} composantes, BA={ba_nt_frais:.1%})")
+
+#ConfusionMatrixDisplay.from_predictions(y_nt_fixe, y_pred_nt_fixe, ax=axes[1],
+#                                          colorbar=False, normalize='true')
+#axes[1].set_title(f"NT — Fixé\n({n_pca_fixe} composantes, BA={ba_nt_fixe:.1%})")
+
+#plt.tight_layout()
+#plt.show()
+
+
+fig, axes = plt.subplots(1, 2, figsize=(11, 5))
+
+ConfusionMatrixDisplay.from_predictions(y_0gy, y_pred_0gy, ax=axes[0],
+                                          colorbar=False, normalize='true')
+axes[0].set_title(f"0gy — NT vs +P\n({n_pca_0gy} composantes, BA={ba_0gy:.1%})")
+
+ConfusionMatrixDisplay.from_predictions(y_45gy, y_pred_45gy, ax=axes[1],
+                                          colorbar=False, normalize='true')
+axes[1].set_title(f"45gy — NT vs +P\n({n_pca_45gy} composantes, BA={ba_45gy:.1%})")
+
+plt.tight_layout()
+plt.show()
+
+effet_dose_dans_NT = X[(doses==45)&(traitements=='NT')].mean(axis=0) - X[(doses==0)&(traitements=='NT')].mean(axis=0)
+effet_dose_dans_P  = X[(doses==45)&(traitements=='+P')].mean(axis=0) - X[(doses==0)&(traitements=='+P')].mean(axis=0)
+
+interaction = effet_dose_dans_P - effet_dose_dans_NT
+
+fig, ax = plt.subplots(figsize=(10, 4))
+ax.plot(w, effet_dose_dans_NT, label="Effet dose — NT (signature dommage)", color='darkred')
+ax.plot(w, effet_dose_dans_P, label="Effet dose — +P", color='darkorange', alpha=0.7)
+ax.plot(w, interaction, label="Interaction (différence des deux effets)", color='black', linestyle='--')
+ax.axhline(0, color='grey', lw=0.5)
+ax.legend(fontsize=8)
+ax.set_xlabel("Raman shift (cm$^{-1}$)")
+ax.set_title("Effet de la dose selon le traitement, et interaction")
+plt.tight_layout()
+plt.show()
+
