@@ -272,108 +272,145 @@ groupes_dose = np.array([f"{d}gy" for d in doses])
 # NOMBRE DE SOURIS PAR GROUPE
 # ════════════════════════════════════════════════════════════════════════════
 
-#for t in np.unique(traitements):
-#    m_t = traitements == t
-#    souris_0 = set(str(s) for s in souris_id[m_t & (doses == 0)])
-#    souris_45 = set(str(s) for s in souris_id[m_t & (doses == 45)])
-#    communes = souris_0 & souris_4
-#
-#    print(f"── {t} ──")
-#    print(f"  {len(souris_0)} souris à 0gy  : {sorted(souris_0)}")
-#    print(f"  {len(souris_45)} souris à 45gy : {sorted(souris_45)}")
-#    print(f"  souris présentes aux deux doses : {len(communes)} → {sorted(communes)}")
-#    print()
+for t in np.unique(traitements):
+    m_t = traitements == t
+    souris_0 = set(str(s) for s in souris_id[m_t & (doses == 0)])
+    souris_45 = set(str(s) for s in souris_id[m_t & (doses == 45)])
+    communes = souris_0 & souris_45
+
+    print(f"── {t} ──")
+    print(f"  {len(souris_0)} souris à 0gy  : {sorted(souris_0)}")
+    print(f"  {len(souris_45)} souris à 45gy : {sorted(souris_45)}")
+    print(f"  souris présentes aux deux doses : {len(communes)} → {sorted(communes)}")
+    print()
 
 # ════════════════════════════════════════════════════════════════════════════
 # 1) DOSE, à l'intérieur du groupe NT seulement (0gy_NT vs 45gy_NT)
 # ════════════════════════════════════════════════════════════════════════════
-#masque_nt = traitements == 'NT'
-#n_pca_nt, y_pred_nt, ba_nt, disc_nt = analyser_dose_dans_sous_groupe(
-#    X, groupes_dose, souris_id, masque_nt, "NT seul", 'darkblue'
-#)
+masque_nt = traitements == 'NT'
+n_pca_nt, y_pred_nt, ba_nt, disc_nt = analyser_dose_dans_sous_groupe(
+    X, groupes_dose, souris_id, masque_nt, "NT seul", 'darkblue'
+)
 
 # ════════════════════════════════════════════════════════════════════════════
 # 2) DOSE, à l'intérieur du groupe +P seulement (0gy_+P vs 45gy_+P)
 # ════════════════════════════════════════════════════════════════════════════
-#masque_p = traitements == '+P'
-#n_pca_p, y_pred_p, ba_p, disc_p = analyser_dose_dans_sous_groupe(
-#    X, groupes_dose, souris_id, masque_p, "+P seul", 'darkgreen'
-#)
+masque_p = traitements == '+P'
+n_pca_p, y_pred_p, ba_p, disc_p = analyser_dose_dans_sous_groupe(
+    X, groupes_dose, souris_id, masque_p, "+P seul", 'darkgreen'
+)
 
 # ════════════════════════════════════════════════════════════════════════════
 # 3) DOSE globale, peu importe le traitement (0gy vs 45gy, tous confondus)
 # ════════════════════════════════════════════════════════════════════════════
-#n_pca_dose, y_pred_dose, ba_dose, disc_dose = analyser_dose_dans_sous_groupe(
-#    X, groupes_dose, souris_id, np.ones(len(X), dtype=bool), "toutes conditions", 'darkred'
-#)
+n_pca_dose, y_pred_dose, ba_dose, disc_dose = analyser_dose_dans_sous_groupe(
+    X, groupes_dose, souris_id, np.ones(len(X), dtype=bool), "toutes conditions", 'darkred'
+)
 
 
 
+from scipy.signal import find_peaks
+
+def annoter_pics(ax, w, spectre, n_pics=8, couleur='black'):
+    """Détecte les n_pics plus grands pics (en valeur absolue) et les annote
+    avec leur position en cm-1."""
+    idx_pos, _ = find_peaks(spectre)
+    idx_neg, _ = find_peaks(-spectre)
+    idx_tous = np.concatenate([idx_pos, idx_neg])
+
+    amplitudes = np.abs(spectre[idx_tous])
+    ordre = np.argsort(amplitudes)[::-1][:n_pics]
+    idx_principaux = idx_tous[ordre]
+
+    for idx in idx_principaux:
+        x, y = w[idx], spectre[idx]
+        ax.annotate(
+            f"{x:.0f}",
+            xy=(x, y),
+            xytext=(0, 10 if y >= 0 else -15),
+            textcoords='offset points',
+            ha='center', fontsize=8, color=couleur,
+            arrowprops=dict(arrowstyle='-', lw=0.5, color=couleur),
+        )
+
+
+fig, ax = plt.subplots(figsize=(11, 5))
+ax.plot(w, disc_nt, color='darkblue')
+ax.axhline(0, color='grey', lw=0.5)
+ax.set_xlabel("Raman shift (cm$^{-1}$)")
+ax.set_ylabel("Poids LD1")
+ax.set_title("Spectre discriminant — Dose (0gy vs 45gy), groupe NT seul")
+
+annoter_pics(ax, w, disc_nt, n_pics=8, couleur='darkblue')
+
+plt.tight_layout()
+plt.show()
 
 # ════════════════════════════════════════════════════════════════════════════
 # Qu'est-ce qui est sain et qu'est-ce qui ne l'ai pas
 # ════════════════════════════════════════════════════════════════════════════
 # ── Étape 1 : calibrer l'axe de référence UNIQUEMENT sur NT ──────────────────
-masque_nt = traitements == 'NT'
-X_nt = X[masque_nt]
-y_nt = groupes_dose[masque_nt]
-groupes_nt = souris_id[masque_nt]
+#masque_nt = traitements == 'NT'
+#X_nt = X[masque_nt]
+#y_nt = groupes_dose[masque_nt]
+#groupes_nt = souris_id[masque_nt]
 
-n_pca_nt = choisir_n_composantes(X_nt, y_nt, groupes_nt, N_MAX_COMPOSANTES,
-                                  "Choix N_PCA — NT (axe de référence)")
+#n_pca_nt = choisir_n_composantes(X_nt, y_nt, groupes_nt, N_MAX_COMPOSANTES,
+#                                  "Choix N_PCA — NT (axe de référence)")
 
-pca_nt = PCA(n_components=n_pca_nt)
-X_pca_nt = pca_nt.fit_transform(X_nt)
+#pca_nt = PCA(n_components=n_pca_nt)
+#X_pca_nt = pca_nt.fit_transform(X_nt)
 
-lda_nt = LinearDiscriminantAnalysis()
-lda_nt.fit(X_pca_nt, y_nt)
+#lda_nt = LinearDiscriminantAnalysis()
+#lda_nt.fit(X_pca_nt, y_nt)
 
 # ── Étape 2 : déterminer le sens de l'axe ─────────────────────────────────────
-scores_nt = lda_nt.transform(X_pca_nt)[:, 0]
-moyenne_0gy = scores_nt[y_nt == '0gy'].mean()
-moyenne_45gy = scores_nt[y_nt == '45gy'].mean()
+#scores_nt = lda_nt.transform(X_pca_nt)[:, 0]
+#moyenne_0gy = scores_nt[y_nt == '0gy'].mean()
+#moyenne_45gy = scores_nt[y_nt == '45gy'].mean()
 
-print(f"Score LD1 moyen — 0gy_NT (sain)     : {moyenne_0gy:.2f}")
-print(f"Score LD1 moyen — 45gy_NT (irradié) : {moyenne_45gy:.2f}")
+#print(f"Score LD1 moyen — 0gy_NT (sain)     : {moyenne_0gy:.2f}")
+#print(f"Score LD1 moyen — 45gy_NT (irradié) : {moyenne_45gy:.2f}")
 
-if moyenne_45gy > moyenne_0gy:
-    print("→ LD1 positif = vers l'irradiation, LD1 négatif = vers le sain")
-else:
-    print("→ LD1 positif = vers le sain, LD1 négatif = vers l'irradiation")
+#if moyenne_45gy > moyenne_0gy:
+#    print("→ LD1 positif = vers l'irradiation, LD1 négatif = vers le sain")
+#else:
+#    print("→ LD1 positif = vers le sain, LD1 négatif = vers l'irradiation")
 
 # ── Étape 3 : projeter TOUS les groupes (NT et +P) sur cet axe ────────────────
-X_pca_tous = pca_nt.transform(X)          # même PCA que celle entraînée sur NT
-scores_tous = lda_nt.transform(X_pca_tous)[:, 0]  # projection sur l'axe NT
+#X_pca_tous = pca_nt.transform(X)          # même PCA que celle entraînée sur NT
+#scores_tous = lda_nt.transform(X_pca_tous)[:, 0]  # projection sur l'axe NT
 
-groupes_4 = np.array([f"{d}gy_{t}" for d, t in zip(doses, traitements)])
+#groupes_4 = np.array([f"{d}gy_{t}" for d, t in zip(doses, traitements)])
 
 # ── Étape 4 : graphique ────────────────────────────────────────────────────────
-color_map = {'0gy_NT': 'tab:blue', '45gy_NT': 'tab:red',
-             '0gy_+P': 'tab:cyan', '45gy_+P': 'tab:orange'}
+#color_map = {'0gy_NT': 'tab:blue', '45gy_NT': 'tab:red',
+#             '0gy_+P': 'tab:cyan', '45gy_+P': 'tab:orange'}
 
-fig, ax = plt.subplots(figsize=(10, 5))
-rng = np.random.default_rng(0)
-for g in ['0gy_NT', '45gy_NT', '0gy_+P', '45gy_+P']:
-    m = groupes_4 == g
-    y_jitter = rng.normal(0, 0.05, m.sum())  # juste pour espacer visuellement les points
-    ax.scatter(scores_tous[m], y_jitter, label=g, color=color_map[g],
-               s=60, edgecolors='k', linewidths=0.3)
+#fig, ax = plt.subplots(figsize=(10, 5))
+#rng = np.random.default_rng(0)
+#for g in ['0gy_NT', '45gy_NT', '0gy_+P', '45gy_+P']:
+#    m = groupes_4 == g
+#    y_jitter = rng.normal(0, 0.05, m.sum())  # juste pour espacer visuellement les points
+#    ax.scatter(scores_tous[m], y_jitter, label=g, color=color_map[g],
+#               s=60, edgecolors='k', linewidths=0.3)
 
-ax.axvline(moyenne_0gy, color='tab:blue', linestyle='--', lw=1)
-ax.axvline(moyenne_45gy, color='tab:red', linestyle='--', lw=1)
-ax.set_xlabel("Score sur l'axe LD1 (calibré sur NT seul : 0gy vs 45gy)")
-ax.set_yticks([])
-ax.set_title("Projection des 4 groupes sur l'axe « dommage radiatif » (référence NT)")
-ax.legend(bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=8)
-plt.tight_layout()
-plt.show()
+#ax.axvline(moyenne_0gy, color='tab:blue', linestyle='--', lw=1)
+#ax.axvline(moyenne_45gy, color='tab:red', linestyle='--', lw=1)
+#ax.set_xlabel("Score sur l'axe LD1 (calibré sur NT seul : 0gy vs 45gy)")
+#ax.set_yticks([])
+#ax.set_title("Projection des 4 groupes sur l'axe « dommage radiatif » (référence NT)")
+#ax.legend(bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=8)
+#plt.tight_layout()
+#plt.show()
 
-spectre_moyen_0gy_nt = X[  (traitements=='NT') & (doses==0)].mean(axis=0)
-spectre_moyen_0gy_p  = X[  (traitements=='+P') & (doses==0)].mean(axis=0)
-diff_pansement = spectre_moyen_0gy_p - spectre_moyen_0gy_nt
+#spectre_moyen_0gy_nt = X[  (traitements=='NT') & (doses==0)].mean(axis=0)
+#spectre_moyen_0gy_p  = X[  (traitements=='+P') & (doses==0)].mean(axis=0)
+#diff_pansement = spectre_moyen_0gy_p - spectre_moyen_0gy_nt
 
-fig, ax = plt.subplots(figsize=(10,4))
-ax.plot(w, diff_pansement, color='purple')
-ax.axhline(0, color='grey', lw=0.5)
-ax.set_title("Effet du pansement seul (0gy_+P − 0gy_NT)")
-plt.show()
+#fig, ax = plt.subplots(figsize=(10,4))
+#ax.plot(w, diff_pansement, color='purple')
+#ax.axhline(0, color='grey', lw=0.5)
+#ax.set_title("Effet du pansement seul (0gy_+P − 0gy_NT)")
+#plt.show()
+

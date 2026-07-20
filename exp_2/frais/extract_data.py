@@ -12,7 +12,7 @@ import numpy as np
 # 1. LECTURE ET TRONCATURE
 # ─────────────────────────────────────────────
 
-def formater_donnees(chemin_fichier, wn_min=500, wn_max=3025):
+def formater_donnees(chemin_fichier, wn_min=500, wn_max=2500):
     data = []
     integration = 1.0  # valeur par défaut si non trouvée
     

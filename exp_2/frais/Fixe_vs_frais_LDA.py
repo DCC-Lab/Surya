@@ -273,15 +273,15 @@ def analyser_traitement_par_dose(X, traitements, souris_id, masque, titre_suffix
 
 
 
-masque_0gy = (doses == 0)
-masque_45gy = (doses == 45)
+#masque_0gy = (doses == 0)
+#masque_45gy = (doses == 45)
 
-y_0gy, y_pred_0gy, ba_0gy, n_pca_0gy = analyser_traitement_par_dose(
-    X, traitements, souris_id, masque_0gy, "0gy (NT vs +P)"
-)
-y_45gy, y_pred_45gy, ba_45gy, n_pca_45gy = analyser_traitement_par_dose(
-    X, traitements, souris_id, masque_45gy, "45gy (NT vs +P)"
-)
+#y_0gy, y_pred_0gy, ba_0gy, n_pca_0gy = analyser_traitement_par_dose(
+#    X, traitements, souris_id, masque_0gy, "0gy (NT vs +P)"
+#)
+#y_45gy, y_pred_45gy, ba_45gy, n_pca_45gy = analyser_traitement_par_dose(
+#    X, traitements, souris_id, masque_45gy, "45gy (NT vs +P)"
+#)
 
 #print("Répartition NT — dose × état :")
 #for e in np.unique(etats):
@@ -316,32 +316,110 @@ for t in np.unique(traitements):
 #plt.show()
 
 
-fig, axes = plt.subplots(1, 2, figsize=(11, 5))
+#fig, axes = plt.subplots(1, 2, figsize=(11, 5))
 
-ConfusionMatrixDisplay.from_predictions(y_0gy, y_pred_0gy, ax=axes[0],
-                                          colorbar=False, normalize='true')
-axes[0].set_title(f"0gy — NT vs +P\n({n_pca_0gy} composantes, BA={ba_0gy:.1%})")
+#ConfusionMatrixDisplay.from_predictions(y_0gy, y_pred_0gy, ax=axes[0],
+#                                          colorbar=False, normalize='true')
+#axes[0].set_title(f"0gy — NT vs +P\n({n_pca_0gy} composantes, BA={ba_0gy:.1%})")
 
-ConfusionMatrixDisplay.from_predictions(y_45gy, y_pred_45gy, ax=axes[1],
-                                          colorbar=False, normalize='true')
-axes[1].set_title(f"45gy — NT vs +P\n({n_pca_45gy} composantes, BA={ba_45gy:.1%})")
+#ConfusionMatrixDisplay.from_predictions(y_45gy, y_pred_45gy, ax=axes[1],
+#                                          colorbar=False, normalize='true')
+#axes[1].set_title(f"45gy — NT vs +P\n({n_pca_45gy} composantes, BA={ba_45gy:.1%})")
 
-plt.tight_layout()
-plt.show()
+#plt.tight_layout()
+#plt.show()
+
+
+#----------------------
+# signature du dommage
+#----------------------
+# ── Construire LD1c : signature dommage, à partir de NT seul (0gy vs 45gy) ──
+masque_nt = (traitements == 'NT')
+X_nt = X[masque_nt]
+y_nt = np.array([f"{d}gy" for d in doses[masque_nt]])
+groupes_nt = souris_id[masque_nt]
+
+n_pca_nt = choisir_n_composantes(X_nt, y_nt, groupes_nt, N_MAX_COMPOSANTES,
+                                  "Choix N_PCA — NT (signature dommage)")
+
+pca_nt = PCA(n_components=n_pca_nt)
+X_pca_nt = pca_nt.fit_transform(X_nt)
+
+lda_nt = LinearDiscriminantAnalysis()
+lda_nt.fit(X_pca_nt, y_nt)
+
+disc_c = pca_nt.components_.T @ lda_nt.scalings_[:, 0]   # spectre discriminant brut (LD1c)
+
+def normaliser(v):
+    return v / np.linalg.norm(v)
+
+disc_c_norm = normaliser(disc_c)   # ← c'est cette variable qui manquait
+
+
 
 effet_dose_dans_NT = X[(doses==45)&(traitements=='NT')].mean(axis=0) - X[(doses==0)&(traitements=='NT')].mean(axis=0)
 effet_dose_dans_P  = X[(doses==45)&(traitements=='+P')].mean(axis=0) - X[(doses==0)&(traitements=='+P')].mean(axis=0)
 
 interaction = effet_dose_dans_P - effet_dose_dans_NT
 
+#fig, ax = plt.subplots(figsize=(10, 4))
+#ax.plot(w, effet_dose_dans_NT, label="Effet dose — NT (signature dommage)", color='darkred')
+#ax.plot(w, effet_dose_dans_P, label="Effet dose — +P", color='darkorange', alpha=0.7)
+#ax.plot(w, interaction, label="Interaction (différence des deux effets)", color='black', linestyle='--')
+#ax.axhline(0, color='grey', lw=0.5)
+#ax.legend(fontsize=8)
+#ax.set_xlabel("Raman shift (cm$^{-1}$)")
+#ax.set_title("Effet de la dose selon le traitement, et interaction")
+#plt.tight_layout()
+#plt.show()
+
+fig, ax1 = plt.subplots(figsize=(10, 4.5))
+
+color1 = 'darkred'
+ax1.plot(w, disc_c_norm, color=color1, label="Signature dommage (LD1c)")
+ax1.set_xlabel("Raman shift (cm$^{-1}$)")
+ax1.set_ylabel("Poids LD1c (dommage)", color=color1)
+ax1.tick_params(axis='y', labelcolor=color1)
+ax1.axhline(0, color='grey', lw=0.5)
+
+ax2 = ax1.twinx()
+color2 = 'black'
+ax2.plot(w, interaction, color=color2, linestyle='--', label="Interaction (effet dose : +P − NT)")
+ax2.set_ylabel("Interaction (intensité brute)", color=color2)
+ax2.tick_params(axis='y', labelcolor=color2)
+
+# légende combinée des deux axes
+lignes1, labels1 = ax1.get_legend_handles_labels()
+lignes2, labels2 = ax2.get_legend_handles_labels()
+ax1.legend(lignes1 + lignes2, labels1 + labels2, fontsize=8, loc='upper right')
+
+ax1.set_title("Signature dommage (LD1c) vs Interaction dose × traitement")
+plt.tight_layout()
+plt.show()
+
+def correlation_glissante(x, y, w_axis, taille_fenetre=100):
+    """Corrélation de Pearson locale, calculée sur des fenêtres glissantes le long du spectre."""
+    correlations = []
+    centres = []
+    demi = taille_fenetre // 2
+    for i in range(demi, len(x) - demi):
+        fenetre_x = x[i-demi:i+demi]
+        fenetre_y = y[i-demi:i+demi]
+        r = np.corrcoef(fenetre_x, fenetre_y)[0, 1]
+        correlations.append(r)
+        centres.append(w_axis[i])
+    return np.array(centres), np.array(correlations)
+
+centres, corr_locale = correlation_glissante(disc_c_norm, interaction, w, taille_fenetre=100)
+
 fig, ax = plt.subplots(figsize=(10, 4))
-ax.plot(w, effet_dose_dans_NT, label="Effet dose — NT (signature dommage)", color='darkred')
-ax.plot(w, effet_dose_dans_P, label="Effet dose — +P", color='darkorange', alpha=0.7)
-ax.plot(w, interaction, label="Interaction (différence des deux effets)", color='black', linestyle='--')
+ax.plot(centres, corr_locale, color='purple')
 ax.axhline(0, color='grey', lw=0.5)
-ax.legend(fontsize=8)
+ax.axhline(1, color='green', lw=0.5, linestyle=':', alpha=0.5)
+ax.axhline(-1, color='red', lw=0.5, linestyle=':', alpha=0.5)
 ax.set_xlabel("Raman shift (cm$^{-1}$)")
-ax.set_title("Effet de la dose selon le traitement, et interaction")
+ax.set_ylabel("Corrélation locale\n(signature dommage vs interaction)")
+ax.set_title("Où le pansement masque (corr. négative) ou n'affecte pas (corr. positive) le dommage")
 plt.tight_layout()
 plt.show()
 
