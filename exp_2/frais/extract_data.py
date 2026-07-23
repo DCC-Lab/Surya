@@ -12,7 +12,7 @@ import numpy as np
 # 1. LECTURE ET TRONCATURE
 # ─────────────────────────────────────────────
 
-def formater_donnees(chemin_fichier, wn_min=500, wn_max=2500):
+def formater_donnees(chemin_fichier, wn_min=600, wn_max=3025):
     data = []
     integration = 1.0  # valeur par défaut si non trouvée
     
@@ -110,7 +110,7 @@ def raman_shift_to_nm(shift_cm1, laser_nm):
     return 1e7 / nu_scattered           # nm
 
 
-def retirer_rayons_cosmiques(wn, intensite, seuil=10.0, fenetre=5, zones_protegees=None):
+def retirer_rayons_cosmiques(wn, intensite, seuil=12.0, fenetre=6, zones_protegees=None):
     """
     Détecte et remplace les spikes de rayons cosmiques.
     
@@ -249,7 +249,7 @@ def corriger_fluorescence_als(intensite, lam=1e6, p=0.01, n_iter=15):
 
 
 def traiter_acquisitions(liste_fichiers,
-                          retirer_cosmiques=True, retirer_fluorescence=True, zones_protegees=None):
+                          retirer_cosmiques=True, retirer_fluorescence=True, zones_protegees=None, seuil=12.0, fenetre=5):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
     Retourne (wavenumbers, spectre_somme).
@@ -272,7 +272,7 @@ def traiter_acquisitions(liste_fichiers,
         
         # retrait des rayons cosmiques
         if retirer_cosmiques:
-            intensite = retirer_rayons_cosmiques(wn_ref, intensite, zones_protegees=zones_protegees)
+            intensite = retirer_rayons_cosmiques(wn_ref, intensite, seuil=seuil, fenetre=fenetre, zones_protegees=zones_protegees)
 
         # Interpoler sur la grille de référence si longueur différente
         if len(wn) != len(wn_ref):
@@ -317,7 +317,7 @@ t_lambda, lisse = caracteriser_motif_fixe(raman_shift_to_nm(wn_ref, 785), intens
 
 
 
-def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True, als=True, bubblewidth=None, lam=1e6, p=0.01):
+def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True, als=True, bubblewidth=None, lam=1e6, p=0.01, seuil=15, fenetre=5):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
     Soustrait le spectre du verre et corrige la fluorescence.
@@ -326,7 +326,7 @@ def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True, als=True, 
     """
     
     #spectre sans rayon cosmiques
-    wn, _, i = traiter_acquisitions(liste_fichiers)
+    wn, _, i = traiter_acquisitions(liste_fichiers, seuil=seuil, fenetre=fenetre)
 
     i_gelose_corr = corriger_motif_fixe(raman_shift_to_nm(wn_gelose, 785), i_gelose, raman_shift_to_nm(wn_ref, 785), t_lambda)
 
@@ -355,7 +355,7 @@ def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True, als=True, 
     intensite_centree = intensite - np.mean(intensite)
     i_nrml = intensite_centree / np.max(intensite_centree)
     
-    return wn, i_nrml, baseline
+    return wn, i_nrml
 
 
 racine8 = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\exp_2"
@@ -390,102 +390,28 @@ def lecteur_données_moy(batch, petri):
         return []
     return tous_les_fichiers
 
-
-
-
-
-#wn_2 = []
-#intensite_2 = []
-#for fichier in lecteur_données_zones("batch#1", "petri2", "z2"):
-#    w, i = formater_donnees(fichier)
-#    wn_2.append(w)
-#    intensite_2.append(i)
-#intensite_moy_2 = np.mean(intensite_2, axis=0)
-
-
-
-#w1, i1, baseline1 = traiter_acquisitions_gellose(lecteur_données_zones("batch#1", "petri2", "z2"), als=True, lam=1e6, p=0.005)
-#w2, i2, baseline2 = traiter_acquisitions_gellose(lecteur_données_zones("batch#1", "petri2", "z2"), als=True, lam=1e6, p=0.01)
-#w_als, i_als, baseline3 = traiter_acquisitions_gellose(lecteur_données_zones("batch#1", "petri2", "z2"), als=True, lam=1e6, p=0.005)
-#w_als, i_als, baseline4 = traiter_acquisitions_gellose(lecteur_données_zones("batch#1", "petri2", "z2"), als=True, lam=1e6, p=0.003)
-#w2, i2 = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri2", "z2"), als=True, lam=1e6)
-#w3, i3 = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri2", "z2"), als=True, lam=1e7)
-#w5, i5 = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri2", "z2"), als=True, lam=1e8)
-#w4, i4 = traiter_acquisitions_gellose(lecteur_données("batch#1", "petri2", "z2"), als=False, bubblewidth=100)
-
 #import matplotlib.pyplot as plt
-#plt.plot(w1, intensite_moy_2, '-k', label='spectre brut', linewidth=2)
-#plt.plot(w1, baseline1, label='baseline 1 lambda=1e6 et p=0,005', linewidth=0.8)
-#plt.plot(w1, baseline2, label='baseline 2 lambda=1e6 et p=0,01', linewidth=0.8)
-#plt.plot(w1, i1*100 +550, label='corrigé 1')
-#plt.plot(w2, i2*100 +550, label='corrigé 2')
-#plt.plot(w_als, baseline2, label='ALS lam=1e6 p=0,001', linewidth=0.8)
-#plt.plot(w_als, baseline3, label='ALS lam=1e6 p=0,005', linewidth=0.8)
-#plt.plot(w_als, baseline4, label='ALS lam=1e6 p=0,003', linewidth=0.8)
-#plt.xlabel('Wavenumber (cm^-1)')
-#plt.ylabel('Intensity')
-#plt.title('Spectre raman pétri2')
-#plt.legend()
-#plt.show()
 
+w1, i1 = traiter_acquisitions_gellose(lecteur_données_frais('batch#1', 'petri1', 'z1'), seuil=10, fenetre=5)
 
+print(len(w1))
+#w2, i2 = traiter_acquisitions_gellose(lecteur_données_frais('batch#1', 'petri1', 'z1'), seuil=15, fenetre=5)
+#w3, i3 = traiter_acquisitions_gellose(lecteur_données_frais('batch#1', 'petri1', 'z1'), seuil=5, fenetre=5)
 
-#wn_4 = []
-#intensite_4 = []
-#for fichier in lecteur_données_zones("batch#1", "petri4", "petri"):
-#    w, i = formater_donnees(fichier)
-#    wn_4.append(w)
-#    intensite_4.append(i)
-#intensite_moy_4 = np.mean(intensite_4, axis=0)
+#w4, i4 = traiter_acquisitions_gellose(lecteur_données_frais('batch#1', 'petri1', 'z1'), seuil=15, fenetre=10)
+#w5, i5 = traiter_acquisitions_gellose(lecteur_données_frais('batch#1', 'petri1', 'z1'), seuil=15, fenetre=3)
+#w6, i6 = traiter_acquisitions_gellose(lecteur_données_frais('batch#1', 'petri1', 'z1'), seuil=15, fenetre=5)
 
-#wn_6 = []
-#intensite_6 = []
-#for fichier in lecteur_données_zones("batch#1", "petri6", "petri"):
-#    w, i = formater_donnees(fichier)
-#    wn_6.append(w)
-#    intensite_6.append(i)
-##intensite_moy_6 = np.mean(intensite_6, axis=0)
-
-
-#w2, i2, base2 = traiter_acquisitions_gellose(lecteur_données_zones("batch#1", "petri2", "petri"), als=True)
-#w3, i3, base4 = traiter_acquisitions_gellose(lecteur_données_zones("batch#1", "petri4", "petri"), als=True)
-#w4, i4, base6 = traiter_acquisitions_gellose(lecteur_données_zones("batch#1", "petri6", "petri"), als=True)
-
-#import matplotlib.pyplot as plt
-#plt.plot(w2, intensite_moy_2, label='spectre brut', linewidth=0.8)
-#plt.plot(w2, base2, label='baseline2')
-#plt.plot(w2, i2*1000 + 850, label='corrigé')
-#plt.plot(w3, i3, label='petri4', linewidth=0.8)
-#plt.plot(w4, i4, label='petri6', linewidth=0.8)
-#plt.xlabel('Wavenumber (cm^-1)')
-#plt.ylabel('Intensity')
-#plt.title('Spectre des gélose+pétri pour différents pétris')
-#plt.legend()
-#plt.show()
-
-#w2, i2 = formater_donnees(lecteur_données("batch#1", "petri2", "z1")[0])
-#w3, i3 = formater_donnees(lecteur_données("batch#1", "petri4", "z1")[0])
-#w4, i4 = formater_donnees(lecteur_données("batch#1", "petri6", "z2")[0])
-
-#import matplotlib.pyplot as plt
-#plt.plot(w2, i2, label='petri2', linewidth=0.8)
-#plt.plot(w3, i3, label='petri4', linewidth=0.8)
-#plt.plot(w4, i4, label='petri6', linewidth=0.8)
-#plt.xlabel('Wavenumber (cm^-1)')
-#plt.ylabel('Intensity')
-#plt.title('on vérifie les pics cosmiques')
-#plt.legend()
-#plt.show()
-
-#wn, intensite_brute = formater_donnees(lecteur_données("batch#1", "petri2", "z1")[0])
-#intensite_sans_filtre = intensite_brute.copy()
-#intensite_avec_filtre = retirer_rayons_cosmiques(wn, intensite_brute, zones_protegees=[(1050, 1070),(2780, 2820)])
-
-#masque = (wn >= 500) & (wn <= 2000)
-#plt.plot(wn[masque], intensite_sans_filtre[masque], label='brut (sans filtre)')
-#plt.plot(wn[masque], intensite_avec_filtre[masque], label='après retirer_rayons_cosmiques')
-#plt.xlabel('wavenumber(cm^-1)')
-#plt.ylabel('Intensité')
-#plt.title("Spectre avec le retrait ou non des « rayons comsiques»")
-#plt.legend()
+#fig, axes = plt.subplots(2, 1, figsize=(11, 5))
+#axes[0].plot(w1, i1, linewidth=0.8, label='s10, f5')
+#axes[0].plot(w2, i2, linewidth=0.8, label='s15, f5')
+#axes[0].plot(w3, i3, linewidth=0.8, label='s5, f5')
+#axes[1].plot(w6, i6, linewidth=0.8, label='s15, f5')
+#axes[1].plot(w4, i4, linewidth=0.8, label='s15, f10')
+#axes[1].plot(w5, i5, linewidth=0.8, label='s15, f3')
+#axes[1].set_xlabel('wavenumber(cm^-1)')
+#axes[1].legend()
+#axes[0].legend()
+#plt.title('différent setting corriger rayons cosmiques')
+#plt.tight_layout()
 #plt.show()

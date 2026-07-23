@@ -106,7 +106,7 @@ def charger_spectres(config, etat, moyenne=False):
                 if not liste_fichiers:
                     continue
 
-                w_local, i, _ = traiter_acquisitions_gellose(liste_fichiers)
+                w_local, i = traiter_acquisitions_gellose(liste_fichiers)
                 if w_local is None or i is None:
                     continue
                 if not np.isfinite(i).all():
@@ -216,10 +216,14 @@ En résumé : c'est une recherche du nombre optimal de composantes PCA, en obser
     return meilleur_n
 
 
-def evaluer_lda(X_pca, y, groupes, titre):
-    """LDA + validation croisée LeaveOneGroupOut (par souris) + rapport de classification."""
+def evaluer_lda(X_sub, y, groupes, n_pca, titre):
+    """Pipeline PCA+LDA, entièrement re-fit à chaque pli LeaveOneGroupOut."""
+    pipe = Pipeline([
+        ('pca', PCA(n_components=n_pca)),
+        ('lda', LinearDiscriminantAnalysis()),
+    ])
     logo = LeaveOneGroupOut()
-    y_pred = cross_val_predict(LinearDiscriminantAnalysis(), X_pca, y, groups=groupes, cv=logo)
+    y_pred = cross_val_predict(pipe, X_sub, y, groups=groupes, cv=logo)
 
     ba = balanced_accuracy_score(y, y_pred)
     print(f"── {titre} ──")
@@ -231,19 +235,24 @@ def evaluer_lda(X_pca, y, groupes, titre):
 # ════════════════════════════════════════════════════════════════════════════
 # Analyse dose (0gy vs 45gy) au sein de NT, séparément pour frais et fixe
 # ════════════════════════════════════════════════════════════════════════════
-def analyser_dose_par_etat(X, doses, souris_id, masque, titre_suffixe):
+def analyser_dose_par_etat(X, doses, souris_id, masque, titre_suffixe, n_max=N_MAX_COMPOSANTES):
     X_sub = X[masque]
     y_sub = np.array([f"{d}gy" for d in doses[masque]])
     groupes_sub = souris_id[masque]
 
-    n_pca = choisir_n_composantes(X_sub, y_sub, groupes_sub, N_MAX_COMPOSANTES,
-                                   f"Choix N_PCA — NT, {titre_suffixe}")
+    n_pca = choisir_n_composantes(X_sub, y_sub, groupes_sub, n_max,
+                                   f"Choix N_PCA — {titre_suffixe}")
 
+    y_pred, ba = evaluer_lda(X_sub, y_sub, groupes_sub, n_pca, f"DOSE — {titre_suffixe}")
+
+    # La PCA/LDA "finales" (fit sur tout X_sub) servent uniquement à reconstruire
+    # le spectre discriminant LD1 — pas à évaluer la performance (ba vient de la CV ci-dessus)
     pca = PCA(n_components=n_pca)
     X_pca = pca.fit_transform(X_sub)
-    y_pred, ba = evaluer_lda(X_pca, y_sub, groupes_sub, f"DOSE — NT, {titre_suffixe}")
+    lda = LinearDiscriminantAnalysis()
+    X_lda = lda.fit_transform(X_pca, y_sub)   # (n_échantillons, 1) — 2 classes
 
-    return y_sub, y_pred, ba, n_pca
+    return y_sub, y_pred, ba, n_pca, X_lda[:, 0], pca, lda
 
 def analyser_traitement_par_dose(X, traitements, souris_id, masque, titre_suffixe):
     X_sub = X[masque]
@@ -301,125 +310,83 @@ for t in np.unique(traitements):
                 souris = np.unique(souris_id[m])
                 print(f"  {t}, {e}, {d}gy : {m.sum()} spectres, {len(souris)} souris → {sorted(souris)}")
 
-# ── Les deux matrices de confusion côte à côte ─────────────────────────────
-#fig, axes = plt.subplots(1, 2, figsize=(11, 5))
-
-#ConfusionMatrixDisplay.from_predictions(y_nt_frais, y_pred_nt_frais, ax=axes[0],
-#                                          colorbar=False, normalize='true')
-#axes[0].set_title(f"NT — Frais\n({n_pca_frais} composantes, BA={ba_nt_frais:.1%})")
-
-#ConfusionMatrixDisplay.from_predictions(y_nt_fixe, y_pred_nt_fixe, ax=axes[1],
-#                                          colorbar=False, normalize='true')
-#axes[1].set_title(f"NT — Fixé\n({n_pca_fixe} composantes, BA={ba_nt_fixe:.1%})")
-
-#plt.tight_layout()
-#plt.show()
-
-
-#fig, axes = plt.subplots(1, 2, figsize=(11, 5))
-
-#ConfusionMatrixDisplay.from_predictions(y_0gy, y_pred_0gy, ax=axes[0],
-#                                          colorbar=False, normalize='true')
-#axes[0].set_title(f"0gy — NT vs +P\n({n_pca_0gy} composantes, BA={ba_0gy:.1%})")
-
-#ConfusionMatrixDisplay.from_predictions(y_45gy, y_pred_45gy, ax=axes[1],
-#                                          colorbar=False, normalize='true')
-#axes[1].set_title(f"45gy — NT vs +P\n({n_pca_45gy} composantes, BA={ba_45gy:.1%})")
-
-#plt.tight_layout()
-#plt.show()
 
 
 #----------------------
 # signature du dommage
 #----------------------
 # ── Construire LD1c : signature dommage, à partir de NT seul (0gy vs 45gy) ──
-masque_nt = (traitements == 'NT')
-X_nt = X[masque_nt]
-y_nt = np.array([f"{d}gy" for d in doses[masque_nt]])
-groupes_nt = souris_id[masque_nt]
+#masque_nt = (traitements == 'NT')
+#X_nt = X[masque_nt]
+#y_nt = np.array([f"{d}gy" for d in doses[masque_nt]])
+#groupes_nt = souris_id[masque_nt]
 
-n_pca_nt = choisir_n_composantes(X_nt, y_nt, groupes_nt, N_MAX_COMPOSANTES,
-                                  "Choix N_PCA — NT (signature dommage)")
+#n_pca_nt = choisir_n_composantes(X_nt, y_nt, groupes_nt, N_MAX_COMPOSANTES,
+#                                  "Choix N_PCA — NT (signature dommage)")
 
-pca_nt = PCA(n_components=n_pca_nt)
-X_pca_nt = pca_nt.fit_transform(X_nt)
+#pca_nt = PCA(n_components=n_pca_nt)
+#X_pca_nt = pca_nt.fit_transform(X_nt)
 
-lda_nt = LinearDiscriminantAnalysis()
-lda_nt.fit(X_pca_nt, y_nt)
+#lda_nt = LinearDiscriminantAnalysis()
+#lda_nt.fit(X_pca_nt, y_nt)
 
-disc_c = pca_nt.components_.T @ lda_nt.scalings_[:, 0]   # spectre discriminant brut (LD1c)
+#disc_c = pca_nt.components_.T @ lda_nt.scalings_[:, 0]   # spectre discriminant brut (LD1c)
 
-def normaliser(v):
-    return v / np.linalg.norm(v)
+#def normaliser(v):
+#    return v / np.linalg.norm(v)
 
-disc_c_norm = normaliser(disc_c)   # ← c'est cette variable qui manquait
+#disc_c_norm = normaliser(disc_c)   # ← c'est cette variable qui manquait
 
 
 
-effet_dose_dans_NT = X[(doses==45)&(traitements=='NT')].mean(axis=0) - X[(doses==0)&(traitements=='NT')].mean(axis=0)
-effet_dose_dans_P  = X[(doses==45)&(traitements=='+P')].mean(axis=0) - X[(doses==0)&(traitements=='+P')].mean(axis=0)
+#effet_dose_dans_NT = X[(doses==45)&(traitements=='NT')].mean(axis=0) - X[(doses==0)&(traitements=='NT')].mean(axis=0)
+#effet_dose_dans_P  = X[(doses==45)&(traitements=='+P')].mean(axis=0) - X[(doses==0)&(traitements=='+P')].mean(axis=0)
 
-interaction = effet_dose_dans_P - effet_dose_dans_NT
+#interaction = effet_dose_dans_P - effet_dose_dans_NT
 
-#fig, ax = plt.subplots(figsize=(10, 4))
-#ax.plot(w, effet_dose_dans_NT, label="Effet dose — NT (signature dommage)", color='darkred')
-#ax.plot(w, effet_dose_dans_P, label="Effet dose — +P", color='darkorange', alpha=0.7)
-#ax.plot(w, interaction, label="Interaction (différence des deux effets)", color='black', linestyle='--')
-#ax.axhline(0, color='grey', lw=0.5)
-#ax.legend(fontsize=8)
-#ax.set_xlabel("Raman shift (cm$^{-1}$)")
-#ax.set_title("Effet de la dose selon le traitement, et interaction")
-#plt.tight_layout()
-#plt.show()
+masque_fixe = (etats == 'fixe') & (traitements == 'NT')
+masque_frais = (etats == 'frais') & (traitements == 'NT')
 
-fig, ax1 = plt.subplots(figsize=(10, 4.5))
+y_fixe, y_pred_fixe, ba_fixe, n_pca_fixe, ld1_fixe, pca_fixe, lda_fixe = analyser_dose_par_etat(
+    X, doses, souris_id, masque_fixe, "Dose — Fixe"
+)
+y_frais, y_pred_frais, ba_frais, n_pca_frais, ld1_frais, pca_frais, lda_frais = analyser_dose_par_etat(
+    X, doses, souris_id, masque_frais, "Dose — Frais"
+)
 
-color1 = 'darkred'
-ax1.plot(w, disc_c_norm, color=color1, label="Signature dommage (LD1c)")
-ax1.set_xlabel("Raman shift (cm$^{-1}$)")
-ax1.set_ylabel("Poids LD1c (dommage)", color=color1)
-ax1.tick_params(axis='y', labelcolor=color1)
-ax1.axhline(0, color='grey', lw=0.5)
 
-ax2 = ax1.twinx()
-color2 = 'black'
-ax2.plot(w, interaction, color=color2, linestyle='--', label="Interaction (effet dose : +P − NT)")
-ax2.set_ylabel("Interaction (intensité brute)", color=color2)
-ax2.tick_params(axis='y', labelcolor=color2)
+from matplotlib.gridspec import GridSpec
 
-# légende combinée des deux axes
-lignes1, labels1 = ax1.get_legend_handles_labels()
-lignes2, labels2 = ax2.get_legend_handles_labels()
-ax1.legend(lignes1 + lignes2, labels1 + labels2, fontsize=8, loc='upper right')
+fig = plt.figure(figsize=(11, 9))
+gs = GridSpec(2, 2, height_ratios=[1, 1.1], figure=fig)
 
-ax1.set_title("Signature dommage (LD1c) vs Interaction dose × traitement")
-plt.tight_layout()
-plt.show()
+ax_cm_fixe = fig.add_subplot(gs[0, 0])
+ax_cm_frais = fig.add_subplot(gs[0, 1])
+ax_ld1 = fig.add_subplot(gs[1, :])   # occupe toute la largeur, en bas
 
-def correlation_glissante(x, y, w_axis, taille_fenetre=100):
-    """Corrélation de Pearson locale, calculée sur des fenêtres glissantes le long du spectre."""
-    correlations = []
-    centres = []
-    demi = taille_fenetre // 2
-    for i in range(demi, len(x) - demi):
-        fenetre_x = x[i-demi:i+demi]
-        fenetre_y = y[i-demi:i+demi]
-        r = np.corrcoef(fenetre_x, fenetre_y)[0, 1]
-        correlations.append(r)
-        centres.append(w_axis[i])
-    return np.array(centres), np.array(correlations)
+ConfusionMatrixDisplay.from_predictions(y_fixe, y_pred_fixe, ax=ax_cm_fixe, colorbar=False, normalize='true')
+ax_cm_fixe.set_title(f"Fixe ({n_pca_fixe} comp., BA={ba_fixe:.1%})")
 
-centres, corr_locale = correlation_glissante(disc_c_norm, interaction, w, taille_fenetre=100)
+ConfusionMatrixDisplay.from_predictions(y_frais, y_pred_frais, ax=ax_cm_frais, colorbar=False, normalize='true')
+ax_cm_frais.set_title(f"Frais ({n_pca_frais} comp., BA={ba_frais:.1%})")
 
-fig, ax = plt.subplots(figsize=(10, 4))
-ax.plot(centres, corr_locale, color='purple')
-ax.axhline(0, color='grey', lw=0.5)
-ax.axhline(1, color='green', lw=0.5, linestyle=':', alpha=0.5)
-ax.axhline(-1, color='red', lw=0.5, linestyle=':', alpha=0.5)
-ax.set_xlabel("Raman shift (cm$^{-1}$)")
-ax.set_ylabel("Corrélation locale\n(signature dommage vs interaction)")
-ax.set_title("Où le pansement masque (corr. négative) ou n'affecte pas (corr. positive) le dommage")
+# ── Spectres discriminants LD1 (fixe vs frais), superposés ────────────────
+disc_fixe = pca_fixe.components_.T @ lda_fixe.scalings_[:, 0]
+disc_frais = pca_frais.components_.T @ lda_frais.scalings_[:, 0]
+
+# Normalisation (norme unitaire) pour rendre les deux spectres comparables
+disc_fixe = disc_fixe / np.linalg.norm(disc_fixe)
+disc_frais = disc_frais / np.linalg.norm(disc_frais)
+
+ax_ld1.plot(w, disc_fixe, label='Fixe', color='tab:orange', lw=1.2)
+ax_ld1.plot(w, disc_frais, label='Frais', color='tab:green', lw=1.2)
+
+ax_ld1.axhline(0, color='grey', lw=0.5)
+ax_ld1.set_xlabel("Nombre d'onde (cm⁻¹)")
+ax_ld1.set_ylabel("Poids LD1 (normalisé)")
+ax_ld1.set_title("Spectre discriminant LD1 — Dose, Fixe vs Frais")
+ax_ld1.legend(fontsize=8)
+
 plt.tight_layout()
 plt.show()
 

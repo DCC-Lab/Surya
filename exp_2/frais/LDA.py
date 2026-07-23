@@ -102,7 +102,7 @@ def charger_spectres(config, moyenne=False):
                 if not liste_fichiers:
                     continue
 
-                w_local, i, _ = traiter_acquisitions_gellose(liste_fichiers)
+                w_local, i = traiter_acquisitions_gellose(liste_fichiers)
                 if w_local is None or i is None:
                     continue
                 if not np.isfinite(i).all():
@@ -184,16 +184,16 @@ En résumé : c'est une recherche du nombre optimal de composantes PCA, en obser
         y_pred = cross_val_predict(pipe, X, y, groups=groupes, cv=logo)
         scores.append(balanced_accuracy_score(y, y_pred))
 
-    fig, ax = plt.subplots(figsize=(8, 5))
-    ax.plot(valeurs_n, scores, marker='o')
-    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-    ax.axhline(0.5, color='grey', lw=0.5, linestyle='--', label='hasard (2 classes)')
-    ax.set_xlabel("Nombre de composantes PCA")
-    ax.set_ylabel("Balanced accuracy (CV LeaveOneGroupOut)")
-    ax.set_title(titre)
-    ax.legend(fontsize=8)
-    plt.tight_layout()
-    plt.show()
+    #fig, ax = plt.subplots(figsize=(8, 5))
+    #ax.plot(valeurs_n, scores, marker='o')
+    #ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+    #ax.axhline(0.5, color='grey', lw=0.5, linestyle='--', label='hasard (2 classes)')
+    #ax.set_xlabel("Nombre de composantes PCA")
+    #ax.set_ylabel("Balanced accuracy (CV LeaveOneGroupOut)")
+    #ax.set_title(titre)
+    #ax.legend(fontsize=8)
+    #plt.tight_layout()
+    #plt.show()
 
     meilleur_n = valeurs_n[int(np.argmax(scores))]
     print(f"{titre} — meilleur score : {max(scores):.1%} avec {meilleur_n} composante(s)\n")
@@ -237,21 +237,21 @@ def analyser_dose_dans_sous_groupe(X, groupes_dose, souris_id, masque, titre_suf
     discriminant = pca.components_.T @ lda.scalings_[:, 0]
 
     # ── Figure combinée : matrice de confusion + spectre discriminant ────────
-    fig, (ax_cm, ax_spec) = plt.subplots(1, 2, figsize=(14, 4.5))
+    #fig, (ax_cm, ax_spec) = plt.subplots(1, 2, figsize=(14, 4.5))
 
-    ConfusionMatrixDisplay.from_predictions(
-        y_sub, y_pred, ax=ax_cm, colorbar=False, normalize='true'
-    )
-    ax_cm.set_title(f"Matrice de confusion — {titre_suffixe}\n({n_pca} composantes, BA={ba:.1%})")
+    #ConfusionMatrixDisplay.from_predictions(
+    #    y_sub, y_pred, ax=ax_cm, colorbar=False, normalize='true'
+    #)
+    #ax_cm.set_title(f"Matrice de confusion — {titre_suffixe}\n({n_pca} composantes, BA={ba:.1%})")
 
-    ax_spec.plot(w, discriminant, color=couleur)
-    ax_spec.axhline(0, color='grey', lw=0.5)
-    ax_spec.set_xlabel("Raman shift (cm$^{-1}$)")
-    ax_spec.set_ylabel("Poids LD1")
-    ax_spec.set_title(f"Spectre discriminant — {titre_suffixe}")
+    #ax_spec.plot(w, discriminant, color=couleur)
+    #ax_spec.axhline(0, color='grey', lw=0.5)
+    #ax_spec.set_xlabel("Raman shift (cm$^{-1}$)")
+    #ax_spec.set_ylabel("Poids LD1")
+    #ax_spec.set_title(f"Spectre discriminant — {titre_suffixe}")
 
-    plt.tight_layout()
-    plt.show()
+    #plt.tight_layout()
+    #plt.show()
 
     return n_pca, y_pred, ba, discriminant
 
@@ -295,23 +295,23 @@ n_pca_nt, y_pred_nt, ba_nt, disc_nt = analyser_dose_dans_sous_groupe(
 # ════════════════════════════════════════════════════════════════════════════
 # 2) DOSE, à l'intérieur du groupe +P seulement (0gy_+P vs 45gy_+P)
 # ════════════════════════════════════════════════════════════════════════════
-masque_p = traitements == '+P'
-n_pca_p, y_pred_p, ba_p, disc_p = analyser_dose_dans_sous_groupe(
-    X, groupes_dose, souris_id, masque_p, "+P seul", 'darkgreen'
-)
+#masque_p = traitements == '+P'
+#n_pca_p, y_pred_p, ba_p, disc_p = analyser_dose_dans_sous_groupe(
+#    X, groupes_dose, souris_id, masque_p, "+P seul", 'darkgreen'
+#)
 
 # ════════════════════════════════════════════════════════════════════════════
 # 3) DOSE globale, peu importe le traitement (0gy vs 45gy, tous confondus)
 # ════════════════════════════════════════════════════════════════════════════
-n_pca_dose, y_pred_dose, ba_dose, disc_dose = analyser_dose_dans_sous_groupe(
-    X, groupes_dose, souris_id, np.ones(len(X), dtype=bool), "toutes conditions", 'darkred'
-)
+#n_pca_dose, y_pred_dose, ba_dose, disc_dose = analyser_dose_dans_sous_groupe(
+#    X, groupes_dose, souris_id, np.ones(len(X), dtype=bool), "toutes conditions", 'darkred'
+#)
 
 
 
 from scipy.signal import find_peaks
 
-def annoter_pics(ax, w, spectre, n_pics=8, couleur='black'):
+def annoter_pics(ax, w, spectre, n_pics=40, couleur='black'):
     """Détecte les n_pics plus grands pics (en valeur absolue) et les annote
     avec leur position en cm-1."""
     idx_pos, _ = find_peaks(spectre)
@@ -341,7 +341,7 @@ ax.set_xlabel("Raman shift (cm$^{-1}$)")
 ax.set_ylabel("Poids LD1")
 ax.set_title("Spectre discriminant — Dose (0gy vs 45gy), groupe NT seul")
 
-annoter_pics(ax, w, disc_nt, n_pics=8, couleur='darkblue')
+annoter_pics(ax, w, disc_nt, n_pics=40, couleur='darkblue')
 
 plt.tight_layout()
 plt.show()
