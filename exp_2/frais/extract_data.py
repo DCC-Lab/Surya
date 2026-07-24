@@ -110,13 +110,16 @@ def raman_shift_to_nm(shift_cm1, laser_nm):
     return 1e7 / nu_scattered           # nm
 
 
-def retirer_rayons_cosmiques(wn, intensite, seuil=12.0, fenetre=6, zones_protegees=None):
+def retirer_rayons_cosmiques(wn, intensite, seuil=6.0, fenetre=14, largeur_max=2, zones_protegees=None):
     """
     Détecte et remplace les spikes de rayons cosmiques.
-    
-    zones_protegees : liste de tuples (wn_min, wn_max) à exclure du filtrage,
-                       pour préserver de vrais pics Raman étroits et 
-                       reproductibles (ex: [(2790, 2820)]).
+
+    seuil       : sensibilité de détection (plus bas = plus sensible, plus de faux positifs possibles)
+    fenetre     : taille du voisinage utilisé pour estimer la médiane/MAD locale
+    largeur_max : largeur maximale (en points) d'une anomalie pour être considérée
+                  comme un rayon cosmique plutôt qu'un vrai pic Raman.
+                  Avec ~2.74 cm-1/point, largeur_max=2 couvre les spikes de 1-2 pixels
+                  tout en protégeant les vrais pics Raman (FWHM typique >= 4-7 points).
     """
     intensite_corr = intensite.copy()
     n = len(intensite)
@@ -129,15 +132,39 @@ def retirer_rayons_cosmiques(wn, intensite, seuil=12.0, fenetre=6, zones_protege
     else:
         masque_protege = np.zeros(n, dtype=bool)
 
+    # ── Étape 1 : détecter tous les points candidats ──
+    candidats = np.zeros(n, dtype=bool)
     for i in range(demi, n - demi):
         if masque_protege[i]:
-            continue  # on ne touche pas à cette zone
+            continue
         voisins = np.concatenate([intensite[i-demi:i], intensite[i+1:i+demi+1]])
         mediane = np.median(voisins)
         mad = np.median(np.abs(voisins - mediane)) + 1e-10
         if abs(intensite[i] - mediane) > seuil * mad:
-            intensite_corr[i] = np.interp(i, [i - demi, i + demi],
-                                           [intensite[i - demi], intensite[i + demi]])
+            candidats[i] = True
+
+    # ── Étape 2 : regrouper les candidats consécutifs en segments ──
+    i = 0
+    while i < n:
+        if not candidats[i]:
+            i += 1
+            continue
+        j = i
+        while j < n and candidats[j]:
+            j += 1
+        largeur = j - i   # segment [i, j) de candidats consécutifs
+
+        if largeur <= largeur_max:
+            # spike ponctuel -> on corrige en interpolant entre les bords sains du segment
+            gauche = i - 1
+            droite = j
+            if gauche >= 0 and droite < n:
+                for k in range(i, j):
+                    intensite_corr[k] = np.interp(k, [gauche, droite],
+                                                   [intensite[gauche], intensite[droite]])
+        # sinon (largeur > largeur_max) -> probablement un vrai pic, on ne touche pas
+        i = j
+
     return intensite_corr
 
 # 3. SOUSTRACTION DE SPECTRE NOCIFS
@@ -249,7 +276,7 @@ def corriger_fluorescence_als(intensite, lam=1e6, p=0.01, n_iter=15):
 
 
 def traiter_acquisitions(liste_fichiers,
-                          retirer_cosmiques=True, retirer_fluorescence=True, zones_protegees=None, seuil=12.0, fenetre=5):
+                          retirer_cosmiques=True, retirer_fluorescence=True):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
     Retourne (wavenumbers, spectre_somme).
@@ -272,7 +299,7 @@ def traiter_acquisitions(liste_fichiers,
         
         # retrait des rayons cosmiques
         if retirer_cosmiques:
-            intensite = retirer_rayons_cosmiques(wn_ref, intensite, seuil=seuil, fenetre=fenetre, zones_protegees=zones_protegees)
+            intensite = retirer_rayons_cosmiques(wn_ref, intensite)
 
         # Interpoler sur la grille de référence si longueur différente
         if len(wn) != len(wn_ref):
@@ -317,7 +344,7 @@ t_lambda, lisse = caracteriser_motif_fixe(raman_shift_to_nm(wn_ref, 785), intens
 
 
 
-def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True, als=True, bubblewidth=None, lam=1e6, p=0.01, seuil=15, fenetre=5):
+def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True, als=True, bubblewidth=None, lam=1e6, p=0.01):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
     Soustrait le spectre du verre et corrige la fluorescence.
@@ -326,7 +353,7 @@ def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True, als=True, 
     """
     
     #spectre sans rayon cosmiques
-    wn, _, i = traiter_acquisitions(liste_fichiers, seuil=seuil, fenetre=fenetre)
+    wn, _, i = traiter_acquisitions(liste_fichiers)
 
     i_gelose_corr = corriger_motif_fixe(raman_shift_to_nm(wn_gelose, 785), i_gelose, raman_shift_to_nm(wn_ref, 785), t_lambda)
 
@@ -392,9 +419,6 @@ def lecteur_données_moy(batch, petri):
 
 #import matplotlib.pyplot as plt
 
-w1, i1 = traiter_acquisitions_gellose(lecteur_données_frais('batch#1', 'petri1', 'z1'), seuil=10, fenetre=5)
-
-print(len(w1))
 #w2, i2 = traiter_acquisitions_gellose(lecteur_données_frais('batch#1', 'petri1', 'z1'), seuil=15, fenetre=5)
 #w3, i3 = traiter_acquisitions_gellose(lecteur_données_frais('batch#1', 'petri1', 'z1'), seuil=5, fenetre=5)
 

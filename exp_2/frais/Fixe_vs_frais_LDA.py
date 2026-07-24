@@ -56,20 +56,20 @@ CONFIG = {
         'petri19': ('S46-G', 45, 'F+P'),
         'petri20': ('S46-D', 0,  'F+P'),
     },
-    # 'batch#3': {
-    #     'petri21': ('S33-G', 45, 'MNT'),
-    #     'petri22': ('S33-D', 0,  'MNT'),
-    #     'petri23': ('S37-G', 45, 'MNT'),
-    #     'petri24': ('S37-D', 0,  'MNT'),
-    #     'petri25': ('S30-G', 45, 'MNT'),
-    #     'petri26': ('S30-D', 0,  'MNT'),
-    #     'petri27': ('S32-G', 45, 'M+P'),
-    #     'petri28': ('S32-D', 0,  'M+P'),
-    #     'petri29': ('S36-G', 45, 'M+P'),
-    #     'petri30': ('S36-D', 0,  'M+P'),
-    #     'petri31': ('S27-G', 45, 'M+P'),
-    #     'petri32': ('S27-D', 0,  'M+P'),
-    # },
+     'batch#3': {
+         'petri21': ('S33-G', 45, 'MNT'),
+         'petri22': ('S33-D', 0,  'MNT'),
+         'petri23': ('S37-G', 45, 'MNT'),
+         'petri24': ('S37-D', 0,  'MNT'),
+         'petri25': ('S30-G', 45, 'MNT'),
+         'petri26': ('S30-D', 0,  'MNT'),
+         'petri27': ('S32-G', 45, 'M+P'),
+         'petri28': ('S32-D', 0,  'M+P'),
+         'petri29': ('S36-G', 45, 'M+P'),
+         'petri30': ('S36-D', 0,  'M+P'),
+         'petri31': ('S27-G', 45, 'M+P'),
+         'petri32': ('S27-D', 0,  'M+P'),
+     },
 }
 
 MOYENNE = False   # True -> une valeur moyennée par pétri (lecteur_données_moy)
@@ -233,9 +233,9 @@ def evaluer_lda(X_sub, y, groupes, n_pca, titre):
     return y_pred, ba
 
 # ════════════════════════════════════════════════════════════════════════════
-# Analyse dose (0gy vs 45gy) au sein de NT, séparément pour frais et fixe
+# Analyse dose (0gy vs 45gy)
 # ════════════════════════════════════════════════════════════════════════════
-def analyser_dose_par_etat(X, doses, souris_id, masque, titre_suffixe, n_max=N_MAX_COMPOSANTES):
+def analyser_dose(X, doses, souris_id, masque, titre_suffixe, n_max=N_MAX_COMPOSANTES):
     X_sub = X[masque]
     y_sub = np.array([f"{d}gy" for d in doses[masque]])
     groupes_sub = souris_id[masque]
@@ -254,7 +254,7 @@ def analyser_dose_par_etat(X, doses, souris_id, masque, titre_suffixe, n_max=N_M
 
     return y_sub, y_pred, ba, n_pca, X_lda[:, 0], pca, lda
 
-def analyser_traitement_par_dose(X, traitements, souris_id, masque, titre_suffixe):
+def analyser_traitement(X, traitements, souris_id, masque, titre_suffixe):
     X_sub = X[masque]
     y_sub = traitements[masque]          # ← on compare NT vs +P, pas 0gy vs 45gy
     groupes_sub = souris_id[masque]
@@ -270,89 +270,66 @@ def analyser_traitement_par_dose(X, traitements, souris_id, masque, titre_suffix
 
 
 
-#masque_nt_frais = (traitements == '+P') & (etats == 'frais')
-#masque_nt_fixe = (traitements == '+P') & (etats == 'fixe')
-
-#y_nt_frais, y_pred_nt_frais, ba_nt_frais, n_pca_frais = analyser_dose_par_etat(
-#    X, doses, souris_id, masque_nt_frais, "frais"
-#)
-#y_nt_fixe, y_pred_nt_fixe, ba_nt_fixe, n_pca_fixe = analyser_dose_par_etat(
-#    X, doses, souris_id, masque_nt_fixe, "fixe"
-#)
 
 
 
-#masque_0gy = (doses == 0)
-#masque_45gy = (doses == 45)
-
-#y_0gy, y_pred_0gy, ba_0gy, n_pca_0gy = analyser_traitement_par_dose(
-#    X, traitements, souris_id, masque_0gy, "0gy (NT vs +P)"
-#)
-#y_45gy, y_pred_45gy, ba_45gy, n_pca_45gy = analyser_traitement_par_dose(
-#    X, traitements, souris_id, masque_45gy, "45gy (NT vs +P)"
-#)
-
-#print("Répartition NT — dose × état :")
-#for e in np.unique(etats):
-#    for d in np.unique(doses):
-#        m = (traitements == '+P') & (etats == e) & (doses == d)
-#        if m.sum() > 0:
-#            souris = np.unique(souris_id[m])
-#            print(f"  {e}, {d}gy : {m.sum()} spectres, {len(souris)} souris → {sorted(souris)}")
 
 
-print("Répartition complète — traitement × dose × état :")
-for t in np.unique(traitements):
-    for e in np.unique(etats):
-        for d in np.unique(doses):
-            m = (traitements == t) & (etats == e) & (doses == d)
-            if m.sum() > 0:
-                souris = np.unique(souris_id[m])
-                print(f"  {t}, {e}, {d}gy : {m.sum()} spectres, {len(souris)} souris → {sorted(souris)}")
-
-
-
-#----------------------
-# signature du dommage
-#----------------------
-# ── Construire LD1c : signature dommage, à partir de NT seul (0gy vs 45gy) ──
-#masque_nt = (traitements == 'NT')
-#X_nt = X[masque_nt]
-#y_nt = np.array([f"{d}gy" for d in doses[masque_nt]])
-#groupes_nt = souris_id[masque_nt]
-
-#n_pca_nt = choisir_n_composantes(X_nt, y_nt, groupes_nt, N_MAX_COMPOSANTES,
-#                                  "Choix N_PCA — NT (signature dommage)")
-
-#pca_nt = PCA(n_components=n_pca_nt)
-#X_pca_nt = pca_nt.fit_transform(X_nt)
-
-#lda_nt = LinearDiscriminantAnalysis()
-#lda_nt.fit(X_pca_nt, y_nt)
-
-#disc_c = pca_nt.components_.T @ lda_nt.scalings_[:, 0]   # spectre discriminant brut (LD1c)
-
-#def normaliser(v):
-#    return v / np.linalg.norm(v)
-
-#disc_c_norm = normaliser(disc_c)   # ← c'est cette variable qui manquait
-
-
-
-#effet_dose_dans_NT = X[(doses==45)&(traitements=='NT')].mean(axis=0) - X[(doses==0)&(traitements=='NT')].mean(axis=0)
-#effet_dose_dans_P  = X[(doses==45)&(traitements=='+P')].mean(axis=0) - X[(doses==0)&(traitements=='+P')].mean(axis=0)
-
-#interaction = effet_dose_dans_P - effet_dose_dans_NT
-
+# ════════════════════════════════════════════════════════════════════════════
+# Analyse dose (0gy vs 45gy) au sein de NT, séparément pour frais et fixe
+# ════════════════════════════════════════════════════════════════════════════
 masque_fixe = (etats == 'fixe') & (traitements == 'NT')
 masque_frais = (etats == 'frais') & (traitements == 'NT')
 
-y_fixe, y_pred_fixe, ba_fixe, n_pca_fixe, ld1_fixe, pca_fixe, lda_fixe = analyser_dose_par_etat(
+y_fixe, y_pred_fixe, ba_fixe, n_pca_fixe, ld1_fixe, pca_fixe, lda_fixe = analyser_dose(
     X, doses, souris_id, masque_fixe, "Dose — Fixe"
 )
-y_frais, y_pred_frais, ba_frais, n_pca_frais, ld1_frais, pca_frais, lda_frais = analyser_dose_par_etat(
+y_frais, y_pred_frais, ba_frais, n_pca_frais, ld1_frais, pca_frais, lda_frais = analyser_dose(
     X, doses, souris_id, masque_frais, "Dose — Frais"
 )
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Analyse dose (0gy vs 45gy) au sein de NT, pour mâle et femmelle frais
+# ════════════════════════════════════════════════════════════════════════════
+
+masque_FNT = (etats == 'frais') & (traitements == 'NT') & (sexes == 'F')
+masque_MNT = (etats == 'frais') & (traitements == 'NT') & (sexes == 'M')
+
+
+y_FNT, y_FNT, ba_FNT, n_pca_FNT, ld1_FNT, pca_FNT, lda_FNT = analyser_dose(
+    X, doses, souris_id, masque_FNT, "FNT - FIXE - 0 Gy vs 45 Gy"
+)
+y_MNT, y_MNT, ba_MNT, n_pca_MNT, ld1_MNT, pca_MNT, lda_MNT = analyser_dose(
+    X, doses, souris_id, masque_MNT, "MNT - FIXE - 0 Gy vs 45 Gy"
+)
+
+
+
+from scipy.signal import find_peaks
+def annoter_pics(ax, w, spectre, n_pics=5, couleur='black'):
+    """Détecte les n_pics plus grands pics (en valeur absolue) et les annote
+    avec leur position en cm-1."""
+    # on cherche les pics positifs ET négatifs séparément
+    idx_pos, _ = find_peaks(spectre)
+    idx_neg, _ = find_peaks(-spectre)
+    idx_tous = np.concatenate([idx_pos, idx_neg])
+
+    # on garde les n_pics avec la plus grande amplitude absolue
+    amplitudes = np.abs(spectre[idx_tous])
+    ordre = np.argsort(amplitudes)[::-1][:n_pics]
+    idx_principaux = idx_tous[ordre]
+
+    for idx in idx_principaux:
+        x, y = w[idx], spectre[idx]
+        ax.annotate(
+            f"{x:.0f}",
+            xy=(x, y),
+            xytext=(0, 10 if y >= 0 else -15),  # décale le texte au-dessus/dessous
+            textcoords='offset points',
+            ha='center', fontsize=8, color=couleur,
+            arrowprops=dict(arrowstyle='-', lw=0.5, color=couleur),
+        )
 
 
 from matplotlib.gridspec import GridSpec
@@ -385,6 +362,8 @@ ax_ld1.axhline(0, color='grey', lw=0.5)
 ax_ld1.set_xlabel("Nombre d'onde (cm⁻¹)")
 ax_ld1.set_ylabel("Poids LD1 (normalisé)")
 ax_ld1.set_title("Spectre discriminant LD1 — Dose, Fixe vs Frais")
+annoter_pics(ax_ld1, w, disc_fixe, n_pics=40)
+annoter_pics(ax_ld1, w, disc_frais, n_pics=40)
 ax_ld1.legend(fontsize=8)
 
 plt.tight_layout()
