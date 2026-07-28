@@ -344,7 +344,7 @@ t_lambda, lisse = caracteriser_motif_fixe(raman_shift_to_nm(wn_ref, 785), intens
 
 
 
-def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True, als=True, bubblewidth=None, lam=1e6, p=0.01):
+def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True, als=True, bubblewidth=None, lam=1e6, p=0.05):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
     Soustrait le spectre du verre et corrige la fluorescence.
@@ -370,7 +370,7 @@ def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True, als=True, 
 
 
         #spectre sans rayon cosmiques, sans étalon, sans fluorescence et sans verre
-        intensite = soustraire_spectre(wn, i_corr_SF, wn_gelose, i_gelose_corr)
+        #intensite = soustraire_spectre(wn, i_corr_SF, wn_gelose, i_gelose_corr)
 
     else:
         i_SF, baseline= corriger_fluorescence_als(i, lam=lam, p=p)
@@ -379,7 +379,7 @@ def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True, als=True, 
         intensite = soustraire_spectre(wn, i_SF, wn_gelose, i_gelose)
 
     
-    intensite_centree = intensite - np.mean(intensite)
+    intensite_centree = i_corr_SF - np.mean(i_corr_SF)
     i_nrml = intensite_centree / np.max(intensite_centree)
     
     return wn, i_nrml
@@ -417,25 +417,59 @@ def lecteur_données_moy(batch, petri):
         return []
     return tous_les_fichiers
 
-#import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
-#w2, i2 = traiter_acquisitions_gellose(lecteur_données_frais('batch#1', 'petri1', 'z1'), seuil=15, fenetre=5)
-#w3, i3 = traiter_acquisitions_gellose(lecteur_données_frais('batch#1', 'petri1', 'z1'), seuil=5, fenetre=5)
+def tester_als_settings(wn, i_corr_F, combos, wn_min=800, wn_max=2200):
+    """
+    Teste plusieurs combinaisons (lam, p) de corriger_fluorescence_als
+    sur un même spectre, et affiche baseline + spectre corrigé pour chaque.
 
-#w4, i4 = traiter_acquisitions_gellose(lecteur_données_frais('batch#1', 'petri1', 'z1'), seuil=15, fenetre=10)
-#w5, i5 = traiter_acquisitions_gellose(lecteur_données_frais('batch#1', 'petri1', 'z1'), seuil=15, fenetre=3)
-#w6, i6 = traiter_acquisitions_gellose(lecteur_données_frais('batch#1', 'petri1', 'z1'), seuil=15, fenetre=5)
+    combos : liste de tuples (lam, p), ex: [(1e5, 0.01), (1e6, 0.01), (1e7, 0.01), (1e6, 0.001)]
+    """
+    masque = (wn >= wn_min) & (wn <= wn_max)
 
-#fig, axes = plt.subplots(2, 1, figsize=(11, 5))
-#axes[0].plot(w1, i1, linewidth=0.8, label='s10, f5')
-#axes[0].plot(w2, i2, linewidth=0.8, label='s15, f5')
-#axes[0].plot(w3, i3, linewidth=0.8, label='s5, f5')
-#axes[1].plot(w6, i6, linewidth=0.8, label='s15, f5')
-#axes[1].plot(w4, i4, linewidth=0.8, label='s15, f10')
-#axes[1].plot(w5, i5, linewidth=0.8, label='s15, f3')
-#axes[1].set_xlabel('wavenumber(cm^-1)')
-#axes[1].legend()
-#axes[0].legend()
-#plt.title('différent setting corriger rayons cosmiques')
-#plt.tight_layout()
+    fig, axes = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
+
+    for lam, p in combos:
+        corrige, baseline = corriger_fluorescence_als(i_corr_F, lam=lam, p=p)
+        axes[0].plot(wn[masque], i_corr_F[masque], color='grey', lw=0.5, alpha=0.5)
+        axes[0].plot(wn[masque], baseline[masque], label=f"lam={lam:.0e}, p={p}")
+        axes[1].plot(wn[masque], corrige[masque], label=f"lam={lam:.0e}, p={p}")
+
+    axes[0].set_title("Baselines ALS superposées sur le spectre brut")
+    axes[0].legend(fontsize=8)
+    axes[1].axhline(0, color='k', lw=0.5)
+    axes[1].set_title("Spectres corrigés résultants")
+    axes[1].set_xlabel("Nombre d'onde (cm⁻¹)")
+    axes[1].legend(fontsize=8)
+
+    plt.tight_layout()
+    plt.show()
+
+# on commence avec 10 graphes par zone
+import matplotlib.pyplot as plt
+#for fichier in lecteur_données_frais('batch#1', 'petri1', 'z1'):
+#    w, i = formater_donnees(fichier)
+#    intensité = retirer_rayons_cosmiques(w, i)
+#    plt.plot(w, intensité)
+#    plt.title(f"Raman spectrum #{lecteur_données_frais('batch#1', 'petri1', 'z1').index(fichier) + 1} without cosmic rays of the zone 1 of petri dish 1")
+#    plt.xlabel('Raman shift (cm⁻¹)')
+#    plt.ylabel('Intensity')
+#    plt.show()
+
+#racine = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\exp_1\spectre_lumière_blanche"
+#fichiers = sorted(glob.glob(os.path.join(racine, '*.txt')))
+#wn_ref,_, intensite_ref_brute = traiter_acquisitions(fichiers)
+#t_lambda, lisse = caracteriser_motif_fixe(raman_shift_to_nm(wn_ref, 785), intensite_ref_brute)
+
+#w, _, i = traiter_acquisitions(lecteur_données_frais('batch#1', 'petri1', 'z1'))
+#i_corr = corriger_motif_fixe(raman_shift_to_nm(w, 785), i, raman_shift_to_nm(wn_ref, 785), t_lambda)
+#i_corr_SF, baseline= corriger_fluorescence_als(i_corr, lam=1e6, p=0.05)
+#intensite_centree = i_corr_SF - np.mean(i_corr_SF)
+#i_nrml = intensite_centree / np.max(intensite_centree)
+#plt.plot(w, i_nrml)
+#plt.title(f"Averaged Raman spectrum without standardization effect and without fluorescence, centered and noralized, of the zone 1 of petri dish 1")
+#plt.xlabel('Raman shift (cm⁻¹)')
+#plt.ylabel('Intensity')
 #plt.show()
+

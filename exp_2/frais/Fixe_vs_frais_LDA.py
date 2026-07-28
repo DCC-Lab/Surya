@@ -70,6 +70,15 @@ CONFIG = {
          'petri31': ('S27-G', 45, 'M+P'),
          'petri32': ('S27-D', 0,  'M+P'),
      },
+    'batch#4': {
+         'petri33': ('S29-G', 0,  'MNT'),
+         'petri34': ('S29-D', 0,  'MNT'),
+         'petri35': ('S31-G', 45, 'MNT'),
+         'petri36': ('S31-D', 0,  'MNT'),
+         'petri37': ('S34-G', 45, 'M+P'),
+         'petri38': ('S34-D', 0,  'M+P'),
+
+     },
 }
 
 MOYENNE = False   # True -> une valeur moyennée par pétri (lecteur_données_moy)
@@ -148,25 +157,8 @@ def parser_etiquettes(etiquettes):
     )
 
 
-# ── Chargement des deux états ──────────────────────────────────────────────
-X_frais, etiquettes_frais, w_frais = charger_spectres(CONFIG, 'frais', moyenne=MOYENNE)
-X_fixe, etiquettes_fixe, w_fixe = charger_spectres(CONFIG, 'fixe', moyenne=MOYENNE)
 
-X = np.concatenate([X_frais, X_fixe], axis=0)
-etiquettes = etiquettes_frais + etiquettes_fixe   # ce sont des listes Python, "+" les concatène
-w = w_frais   # en supposant que w_frais == w_fixe (mêmes wavenumbers pour les deux états)
-
-echantillons, doses, sexes, traitements, souris_id, etats = parser_etiquettes(etiquettes)
-
-# ── Vérification rapide de la répartition ──────────────────────────────────
-print("Répartition NT, par état :")
-for e in np.unique(etats):
-    for d in np.unique(doses):
-        m = (traitements == '+P') & (etats == e) & (doses == d)
-        if m.sum() > 0:
-            print(f"  {e}, {d}gy : {m.sum()} spectres, {len(np.unique(souris_id[m]))} souris")
-
-def choisir_n_composantes(X, y, groupes, n_max=19, titre="Choix du nombre de composantes"):
+def choisir_n_composantes(X, y, groupes, n_max=8, titre="Choix du nombre de composantes"):
     """Balaie le nombre de composantes PCA et évalue la balanced accuracy en
     validation croisée LeaveOneGroupOut, pour aider à choisir combien en
     garder avant le LDA final.
@@ -270,42 +262,6 @@ def analyser_traitement(X, traitements, souris_id, masque, titre_suffixe):
 
 
 
-
-
-
-
-
-# ════════════════════════════════════════════════════════════════════════════
-# Analyse dose (0gy vs 45gy) au sein de NT, séparément pour frais et fixe
-# ════════════════════════════════════════════════════════════════════════════
-masque_fixe = (etats == 'fixe') & (traitements == 'NT')
-masque_frais = (etats == 'frais') & (traitements == 'NT')
-
-y_fixe, y_pred_fixe, ba_fixe, n_pca_fixe, ld1_fixe, pca_fixe, lda_fixe = analyser_dose(
-    X, doses, souris_id, masque_fixe, "Dose — Fixe"
-)
-y_frais, y_pred_frais, ba_frais, n_pca_frais, ld1_frais, pca_frais, lda_frais = analyser_dose(
-    X, doses, souris_id, masque_frais, "Dose — Frais"
-)
-
-
-# ════════════════════════════════════════════════════════════════════════════
-# Analyse dose (0gy vs 45gy) au sein de NT, pour mâle et femmelle frais
-# ════════════════════════════════════════════════════════════════════════════
-
-masque_FNT = (etats == 'frais') & (traitements == 'NT') & (sexes == 'F')
-masque_MNT = (etats == 'frais') & (traitements == 'NT') & (sexes == 'M')
-
-
-y_FNT, y_FNT, ba_FNT, n_pca_FNT, ld1_FNT, pca_FNT, lda_FNT = analyser_dose(
-    X, doses, souris_id, masque_FNT, "FNT - FIXE - 0 Gy vs 45 Gy"
-)
-y_MNT, y_MNT, ba_MNT, n_pca_MNT, ld1_MNT, pca_MNT, lda_MNT = analyser_dose(
-    X, doses, souris_id, masque_MNT, "MNT - FIXE - 0 Gy vs 45 Gy"
-)
-
-
-
 from scipy.signal import find_peaks
 def annoter_pics(ax, w, spectre, n_pics=5, couleur='black'):
     """Détecte les n_pics plus grands pics (en valeur absolue) et les annote
@@ -328,44 +284,204 @@ def annoter_pics(ax, w, spectre, n_pics=5, couleur='black'):
             xytext=(0, 10 if y >= 0 else -15),  # décale le texte au-dessus/dessous
             textcoords='offset points',
             ha='center', fontsize=8, color=couleur,
+            rotation=90,
             arrowprops=dict(arrowstyle='-', lw=0.5, color=couleur),
         )
 
 
-from matplotlib.gridspec import GridSpec
+def marquer_positions(ax, w, spectre, positions, couleur='red', 
+                       ligne_verticale=True, annoter=True, fontsize=8):
+    """
+    Marque des positions spécifiques (en cm-1) sur un spectre :
+    - trouve la valeur y du spectre à cette position (par interpolation)
+    - trace un point à l'intersection
+    - optionnellement une ligne verticale pointillée jusqu'au point
+    - optionnellement une étiquette avec la valeur en cm-1
 
-fig = plt.figure(figsize=(11, 9))
-gs = GridSpec(2, 2, height_ratios=[1, 1.1], figure=fig)
+    positions : liste de nombres d'onde, ex. [1094, 1450, 1655]
+    """
+    for x_cible in positions:
+        y_cible = np.interp(x_cible, w, spectre)  # interpolation linéaire
 
-ax_cm_fixe = fig.add_subplot(gs[0, 0])
-ax_cm_frais = fig.add_subplot(gs[0, 1])
-ax_ld1 = fig.add_subplot(gs[1, :])   # occupe toute la largeur, en bas
+        # ligne verticale du bas du graphique jusqu'au point
+        if ligne_verticale:
+            ax.plot([x_cible, x_cible], [0, y_cible],
+                     color=couleur, lw=0.8, linestyle='--', alpha=0.7)
 
-ConfusionMatrixDisplay.from_predictions(y_fixe, y_pred_fixe, ax=ax_cm_fixe, colorbar=False, normalize='true')
-ax_cm_fixe.set_title(f"Fixe ({n_pca_fixe} comp., BA={ba_fixe:.1%})")
+        # point à l'intersection
+        ax.plot(x_cible, y_cible, marker='o', color=couleur,
+                 markersize=5, zorder=5)
 
-ConfusionMatrixDisplay.from_predictions(y_frais, y_pred_frais, ax=ax_cm_frais, colorbar=False, normalize='true')
-ax_cm_frais.set_title(f"Frais ({n_pca_frais} comp., BA={ba_frais:.1%})")
+        # étiquette
+        if annoter:
+            ax.annotate(
+                f"{x_cible:.0f}",
+                xy=(x_cible, y_cible),
+                xytext=(0, 8 if y_cible >= 0 else -12),
+                textcoords='offset points',
+                ha='center', fontsize=fontsize, color=couleur,
+            )
+
+
+# ── Chargement des deux états ──────────────────────────────────────────────
+X_frais, etiquettes_frais, w_frais = charger_spectres(CONFIG, 'frais', moyenne=MOYENNE)
+X_fixe, etiquettes_fixe, w_fixe = charger_spectres(CONFIG, 'fixe', moyenne=MOYENNE)
+
+X = np.concatenate([X_frais, X_fixe], axis=0)
+etiquettes = etiquettes_frais + etiquettes_fixe   # ce sont des listes Python, "+" les concatène
+w = w_frais   # en supposant que w_frais == w_fixe (mêmes wavenumbers pour les deux états)
+
+echantillons, doses, sexes, traitements, souris_id, etats = parser_etiquettes(etiquettes)
+
+# ════════════════════════════════════════════════════════════════════════════
+# Analyse dose (0gy vs 45gy) - NT vs +P - sexe confondu et frais
+# ════════════════════════════════════════════════════════════════════════════
+
+#masque_NT = (etats == 'frais') & (traitements == 'NT')
+#masque_P = (etats == 'frais') & (traitements == '+P')
+
+
+#y_NT, y_pred_NT, ba_NT, n_pca_NT, ld1_NT, pca_NT, lda_NT = analyser_dose(
+#    X, doses, souris_id, masque_NT, "NT - Frais - 0 Gy vs 45 Gy"
+#)
+#y_P, y_pred_P, ba_P, n_pca_P, ld1_P, pca_P, lda_P = analyser_dose(
+#    X, doses, souris_id, masque_P, "+P - Frais - 0 Gy vs 45 Gy"
+#)
+
+
+#from matplotlib.gridspec import GridSpec
+
+#fig = plt.figure(figsize=(11, 9))
+#gs = GridSpec(2, 2, height_ratios=[1, 1.1], figure=fig)
+
+#ax_cm_NT = fig.add_subplot(gs[0, 0])
+#ax_cm_P = fig.add_subplot(gs[0, 1])
+#ax_ld1 = fig.add_subplot(gs[1, :])   # occupe toute la largeur, en bas
+
+#ConfusionMatrixDisplay.from_predictions(y_NT, y_pred_NT, ax=ax_cm_NT, colorbar=False, normalize='true', im_kw={'vmin': 0, 'vmax': 1})
+#ax_cm_NT.set_title(f"NT ({n_pca_NT} comp., BA={ba_NT:.1%})")
+
+#ConfusionMatrixDisplay.from_predictions(y_P, y_pred_P, ax=ax_cm_P, colorbar=False, normalize='true', im_kw={'vmin': 0, 'vmax': 1})
+#ax_cm_P.set_title(f"+P({n_pca_P} comp., BA={ba_P:.1%})")
 
 # ── Spectres discriminants LD1 (fixe vs frais), superposés ────────────────
-disc_fixe = pca_fixe.components_.T @ lda_fixe.scalings_[:, 0]
-disc_frais = pca_frais.components_.T @ lda_frais.scalings_[:, 0]
+#disc_NT = pca_NT.components_.T @ lda_NT.scalings_[:, 0]
+#disc_P = pca_P.components_.T @ lda_P.scalings_[:, 0]
 
 # Normalisation (norme unitaire) pour rendre les deux spectres comparables
-disc_fixe = disc_fixe / np.linalg.norm(disc_fixe)
-disc_frais = disc_frais / np.linalg.norm(disc_frais)
+# disc_NT = disc_NT / np.linalg.norm(disc_NT)
+#disc_P = disc_P / np.linalg.norm(disc_P)
 
-ax_ld1.plot(w, disc_fixe, label='Fixe', color='tab:orange', lw=1.2)
-ax_ld1.plot(w, disc_frais, label='Frais', color='tab:green', lw=1.2)
+#ax_ld1.plot(w, disc_NT, label='NT', color='tab:orange', lw=1.2)
+#ax_ld1.plot(w, disc_P, label='+P', color='tab:green', lw=1.2)
 
-ax_ld1.axhline(0, color='grey', lw=0.5)
-ax_ld1.set_xlabel("Nombre d'onde (cm⁻¹)")
-ax_ld1.set_ylabel("Poids LD1 (normalisé)")
-ax_ld1.set_title("Spectre discriminant LD1 — Dose, Fixe vs Frais")
-annoter_pics(ax_ld1, w, disc_fixe, n_pics=40)
-annoter_pics(ax_ld1, w, disc_frais, n_pics=40)
-ax_ld1.legend(fontsize=8)
+#marquer_positions(ax_ld1, w, disc_NT, [1094], couleur='tab:orange')
+#marquer_positions(ax_ld1, w, disc_P, [1094], couleur='tab:green')
+#marquer_positions(ax_ld1, w, disc_NT, [1244], couleur='tab:orange')
+#marquer_positions(ax_ld1, w, disc_P, [1244], couleur='tab:green')
+
+#ax_ld1.axhline(0, color='grey', lw=0.5)
+#ax_ld1.set_xlabel("Nombre d'onde (cm⁻¹)")
+#ax_ld1.set_ylabel("Poids LD1 (normalisé)")
+#ax_ld1.set_title("Spectre discriminant LD1 — effet de la dose femelle vs mâle — NT et frais  ")
+#annoter_pics(ax_ld1, w, disc_NT, n_pics=40)
+#annoter_pics(ax_ld1, w, disc_P, n_pics=40)
+#ax_ld1.legend(fontsize=8)
+
+#plt.tight_layout()
+#plt.show()
+
+# ════════════════════════════════════════════════════════════════════════════
+# Analyse dose (0gy vs 45gy) au sein de NT, séparément pour frais et fixe
+# ════════════════════════════════════════════════════════════════════════════
+#masque_fixe = (etats == 'fixe') & (traitements == 'NT')
+#masque_frais = (etats == 'frais') & (traitements == 'NT')
+
+#y_fixe, y_pred_fixe, ba_fixe, n_pca_fixe, ld1_fixe, pca_fixe, lda_fixe = analyser_dose(
+#    X, doses, souris_id, masque_fixe, "Dose — Fixe"
+#)
+#y_frais, y_pred_frais, ba_frais, n_pca_frais, ld1_frais, pca_frais, lda_frais = analyser_dose(
+#    X, doses, souris_id, masque_frais, "Dose — Frais"
+#)
+
+#from matplotlib.gridspec import GridSpec
+
+#fig = plt.figure(figsize=(11, 9))
+#gs = GridSpec(2, 2, height_ratios=[1, 1.1], figure=fig)
+
+#ax_cm_fixe = fig.add_subplot(gs[0, 0])
+#ax_cm_frais = fig.add_subplot(gs[0, 1])
+#ax_ld1 = fig.add_subplot(gs[1, :])   # occupe toute la largeur, en bas
+
+#ConfusionMatrixDisplay.from_predictions(y_fixe, y_pred_fixe, ax=ax_cm_fixe, colorbar=False, normalize='true', im_kw={'vmin': 0, 'vmax': 1})
+#ax_cm_fixe.set_title(f"Fixe ({n_pca_fixe} comp., BA={ba_fixe:.1%})")
+
+#ConfusionMatrixDisplay.from_predictions(y_frais, y_pred_frais, ax=ax_cm_frais, colorbar=False, normalize='true', im_kw={'vmin': 0, 'vmax': 1})
+#ax_cm_frais.set_title(f"Frais ({n_pca_frais} comp., BA={ba_frais:.1%})")
+
+# ── Spectres discriminants LD1 (fixe vs frais), superposés ────────────────
+#disc_fixe = pca_fixe.components_.T @ lda_fixe.scalings_[:, 0]
+#disc_frais = pca_frais.components_.T @ lda_frais.scalings_[:, 0]
+
+# Normalisation (norme unitaire) pour rendre les deux spectres comparables
+#disc_fixe = disc_fixe / np.linalg.norm(disc_fixe)
+#disc_frais = disc_frais / np.linalg.norm(disc_frais)
+
+#ax_ld1.plot(w, disc_fixe, label='Fixe', color='tab:orange', lw=1.2)
+#ax_ld1.plot(w, disc_frais, label='Frais', color='tab:green', lw=1.2)
+
+#ax_ld1.axhline(0, color='grey', lw=0.5)
+#ax_ld1.set_xlabel("Nombre d'onde (cm⁻¹)")
+#ax_ld1.set_ylabel("Poids LD1 (normalisé)")
+#ax_ld1.set_title("Spectre discriminant LD1 — Dose, Fixe vs Frais")
+#ax_ld1.legend(fontsize=8)
+
+#plt.tight_layout()
+#plt.show()
+
+# ════════════════════════════════════════════════════════════════════════════
+# Analyse dose (0gy vs 45gy) - NT vs +P - sexe confondu et frais
+# ════════════════════════════════════════════════════════════════════════════
+
+masque_NT = (etats == 'frais') & (traitements == 'NT')
+
+y_NT, y_pred_NT, ba_NT, n_pca_NT, ld1_NT, pca_NT, lda_NT = analyser_dose(
+    X, doses, souris_id, masque_NT, "NT - Frais - 0 Gy vs 45 Gy"
+)
+
+# ════════════════════════════════════════════════════════════════════════
+# FIGURE 1 — Matrice de confusion (avec colorbar)
+# ════════════════════════════════════════════════════════════════════════
+fig1, ax1 = plt.subplots(figsize=(6, 5))
+
+ConfusionMatrixDisplay.from_predictions(
+    y_NT, y_pred_NT, ax=ax1,
+    colorbar=True,              # ← gradient affiché
+    normalize='true',
+    im_kw={'vmin': 0, 'vmax': 1}
+)
+ax1.set_title(f"NT ({n_pca_NT} comp., BA={ba_NT:.1%})")
 
 plt.tight_layout()
 plt.show()
+
+# ════════════════════════════════════════════════════════════════════════
+# FIGURE 2 — Spectre discriminant LD1
+# ════════════════════════════════════════════════════════════════════════
+disc_NT = pca_NT.components_.T @ lda_NT.scalings_[:, 0]
+disc_NT = disc_NT / np.linalg.norm(disc_NT)   # normalisation (optionnel mais cohérent avec vos autres figures)
+
+fig2, ax2 = plt.subplots(figsize=(11, 6))
+
+ax2.plot(w, disc_NT, label='NT', color='tab:orange', lw=1.2)
+ax2.axhline(0, color='grey', lw=0.5)
+ax2.set_xlabel("Nombre d'onde (cm⁻¹)")
+ax2.set_ylabel("Poids LD1 (normalisé)")
+ax2.set_title("Spectre discriminant LD1 — NT, frais — 0 Gy vs 45 Gy")
+ax2.legend(fontsize=8)
+
+plt.tight_layout()
+plt.show()
+
+
 
