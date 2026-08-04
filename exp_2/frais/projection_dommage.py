@@ -208,6 +208,58 @@ En résumé : c'est une recherche du nombre optimal de composantes PCA, en obser
     return meilleur_n
 
 
+def choisir_n_composantes_ajuste(X, y, groupes, n_max=8, titre="Choix du nombre de composantes",
+                           marge_securite=1):
+    """Balaie le nombre de composantes PCA et évalue la balanced accuracy en
+    validation croisée LeaveOneGroupOut, pour aider à choisir combien en
+    garder avant le LDA final.
+
+    Le n_max effectif est automatiquement plafonné en fonction du nombre de
+    groupes (souris) disponibles, pour éviter le surapprentissage quand on a
+    plus de dimensions PCA que d'individus biologiques indépendants.
+    """
+    n_groupes = len(np.unique(groupes))
+    n_groupes_entrainement = n_groupes - 1  # LeaveOneGroupOut retire 1 groupe à chaque pli
+
+    n_max_securise = max(1, n_groupes_entrainement - marge_securite)
+
+    if n_max > n_max_securise:
+        print(f"⚠ {titre} : n_max demandé ({n_max}) réduit à {n_max_securise} "
+              f"car seulement {n_groupes} souris disponibles "
+              f"({n_groupes_entrainement} par pli d'entraînement).")
+        n_max = n_max_securise
+
+    if n_groupes < 5:
+        print(f"⚠ {titre} : seulement {n_groupes} souris — les résultats de cette "
+              f"analyse doivent être interprétés avec beaucoup de prudence, peu "
+              f"importe le score obtenu.\n")
+
+    valeurs_n = list(range(1, n_max + 1))
+    scores = []
+    logo = LeaveOneGroupOut()
+
+    for n in valeurs_n:
+        pipe = Pipeline([
+            ('pca', PCA(n_components=n)),
+            ('lda', LinearDiscriminantAnalysis()),
+        ])
+        y_pred = cross_val_predict(pipe, X, y, groups=groupes, cv=logo)
+        scores.append(balanced_accuracy_score(y, y_pred))
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.plot(valeurs_n, scores, marker='o')
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+    ax.axhline(0.5, color='grey', lw=0.5, linestyle='--', label='hasard (2 classes)')
+    ax.set_xlabel("Nombre de composantes PCA")
+    ax.set_ylabel("Balanced accuracy (CV LeaveOneGroupOut)")
+    ax.set_title(f"{titre}\n({n_groupes} souris)")
+    ax.legend(fontsize=8)
+    plt.tight_layout()
+    plt.show()
+
+    meilleur_n = valeurs_n[int(np.argmax(scores))]
+    print(f"{titre} — meilleur score : {max(scores):.1%} avec {meilleur_n} composante(s)\n")
+    return meilleur_n
 
 
 def evaluer_lda(X_sub, y, groupes, n_pca, titre):
@@ -285,47 +337,11 @@ def annoter_pics(ax, w, spectre, n_pics=5, couleur='black'):
             xy=(x, y),
             xytext=(0, 10 if y >= 0 else -15),  # décale le texte au-dessus/dessous
             textcoords='offset points',
-            ha='center', fontsize=7, color=couleur,
+            ha='center', fontsize=8, color=couleur,
             rotation=90,
             arrowprops=dict(arrowstyle='-', lw=0.5, color=couleur),
         )
 
-
-def marquer_positions(ax, w, spectre, positions, couleur='red', 
-                       ligne_verticale=True, annoter=True, fontsize=8):
-    """
-    Marque des positions spécifiques (en cm-1) sur un spectre :
-    - trouve la valeur y du spectre à cette position (par interpolation)
-    - trace un point à l'intersection
-    - optionnellement une ligne verticale pointillée jusqu'au point
-    - optionnellement une étiquette avec la valeur en cm-1
-
-    positions : liste de nombres d'onde, ex. [1094, 1450, 1655]
-    """
-    for x_cible in positions:
-        y_cible = np.interp(x_cible, w, spectre)  # interpolation linéaire
-
-        # ligne verticale du bas du graphique jusqu'au point
-        if ligne_verticale:
-            ax.plot([x_cible, x_cible], [0, y_cible],
-                     color=couleur, lw=0.8, linestyle='--', alpha=0.7)
-
-        # point à l'intersection
-        ax.plot(x_cible, y_cible, marker='o', color=couleur,
-                 markersize=5, zorder=5)
-
-        # étiquette
-        if annoter:
-            ax.annotate(
-                f"{x_cible:.0f}",
-                xy=(x_cible, y_cible),
-                xytext=(0, 8 if y_cible >= 0 else -12),
-                textcoords='offset points',
-                ha='center', fontsize=fontsize, color=couleur,
-            )
-
-
-# ── Chargement des deux états ──────────────────────────────────────────────
 X_frais, etiquettes_frais, w_frais = charger_spectres(CONFIG, 'frais', moyenne=MOYENNE)
 X_fixe, etiquettes_fixe, w_fixe = charger_spectres(CONFIG, 'fixe', moyenne=MOYENNE)
 
@@ -335,132 +351,45 @@ w = w_frais   # en supposant que w_frais == w_fixe (mêmes wavenumbers pour les 
 
 echantillons, doses, sexes, traitements, souris_id, etats = parser_etiquettes(etiquettes)
 
-
-
-
-
-
-masque_NTFi = (etats == 'frais') & (traitements == 'NT')
-
-y_NTFi, y_pred_NTFi, ba_NTFi, n_pca_NTFi, ld1_NTFi, pca_NTFi, lda_NTFi = analyser_dose(
-    X, doses, souris_id, masque_NTFi, "NT - frais - 0 Gy vs 45 Gy"
-)
-
-masque_NTFr = (etats == 'frais') & (traitements == '+P')
-
-y_NTFr, y_pred_NTFr, ba_NTFr, n_pca_NTFr, ld1_NTFr, pca_NTFr, lda_NTFr = analyser_dose(
-    X, doses, souris_id, masque_NTFr, "+P - Frais - 0 Gy vs 45 Gy"
-)
-
-
-
-# ════════════════════════════════════════════════════════════════════════
-# FIGURE 1 — Matrice de confusion (avec colorbar)
-# ════════════════════════════════════════════════════════════════════════
-#fig1, ax1 = plt.subplots(figsize=(6, 5))
-
-#ConfusionMatrixDisplay.from_predictions(
-#    y_NTFi, y_pred_NTFi, ax=ax1,
-#    colorbar=True,              # ← gradient affiché
-#    normalize='true',
-#    im_kw={'vmin': 0, 'vmax': 1}, 
-#    cmap='RdPu',
-#    display_labels=["Non-irradiated", "Irradiated"]
-#)
-#ax1.set_title(f"Effect of irradiation - fixed ({n_pca_NTFi} comp., BA={ba_NTFi:.1%})")
-
-#plt.tight_layout()
-#plt.show()
-
+import numpy as np
+import matplotlib.pyplot as plt
 
 def score_ld1(spectres, pca, lda):
-    """Projette des spectres bruts sur un LD1 déjà figé (pca+lda entraînés sur NT).
-    Le signe indique la classe prédite, le seuil de décision est à 0."""
+    """Projette des spectres bruts sur un LD1 déjà entraîné (pca + lda figés)."""
     X_pca = pca.transform(spectres)
-    return lda.decision_function(X_pca)
+    return lda.transform(X_pca)[:, 0]
 
-# ── Masques pour vos échantillons +P (jamais vus par ce LDA) ────────────────
-#masque_PFi_0  = (etats == 'frais') & (traitements == '+P') & (doses == 0)
-#masque_PFi_45 = (etats == 'frais') & (traitements == '+P') & (doses == 45)
+def graphique_scores_2d(scores_groupe1, scores_groupe2,
+                          nom_groupe1="NT irradié", nom_groupe2="+P irradié",
+                          titre="Scores LD1 (dommage) — NT vs +P irradiés",
+                          seuil=None, rng=None):
+    """Affiche deux groupes de scores LD1 sur un axe X, avec un jitter Y
+    aléatoire uniquement pour la lisibilité (l'axe Y n'a pas de sens statistique)."""
+    rng = rng or np.random.default_rng(0)
 
-#scores_P_0gy  = score_ld1(X[masque_PFi_0],  pca_NTFi, lda_NTFi)
-#scores_P_45gy = score_ld1(X[masque_PFi_45], pca_NTFi, lda_NTFi)
+    y1 = rng.normal(loc=1.0, scale=0.05, size=len(scores_groupe1))
+    y2 = rng.normal(loc=0.0, scale=0.05, size=len(scores_groupe2))
 
-#pred_P_0gy  = np.where(scores_P_0gy  > 0, "45gy", "0gy")
-#pred_P_45gy = np.where(scores_P_45gy > 0, "45gy", "0gy")
+    fig, ax = plt.subplots(figsize=(9, 4))
+    ax.scatter(scores_groupe1, y1, color='tab:red', label=nom_groupe1, s=50, alpha=0.8, edgecolor='k')
+    ax.scatter(scores_groupe2, y2, color='tab:blue', label=nom_groupe2, s=50, alpha=0.8, edgecolor='k')
 
-#print("+P, vrai 0gy  → prédictions :", pred_P_0gy)
-#print("+P, vrai 45gy → prédictions :", pred_P_45gy)
+    if seuil is not None:
+        ax.axvline(seuil, color='grey', linestyle='--', lw=1, label='seuil (0gy/45gy)')
 
+    ax.set_yticks([0, 1])
+    ax.set_yticklabels([nom_groupe2, nom_groupe1])
+    ax.set_ylim(-0.3, 1.3)
+    ax.set_xlabel("Score LD1 (axe du dommage)")
+    ax.set_title(titre)
+    ax.legend(loc='best', fontsize=8)
+    plt.tight_layout()
+    plt.show()
 
+# ── Utilisation ──────────────────────────────────────────────────────────
+# pca_NT, lda_NT = déjà entraînés sur NT-0gy vs NT-45gy (comme votre analyser_dose)
 
+scores_NT_irradie = score_ld1(X[masque_NT_45_frais], pca_NT, lda_NT)
+scores_P_irradie  = score_ld1(X[masque_P_45_frais],  pca_NT, lda_NT)
 
-# ════════════════════════════════════════════════════════════════════════
-# FIGURE — Projection scalaire des +P sur l'axe LD1 (NT), en 2D pour la lisibilité
-# ════════════════════════════════════════════════════════════════════════
-#rng = np.random.default_rng(0)
-
-#def jitter(n, centre, ecart=0.08):
-#    return rng.normal(loc=centre, scale=ecart, size=n)
-
-#fig, ax = plt.subplots(figsize=(9, 4))
-#ax.scatter(scores_P_0gy,  jitter(len(scores_P_0gy),  1), color='tab:cyan',
-#           s=60, alpha=0.85, edgecolor='k', label='+P - non irradié')
-#ax.scatter(scores_P_45gy, jitter(len(scores_P_45gy), 0), color='tab:orange',
-#           s=60, alpha=0.85, edgecolor='k', label='+P — irradié')
-
-#ax.axvline(0, color='grey', linestyle='--', lw=1, label='seuil de décision (LD1 NT)')
-#ax.set_yticks([0, 1])
-#ax.set_yticklabels(['+P — irradié', '+P — non irradié'])
-#ax.set_ylim(-0.5, 1.5)
-#ax.set_xlabel("Score LD1 (axe du dommage, entraîné sur NT)")
-#ax.set_title("Classification des échantillons +P via le LD1 entraîné sur NT")
-#ax.legend(loc='best', fontsize=8)
-#plt.tight_layout()
-#plt.show()
-
-
-# ════════════════════════════════════════════════════════════════════════
-# FIGURE 1 — Matrice de confusion (avec colorbar)
-# ════════════════════════════════════════════════════════════════════════
-#fig1, ax3 = plt.subplots(figsize=(6, 5))
-
-#ConfusionMatrixDisplay.from_predictions(
-#    y_NTFr, y_pred_NTFr, ax=ax3,
-#    colorbar=True,              # ← gradient affiché
-#    normalize='true',
-#    im_kw={'vmin': 0, 'vmax': 1}, 
-#    cmap='RdPu',
-#    display_labels=["Non-irradiated", "Irradiated"]
-#)
-#ax3.set_title(f"Effect of pansement - fresh ({n_pca_NTFr} comp., BA={ba_NTFr:.1%})")
-
-#plt.tight_layout()
-#plt.show()
-
-# ════════════════════════════════════════════════════════════════════════
-# FIGURE 2 — Spectre discriminant LD1
-# ════════════════════════════════════════════════════════════════════════
-disc_NTFi = pca_NTFi.components_.T @ lda_NTFi.scalings_[:, 0]
-disc_NTFi = disc_NTFi / np.linalg.norm(disc_NTFi)   # normalisation (optionnel mais cohérent avec vos autres figures)
-
-disc_NTFr = pca_NTFr.components_.T @ lda_NTFr.scalings_[:, 0]
-disc_NTFr = disc_NTFr / np.linalg.norm(disc_NTFr)   # normalisation (optionnel mais cohérent avec vos autres figures)
-
-fig2, ax2 = plt.subplots(figsize=(11, 6))
-
-ax2.plot(w, disc_NTFi, label='NT', color='tab:orange', lw=1.2)
-ax2.plot(w, disc_NTFr, label='+P', color='tab:green', lw=1.2)
-ax2.axhline(0, color='grey', lw=0.5)
-ax2.set_xlabel("Raman shift(cm⁻¹)")
-ax2.set_ylabel("LD1 wheight")
-ax2.set_title("Discriminating spectrum LD1 — effet de la dose — +P vs NT")
-annoter_pics(ax2, w, disc_NTFi, n_pics=50, couleur='black')
-annoter_pics(ax2, w, disc_NTFr, n_pics=50, couleur='black')
-ax2.legend()
-
-plt.tight_layout()
-plt.show()
-
-
-
+graphique_scores_2d(scores_NT_irradie, scores_P_irradie)

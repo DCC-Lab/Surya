@@ -54,33 +54,84 @@ config = {
      },
 }
 
-i_non_irr, i_irr = [], []
+i_non_irr, ip_non_irr, i_irr, ip_irr =[], [], [], []
 
 
 for batch, petri in config.items():
     for petri, (echantillon, dose, type_) in petri.items():
-        if dose == 0 and 'NT' in type_:
-            for z in ('z1', 'z2', 'z3'):
-                w, i = traiter_acquisitions_gellose(lecteur_données_frais(batch, petri, z))
-                i_non_irr.append(i)
+        if dose == 0:
+            if 'NT' in type_:
+                for z in ('z1', 'z2', 'z3'):
+                    fichiers = lecteur_données_frais(batch, petri, z)
+                    if not fichiers:
+                        print(f"⚠ Aucun fichier pour {petri} {z} — ignoré")
+                        continue
+                    w, i = traiter_acquisitions_gellose(fichiers)
+                    i_non_irr.append(i)
+            else:
+                for z in ('z1', 'z2', 'z3'):
+                    fichiers = lecteur_données_frais(batch, petri, z)
+                    if not fichiers:
+                        print(f"⚠ Aucun fichier pour {petri} {z} — ignoré")
+                        continue
+                    w, i = traiter_acquisitions_gellose(fichiers)
+                    ip_non_irr.append(i)  
+        elif dose == 45:
+            if 'NT' in type_:
+                for z in ('z1', 'z2', 'z3'):
+                    fichiers = lecteur_données_frais(batch, petri, z)
+                    if not fichiers:
+                        print(f"⚠ Aucun fichier pour {petri} {z} — ignoré")
+                        continue
+                    w, i = traiter_acquisitions_gellose(fichiers)
+                    i_irr.append(i)  
+            else:
+                for z in ('z1', 'z2', 'z3'):
+                    fichiers = lecteur_données_frais(batch, petri, z)
+                    if not fichiers:
+                        print(f"⚠ Aucun fichier pour {petri} {z} — ignoré")
+                        continue
+                    w, i = traiter_acquisitions_gellose(fichiers)
+                    ip_irr.append(i)                 
+
         else:
-            for z in ('z1', 'z2', 'z3'):
-                w, i = traiter_acquisitions_gellose(lecteur_données_frais(batch, petri, z))
-                i_irr.append(i)  
+            continue
       
 
-i_non_irr_moy = np.mean(np.array(i_non_irr), axis=0)
-i_irr_moy = np.mean(np.array(i_irr), axis=0)
+i_non_irr_arr = np.array(i_non_irr)
+i_irr_arr = np.array(i_irr)
+ip_irr_arr = np.array(ip_irr)
+ip_non_irr_arr = np.array(ip_non_irr)
 
-plt.plot(w, i_non_irr_moy, label='Non-irradiated', color='tab:orange', lw=0.8)
-up = i_non_irr_moy + np.std(i_non_irr)
-low = i_non_irr_moy - np.std(i_non_irr)
-plt.fill_between(i_non_irr_moy, low, up, where=up >= low, color='tab:orange', alpha=0.2)
+i_non_irr_moy = np.mean(i_non_irr_arr, axis=0)
+i_irr_moy = np.mean(i_irr_arr, axis=0)
+ip_irr_moy = np.mean(ip_irr_arr, axis=0)
+ip_non_irr_moy = np.mean(ip_non_irr_arr, axis=0)
 
-plt.plot(w, i_irr_moy, label='Irradiated', color='tab:green', lw=0.8)
-up = i_irr_moy + np.std(i_irr)
-low = i_irr_moy - np.std(i_irr)
-plt.fill_between(i_irr_moy, low, up, where=up >= low, color='tab:grean', alpha=0.2)
+std_non_irr = np.std(i_non_irr_arr, axis=0)
+std_irr = np.std(i_irr_arr, axis=0)
+stdp_irr = np.std(ip_irr_arr, axis=0)
+stdp_non_irr = np.std(ip_non_irr_arr, axis=0)
+
+plt.plot(w, i_non_irr_moy, label='Non-irradiated', color='xkcd:royal blue', lw=0.8)
+#up = i_non_irr_moy + std_non_irr
+#low = i_non_irr_moy - std_non_irr
+#plt.fill_between(w, low, up, color='xkcd:royal blue', alpha=0.2)
+
+plt.plot(w, i_irr_moy, label='Irradiated NT', color='xkcd:scarlet', lw=0.8)
+#up = i_irr_moy + std_irr
+#low = i_irr_moy - std_irr
+#plt.fill_between(w, low, up, color='xkcd:scarlet', alpha=0.2)
+
+plt.plot(w, ip_irr_moy, label='Irradiated +P', color='xkcd:violet', lw=0.8)
+#up = ip_irr_moy + stdp_irr
+#low = ip_irr_moy - stdp_irr
+#plt.fill_between(w, low, up, color='xkcd:violet', alpha=0.2)
+
+plt.plot(w, ip_non_irr_moy, label='Non-irradiated +P', color='xkcd:green', lw=0.8)
+#up = i_non_irr_moy + stdp_non_irr
+#low = i_non_irr_moy - stdp_non_irr
+#plt.fill_between(w, low, up, color='xkcd:scarlet', alpha=0.2)
 
 plt.title('Medium spectrum of irradiated and non-irradiated skin')
 plt.xlabel('Raman shift (cm⁻¹)')
