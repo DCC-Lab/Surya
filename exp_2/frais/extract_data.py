@@ -186,6 +186,13 @@ def soustraire_spectre(wn_echantillon, intensite_echantillon,
                       le fit à des zones dominées par le verre 
                       (ex: [(500, 550), (900, 950)]). None = tout le spectre.
     """
+    
+    wn_echantillon = np.asarray(wn_echantillon, dtype=float)
+    intensite_echantillon = np.asarray(intensite_echantillon, dtype=float)
+    wn_nocif = np.asarray(wn_nocif, dtype=float)
+    intensite_nocif = np.asarray(intensite_nocif, dtype=float)
+
+    # ... reste du code inchangé
     # Interpoler le verre/gellose sur la même grille que l'échantillon
     nocif_interp = np.interp(wn_echantillon, wn_nocif, intensite_nocif)
 
@@ -385,6 +392,48 @@ def traiter_acquisitions_gellose(liste_fichiers, traiter_etalon=True, als=True, 
     return wn, i_nrml
 
 
+def traiter_acquisitions_verre(liste_fichiers, traiter_etalon=True, als=True, bubblewidth=None, lam=1e6):
+    """
+    Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
+    Soustrait le spectre du verre et corrige la fluorescence.
+    Centrage des données en soustrayant la moyenne.
+    Retourne (wavenumbers, spectre_centré).
+    """
+    
+    #spectre sans rayon cosmiques
+    wn, _, i = traiter_acquisitions(liste_fichiers)
+
+    i_verre_corr = corriger_motif_fixe(raman_shift_to_nm(wn_verre, 785), i_verre, raman_shift_to_nm(wn_ref, 785), t_lambda)
+
+    if traiter_etalon:
+        #spectre sans rayon cosmiques et sans étalon
+        i_corr_F = corriger_motif_fixe(raman_shift_to_nm(wn, 785), i, raman_shift_to_nm(wn_ref, 785), t_lambda)
+
+        if als==True:
+            #spectre sans rayon cosmiques, sans étalon et sans fluorescence
+            i_corr_SF, baseline= corriger_fluorescence_als(i_corr_F, lam=lam)
+        else:
+            i_corr_SF = corriger_fluorescence(i_corr_F, min_bubble_widths=bubblewidth)
+
+        #spectre sans rayon cosmiques, sans étalon, sans fluorescence et sans verre
+        intensite = soustraire_spectre(wn, i_corr_SF, wn_verre, i_verre_corr)
+
+    else:
+        if als ==True:
+            i_SF, baseline = corriger_fluorescence_als(i)
+
+        else:
+            i_SF = corriger_fluorescence(i)
+        intensite = soustraire_spectre(wn, i_SF, wn_verre, i_verre_corr)
+
+    
+    intensite_centree = intensite - np.mean(intensite)
+    i_nrml = intensite_centree / np.max(intensite_centree)
+    
+    return wn, i_nrml
+
+
+
 racine8 = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\exp_2"
 def lecteur_données_frais(batch, petri, zone):
     dossier = os.path.join(racine8, batch, 'frais', petri)
@@ -446,30 +495,97 @@ def tester_als_settings(wn, i_corr_F, combos, wn_min=800, wn_max=2200):
     plt.tight_layout()
     plt.show()
 
-# on commence avec 10 graphes par zone
-import matplotlib.pyplot as plt
-#for fichier in lecteur_données_frais('batch#1', 'petri1', 'z1'):
-#    w, i = formater_donnees(fichier)
-#    intensité = retirer_rayons_cosmiques(w, i)
-#    plt.plot(w, intensité)
-#    plt.title(f"Raman spectrum #{lecteur_données_frais('batch#1', 'petri1', 'z1').index(fichier) + 1} without cosmic rays of the zone 1 of petri dish 1")
-#    plt.xlabel('Raman shift (cm⁻¹)')
-#    plt.ylabel('Intensity')
-#    plt.show()
+racine1 = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya"
 
-#racine = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\exp_1\spectre_lumière_blanche"
-#fichiers = sorted(glob.glob(os.path.join(racine, '*.txt')))
-#wn_ref,_, intensite_ref_brute = traiter_acquisitions(fichiers)
-#t_lambda, lisse = caracteriser_motif_fixe(raman_shift_to_nm(wn_ref, 785), intensite_ref_brute)
+def extraire_fichiers_jours_8_11(jour, petri, souris, zone):
+    dossier = os.path.join(racine1, jour, "Raman", petri, souris, zone)
+            # Si le dossier n'existe pas, on le saute sans buguer
+    if not os.path.exists(dossier):
+        return []
+    # Chercher les fichiers .txt dans ce dossier
+    fichiers_zone = glob.glob(os.path.join(dossier, "*.txt"))
+    #print(f'Premier 10 fichiers de la zone {zone} du jour {jour} : {fichiers_zone}')
+    return fichiers_zone
 
-#w, _, i = traiter_acquisitions(lecteur_données_frais('batch#1', 'petri1', 'z1'))
-#i_corr = corriger_motif_fixe(raman_shift_to_nm(w, 785), i, raman_shift_to_nm(wn_ref, 785), t_lambda)
-#i_corr_SF, baseline= corriger_fluorescence_als(i_corr, lam=1e6, p=0.05)
-#intensite_centree = i_corr_SF - np.mean(i_corr_SF)
-#i_nrml = intensite_centree / np.max(intensite_centree)
-#plt.plot(w, i_nrml)
-#plt.title(f"Averaged Raman spectrum without standardization effect and without fluorescence, centered and noralized, of the zone 1 of petri dish 1")
-#plt.xlabel('Raman shift (cm⁻¹)')
-#plt.ylabel('Intensity')
-#plt.show()
+#────────────────────────────────────────3. FICHIER DU JOUR 4 ──────────────────────────────────────────────
+
+racine3 = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\acquisition_données_Surya"
+
+def extraire_fichiers_jour_4(jour, petri, souris, zone, fichiers_par_zone=10):
+    """
+    Sépare les fichiers d'un dossier en zones selon l'ordre chronologique.
+    Les 10 premiers (par date) = zone1, les 10 suivants = zone2, etc.
+    
+    zone : int (1, 2, 3...)
+    """
+    dossier = os.path.join(racine3, jour, "Raman", petri)
+
+    pattern = os.path.join(dossier, f"{souris}*.txt")
+
+    tous_les_fichiers = sorted(glob.glob(pattern))
+    
+    if not tous_les_fichiers:
+        #print(f"Aucun fichier trouvé avec le pattern : {pattern}")
+        return []
+    
+    # Trie par date de modification (le plus ancien en premier)
+    tous_les_fichiers_tries = sorted(tous_les_fichiers, key=lambda f: os.path.getmtime(f))
+    
+    # Découpe en tranches de 10
+    indice = int(zone[-1])
+    debut = (indice - 1) * fichiers_par_zone
+    fin = debut + fichiers_par_zone
+    fichiers_zone = tous_les_fichiers_tries[debut:fin]
+    
+    
+    #print(f"{zone} — {len(fichiers_zone)} fichiers trouvés")
+    return fichiers_zone
+
+def extraire_fichiers_jour_0(jour, petri, souris, echantillon, zone, fichiers_par_zone=10):
+
+    dossier = os.path.join(racine1, jour, 'raman', petri, souris)
+
+    pattern = os.path.join(dossier, f"{echantillon}*.txt")
+    tous_les_fichiers = sorted(glob.glob(pattern))
+    
+    if not tous_les_fichiers:
+        print(f"Aucun fichier trouvé avec le pattern : {pattern}")
+        return []
+    
+    # Trie par date de modification (le plus ancien en premier)
+    tous_les_fichiers_tries = sorted(tous_les_fichiers, key=lambda f: os.path.getmtime(f))
+
+        # Découpe en tranches de 10
+    indice = int(zone[-1])
+    debut = (indice - 1) * fichiers_par_zone
+    fin = debut + fichiers_par_zone
+    fichiers_zone = tous_les_fichiers_tries[debut:fin]
+
+    #print(f"{zone} — {len(fichiers_zone)} fichiers trouvés")
+    return fichiers_zone    
+
+racine1 = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\exp_1"
+
+def extraire_fichiers_j2_fixe(matiere, jour, petri, souris, zone, fichiers_par_zone=10):
+
+    dossier = os.path.join(racine1, jour, "raman", petri)
+    pattern = os.path.join(dossier, f"{souris}*{matiere}*")
+
+    tous_les_fichiers = sorted(glob.glob(pattern))
+    
+    if not tous_les_fichiers:
+        #print(f"Aucun fichier trouvé avec le pattern : {pattern}")
+        return []
+    
+    # Trie par date de modification (le plus ancien en premier)
+    tous_les_fichiers_tries = sorted(tous_les_fichiers, key=lambda f: os.path.getmtime(f))
+    
+    # Découpe en tranches de 10
+    indice = int(zone[-1])
+    debut = (indice - 1) * fichiers_par_zone
+    fin = debut + fichiers_par_zone
+    fichiers_zone = tous_les_fichiers_tries[debut:fin]
+    #print(f"{zone} — {len(fichiers_zone)} fichiers trouvés: {fichiers_zone}")
+    
+    return fichiers_zone
 

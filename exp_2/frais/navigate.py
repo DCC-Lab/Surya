@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from extract_data import traiter_acquisitions_gellose, lecteur_données_frais, lecteur_données_fixes, lecteur_données_moy
+from extract_data import traiter_acquisitions_gellose, lecteur_données_frais, lecteur_données_fixes, lecteur_données_moy, traiter_acquisitions_verre, extraire_fichiers_jour_0, extraire_fichiers_j2_fixe,  extraire_fichiers_jour_4, extraire_fichiers_jours_8_11
 
 
 
@@ -54,6 +54,7 @@ config = {
      },
 }
 
+
 i_non_irr, ip_non_irr, i_irr, ip_irr =[], [], [], []
 
 
@@ -96,7 +97,153 @@ for batch, petri in config.items():
 
         else:
             continue
-      
+
+
+
+
+config = {
+
+    'jour0': {
+        'petri1': ('0gy', {
+            'souris1': {'echantillon1': ['zone1','zone2','zone3'], 'echantillon2': ['zone1','zone2','zone3']},
+            'souris2': {'echantillon1': ['zone1','zone2','zone3'], 'echantillon2': ['zone1','zone2','zone3']},
+            'souris3': {'echantillon1': ['zone1','zone2','zone3']},
+        }),
+        'petri2': ('0gy', {
+            'souris4': {'echantillon1': ['zone1','zone2','zone3']},
+            'souris5': {'echantillon1': ['zone1','zone2','zone3']},
+        }),
+        #'petri3': ('80gy', {
+        #    'souris4': {'echantillon1': ['zone1','zone2','zone3']},
+        #}),
+    },
+    
+    'jour_2': {
+        'petri1': ('0gy',      {'souris1': ['zone1'], 'souris2': ['zone1','zone2'], 'souris3': ['zone1','zone2','zone3']}),
+        'petri2': ('45gy',     {'souris1': ['zone1','zone2'], 'souris2': ['zone1','zone2','zone3']}),
+        'petri3': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
+        'petri4': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        'petri5': ('80gy',     {'souris4': ['zone1','zone2','zone3']}),
+    },
+    'jour4': {
+        'petri1': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        'petri2': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        'petri3': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
+        'petri4': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
+        'petri5': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3']}),
+    },
+    'jour_8': {
+        'petri1': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
+        'petri2': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
+        'petri3': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3']}),
+        'petri4': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        'petri5': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+    },    
+    'jour_11': {
+        'petri1': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
+        'petri2': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
+        'petri3': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        'petri4': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+    },
+}
+
+extracteur = {
+    'jour0':   extraire_fichiers_jour_0,
+    'jour_2':   extraire_fichiers_j2_fixe,
+    'jour4':   extraire_fichiers_jour_4,
+    'jour_8':  extraire_fichiers_jours_8_11,
+    'jour_11': extraire_fichiers_jours_8_11,
+}
+
+spectres1 = []
+etiquettes1 = []
+
+for jour, petris in config.items():
+    for petri, (dose, souris_data) in petris.items():
+        for souris, contenu in souris_data.items():
+
+            if jour == 'jour0':
+                # ✅ contenu est un dict {echantillon: [zones]}
+                for echantillon, zones in contenu.items():
+                    for zone in zones:
+                        liste_fichiers = extraire_fichiers_jour_0(jour, petri, souris, echantillon, zone)
+                        if not liste_fichiers:
+                            continue
+
+                        w, i = traiter_acquisitions_verre(liste_fichiers)  # ou gelose, selon le jour0
+
+                        if w is None or i is None:
+                            continue
+                        if not np.isfinite(i).all():
+                            print(f"NaN/Inf : {souris} {echantillon} {zone}, {petri}, {jour} — ignoré")
+                            continue
+
+
+                        spectres1.append(i)
+                        etiquettes1.append(f"{souris}-{echantillon}-{zone}-{jour}-{dose}")
+
+            elif jour == 'jour_2':
+                # ✅ structure normale : contenu est une liste de zones
+                zones = contenu
+                for zone in zones:
+                    liste_fichiers = extracteur[jour]('verre', jour, petri, souris, zone)
+                    if not liste_fichiers:
+                        continue
+
+                    w, i = traiter_acquisitions_verre(liste_fichiers)
+
+                    if w is None or i is None:
+                        continue
+                    if not np.isfinite(i).all():
+                        print(f"NaN/Inf : {souris} {zone}, {petri}, {jour} — ignoré")
+                        continue
+
+                    spectres1.append(i)
+                    etiquettes1.append(f"{souris}-{zone}-{jour}-{dose}")               
+
+            else:
+                # ✅ structure normale : contenu est une liste de zones
+                zones = contenu
+                for zone in zones:
+                    liste_fichiers = extracteur[jour](jour, petri, souris, zone)
+                    if not liste_fichiers:
+                        continue
+
+                    w, i = traiter_acquisitions_verre(liste_fichiers)
+
+                    if w is None or i is None:
+                        continue
+                    if not np.isfinite(i).all():
+                        print(f"NaN/Inf : {souris} {zone}, {petri}, {jour} — ignoré")
+                        continue
+
+                    spectres1.append(i)
+                    etiquettes1.append(f"{souris}-{zone}-{jour}-{dose}")
+
+
+# Cas spéciaux souris1.1 et souris2.1 (j8, petri3)
+for souris_sp in ['souris1.1', 'souris2.1']:
+    souris_label = souris_sp.replace('.', '_')
+    for zone in ['zone1', 'zone2', 'zone3']:
+        liste_fichiers = extraire_fichiers_jours_8_11('jour_8', 'petri3', souris_sp, zone)
+        if liste_fichiers:
+            w, i = traiter_acquisitions_verre(liste_fichiers)
+            if i is not None and np.isfinite(i).all():
+                spectres1.append(i)
+                etiquettes1.append(f"{souris_label}-jour_8-45gy + P")
+
+
+X1 = np.array(spectres1)
+
+def parser_jour_dose(etiquettes):
+    jours, doses = [], []
+    for e in etiquettes:
+        reste, jour, dose = e.rsplit('-', 2)
+        jours.append(jour)
+        doses.append(dose)
+    return np.array(jours), np.array(doses)
+
+jours_verre, doses_verre = parser_jour_dose(etiquettes1)
 
 i_non_irr_arr = np.array(i_non_irr)
 i_irr_arr = np.array(i_irr)
