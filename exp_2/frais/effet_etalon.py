@@ -52,7 +52,7 @@ for facteur in [2, 3, 4, 5]:
 
 
 plt.plot(wn_ref, intensite_ref_brute, label='Lumière blanche brute')
-#plt.plot(wn_ref, t_lambda1, label='Lambda x2000, f=101, ordre=3')
+plt.plot(wn_ref, lisse1, label='f=101, ordre=3')
 #plt.plot(wn_ref, t_lambda2+1, label='Lambda x2000, f=51, ordre=3')
 plt.plot(wn_ref, lisse3, label='Lambda x2000, f=151, ordre=3')
 plt.ylabel('Intensité')

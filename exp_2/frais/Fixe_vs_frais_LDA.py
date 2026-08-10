@@ -25,7 +25,7 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.model_selection import LeaveOneGroupOut, cross_val_predict
 from sklearn.metrics import classification_report, balanced_accuracy_score, ConfusionMatrixDisplay
 
-from extract_data import traiter_acquisitions_gellose, lecteur_données_frais, lecteur_données_fixes, lecteur_données_moy
+from extract_data import traiter_acquisitions_gellose, lecteur_données_frais, lecteur_données_fixes, lecteur_données_moy, soustraire_spectre, lecteur_gelose
 
 
 
@@ -48,8 +48,8 @@ CONFIG = {
         # 'petri9':  ('S39-G', 0,  'FNT'),
         # 'petri10': ('S39-D', 0,  'FNT'),
     },
-    'batch#2': {
-        'petri11': ('S45-G', 45, 'F+P'),
+    #'batch#2': {
+    #    'petri11': ('S45-G', 45, 'F+P'),
         'petri12': ('S45-D', 0,  'F+P'),
         'petri13': ('S41-G', 45, 'F+P'),
         'petri14': ('S41-D', 0,  'F+P'),
@@ -59,30 +59,30 @@ CONFIG = {
         'petri18': ('S44-D', 0,  'F+P'),
         'petri19': ('S46-G', 45, 'F+P'),
         'petri20': ('S46-D', 0,  'F+P'),
-    },
-     'batch#3': {
-         'petri21': ('S33-G', 45, 'MNT'),
-         'petri22': ('S33-D', 0,  'MNT'),
-         'petri23': ('S37-G', 45, 'MNT'),
-         'petri24': ('S37-D', 0,  'MNT'),
-         'petri25': ('S30-G', 45, 'MNT'),
-         'petri26': ('S30-D', 0,  'MNT'),
-         'petri27': ('S32-G', 45, 'M+P'),
-         'petri28': ('S32-D', 0,  'M+P'),
-         'petri29': ('S36-G', 45, 'M+P'),
-         'petri30': ('S36-D', 0,  'M+P'),
-         'petri31': ('S27-G', 45, 'M+P'),
-         'petri32': ('S27-D', 0,  'M+P'),
-     },
-    'batch#4': {
-         'petri33': ('S29-G', 0,  'MNT'),
-         'petri34': ('S29-D', 0,  'MNT'),
-         'petri35': ('S31-G', 45, 'MNT'),
-         'petri36': ('S31-D', 0,  'MNT'),
-         'petri37': ('S34-G', 45, 'M+P'),
-         'petri38': ('S34-D', 0,  'M+P'),
+    #},
+    # 'batch#3': {
+    #     'petri21': ('S33-G', 45, 'MNT'),
+    #     'petri22': ('S33-D', 0,  'MNT'),
+    #     'petri23': ('S37-G', 45, 'MNT'),
+    #     'petri24': ('S37-D', 0,  'MNT'),
+    #     'petri25': ('S30-G', 45, 'MNT'),
+    #     'petri26': ('S30-D', 0,  'MNT'),
+    #     'petri27': ('S32-G', 45, 'M+P'),
+    #     'petri28': ('S32-D', 0,  'M+P'),
+    #     'petri29': ('S36-G', 45, 'M+P'),
+    #     'petri30': ('S36-D', 0,  'M+P'),
+    #     'petri31': ('S27-G', 45, 'M+P'),
+    #     'petri32': ('S27-D', 0,  'M+P'),
+    # },
+    #'batch#4': {
+    #     'petri33': ('S29-G', 0,  'MNT'),
+    #     'petri34': ('S29-D', 0,  'MNT'),
+    #     'petri35': ('S31-G', 45, 'MNT'),
+    #     'petri36': ('S31-D', 0,  'MNT'),
+    #     'petri37': ('S34-G', 45, 'M+P'),
+    #     'petri38': ('S34-D', 0,  'M+P'),
 
-     },
+    # },
 }
 
 MOYENNE = False   # True -> une valeur moyennée par pétri (lecteur_données_moy)
@@ -91,10 +91,11 @@ MOYENNE = False   # True -> une valeur moyennée par pétri (lecteur_données_mo
 N_MAX_COMPOSANTES = 11  # borne supérieure explorée par le test de sélection
 
 
+
 # ────────────────────────────────────────────────────────────────────────────
 # CHARGEMENT DES DONNÉES
 # ────────────────────────────────────────────────────────────────────────────
-def charger_spectres(config, etat, moyenne=False):
+def charger_spectres(config, etat, i_nocif, moyenne=False):
     """Charge tous les spectres et construit les étiquettes associées.
 
     Si moyenne=False, chaque échantillon donne 3 spectres (z1, z2, z3) qui
@@ -126,13 +127,27 @@ def charger_spectres(config, etat, moyenne=False):
                     print(f"NaN/Inf : {echantillon} {zone or ''}, {petri}, {batch} — ignoré")
                     continue
 
+                i_corr = soustraire_spectre(w_local, i, w_local, i_nocif)
+
                 w = w_local
                 suffixe = f"_{zone}" if zone else ""
-                spectres.append(i)
+                spectres.append(i_corr)
                 etiquettes.append(f"{echantillon}{suffixe}_{dose}{type_}_{etat}")
 
     return np.array(spectres), etiquettes, w
 
+
+def charger_nocif(config):
+    i_s = []
+
+    for batch, petri in config.items():
+        for petri, (echantillon, dose, type_) in petri.items():
+            fichiers = lecteur_gelose(batch, petri)
+            if not fichiers:
+                continue
+            w, i = traiter_acquisitions_gellose(fichiers)
+            i_s.append(i)
+    return i_s
 
 def parser_etiquettes(etiquettes):
     """Extrait échantillon, dose, sexe, traitement, id souris, état (frais/fixe), zone."""
@@ -245,8 +260,8 @@ def analyser_dose(X, doses, souris_id, masque1, masque2, titre_suffixe, n_max=N_
     X_sub = X_tot.concatenate([X1, X2], axis=0)
 
 
-    y_sub = np.array([f"{d}gy" for d in doses[masque]])
-    groupes_sub = souris_id[masque]
+    y_sub = np.array([f"{d}gy" for d in doses[masque1]])
+    groupes_sub = souris_id[masque1]
 
     n_pca = choisir_n_composantes(X_sub, y_sub, groupes_sub, n_max,
                                    f"Choix N_PCA — {titre_suffixe}")
@@ -376,8 +391,8 @@ def etiquette_courte(id_souris, zone):
 
 
 # ── Chargement des deux états ──────────────────────────────────────────────
-X_frais, etiquettes_frais, w_frais = charger_spectres(CONFIG, 'frais', moyenne=MOYENNE)
-X_fixe, etiquettes_fixe, w_fixe = charger_spectres(CONFIG, 'fixe', moyenne=MOYENNE)
+X_frais, etiquettes_frais, w_frais = charger_spectres(CONFIG, 'frais', charger_nocif(CONFIG), moyenne=MOYENNE)
+X_fixe, etiquettes_fixe, w_fixe = charger_spectres(CONFIG, 'fixe', charger_nocif(CONFIG), moyenne=MOYENNE)
 
 X = np.concatenate([X_frais, X_fixe], axis=0)
 etiquettes = etiquettes_frais + etiquettes_fixe   # ce sont des listes Python, "+" les concatène
@@ -388,28 +403,39 @@ echantillons, doses, sexes, traitements, souris_id, etats, zones = parser_etique
 
 
 
+# étiquette de dose sous forme de chaîne, pour tout le dataset
+y_dose = np.array([f"{d}gy" for d in doses])
+
+# on retire le groupe irradié + pansement (45gy & +P) des DEUX analyses
+#masque_exclu_irr_P = ~((doses == 45) & (traitements == '+P'))
+
+# base commune : frais + on retire ce groupe croisé
+#masque_base = (etats == 'frais') & masque_exclu_irr_P
 
 
-masque_NTFi = (etats == 'frais') & (traitements == 'NT') #composante 
+#y_sub_dose, y_pred_dose, ba_dose, n_pca_dose, ld1_dose, pca_dose, lda_dose = entrainer_lda(
+#    X, y_dose, souris_id, masque_base, "Irradiation — 0gy vs 45gy (sans 45gy+P)"
+#)
 
-y_NTFi, y_pred_NTFi, ba_NTFi, n_pca_NTFi, ld1_NTFi, pca_NTFi, lda_NTFi = analyser_dose(
-    X, doses, souris_id, masque_NTFi, "NT - frais - 0 Gy vs 45 Gy"
+#y_sub_pans, y_pred_pans, ba_pans, n_pca_pans, ld1_pans, pca_pans, lda_pans = entrainer_lda(
+#    X, traitements, souris_id, masque_base, "Pansement — NT vs +P (sans 45gy+P)"
+#)
+
+
+
+masque_NTFi = (etats == 'frais') & (traitements == 'NT') & (sexes == 'F')
+
+y_NTFi, y_pred_NTFi, ba_NTFi, n_pca_NTFi, ld1_NTFi, pca_NTFi, lda_NTFi = entrainer_lda(
+    X, y_dose, souris_id, masque_NTFi, "NT - frais - 0 Gy vs 45 Gy"
 )
 
 
-masque_NTFi = (etats == 'frais') & (traitements == 'NT')
-
-y_NTFi, y_pred_NTFi, ba_NTFi, n_pca_NTFi, ld1_NTFi, pca_NTFi, lda_NTFi = analyser_dose(
-    X, doses, souris_id, masque_NTFi, "NT - frais - 0 Gy vs 45 Gy"
-)
 
 
+#masque_NTFr = (etats == 'frais') & (doses == 45)
 
-
-#masque_NTFr = (etats2 == 'frais') & (traitements2 == '+P')
-
-#y_NTFr, y_pred_NTFr, ba_NTFr, n_pca_NTFr, ld1_NTFr, pca_NTFr, lda_NTFr = analyser_dose(
-#    X2, doses2, souris_id2, masque_NTFr, "+P - Frais - 0 Gy vs 45 Gy"
+#y_NTFr, y_pred_NTFr, ba_NTFr, n_pca_NTFr, ld1_NTFr, pca_NTFr, lda_NTFr = entrainer_lda(
+#    X, traitements, souris_id, masque_NTFr, "45 - Frais - +P vs NT"
 #)
 
 
@@ -417,20 +443,20 @@ y_NTFi, y_pred_NTFi, ba_NTFi, n_pca_NTFi, ld1_NTFi, pca_NTFi, lda_NTFi = analyse
 # ════════════════════════════════════════════════════════════════════════
 # FIGURE 1 — Matrice de confusion (avec colorbar)
 # ════════════════════════════════════════════════════════════════════════
-#fig1, ax1 = plt.subplots(figsize=(6, 5))
+fig1, ax1 = plt.subplots(figsize=(6, 5))
 
-#ConfusionMatrixDisplay.from_predictions(
-#    y_NTFi, y_pred_NTFi, ax=ax1,
-#    colorbar=True,              # ← gradient affiché
-#    normalize='true',
-#    im_kw={'vmin': 0, 'vmax': 1}, 
-#    cmap='RdPu',
-#    display_labels=["Non-irradiated", "Irradiated"]
-#)
-#ax1.set_title(f"Effect of irradiation - fixed ({n_pca_NTFi} comp., BA={ba_NTFi:.1%})")
+ConfusionMatrixDisplay.from_predictions(
+    y_NTFi, y_pred_NTFi, ax=ax1,
+    colorbar=True,              # ← gradient affiché
+    normalize='true',
+    im_kw={'vmin': 0, 'vmax': 1}, 
+    cmap='RdPu',
+    display_labels=["Non-irradiated", "Irradiated"]
+)
+ax1.set_title(f"Effect of irradiation - female fresh ({n_pca_NTFi} comp., BA={ba_NTFi:.1%})")
 
-#plt.tight_layout()
-#plt.show()
+plt.tight_layout()
+plt.show()
 
 
 def score_ld1(spectres, pca, lda):
@@ -440,21 +466,21 @@ def score_ld1(spectres, pca, lda):
     return lda.decision_function(X_pca)
 
 # ── Masques pour vos échantillons +P (jamais vus par ce LDA) ────────────────
-masque_PFi_0  = (etats == 'frais') & (traitements == '+P') & (doses == 0)
-masque_PFi_45 = (etats == 'frais') & (traitements == '+P') & (doses == 45)
-masque_NTFi_45 = (etats == 'frais') & (traitements == 'NT') & (doses == 45)
+#masque_PFi_0  = (etats == 'frais') & (traitements == '+P') & (doses == 0)
+#masque_PFi_45 = (etats == 'frais') & (traitements == '+P') & (doses == 45)
+#masque_NTFi_45 = (etats == 'frais') & (traitements == 'NT') & (doses == 45)
 
-scores_P_0gy  = score_ld1(X[masque_PFi_0],  pca_NTFi, lda_NTFi)
-scores_P_45gy = score_ld1(X[masque_PFi_45], pca_NTFi, lda_NTFi)
-scores_NT_45gy = score_ld1(X[masque_NTFi_45], pca_NTFi, lda_NTFi)
+#scores_P_0gy  = score_ld1(X[masque_PFi_0],  pca_NTFi, lda_NTFi)
+#scores_P_45gy = score_ld1(X[masque_PFi_45], pca_NTFi, lda_NTFi)
+#scores_NT_45gy = score_ld1(X[masque_NTFi_45], pca_NTFi, lda_NTFi)
 
-pred_P_0gy  = np.where(scores_P_0gy  > 0, "45gy", "0gy")
-pred_P_45gy = np.where(scores_P_45gy > 0, "45gy", "0gy")
-pred_NT_45gy = np.where(scores_NT_45gy > 0, "45gy", "0gy")
+#pred_P_0gy  = np.where(scores_P_0gy  > 0, "45gy", "0gy")
+#pred_P_45gy = np.where(scores_P_45gy > 0, "45gy", "0gy")
+#pred_NT_45gy = np.where(scores_NT_45gy > 0, "45gy", "0gy")
 
-labels_P_0gy = [etiquette_courte(s, z) for s, z in zip(souris_id[masque_PFi_0], zones[masque_PFi_0])]
-labels_P_45gy = [etiquette_courte(s, z) for s, z in zip(souris_id[masque_PFi_45], zones[masque_PFi_45])]
-labels_NT_45gy = [etiquette_courte(s, z) for s, z in zip(souris_id[masque_NTFi_45], zones[masque_NTFi_45])]
+#labels_P_0gy = [etiquette_courte(s, z) for s, z in zip(souris_id[masque_PFi_0], zones[masque_PFi_0])]
+#labels_P_45gy = [etiquette_courte(s, z) for s, z in zip(souris_id[masque_PFi_45], zones[masque_PFi_45])]
+#labels_NT_45gy = [etiquette_courte(s, z) for s, z in zip(souris_id[masque_NTFi_45], zones[masque_NTFi_45])]
 
 #print("+P, vrai 0gy  → prédictions :", pred_P_0gy)
 #print("+P, vrai 45gy → prédictions :", pred_P_45gy)
@@ -463,48 +489,42 @@ labels_NT_45gy = [etiquette_courte(s, z) for s, z in zip(souris_id[masque_NTFi_4
 
 
 # ════════════════════════════════════════════════════════════════════════
-# FIGURE — Projection scalaire des +P sur l'axe LD1 (NT), en 2D pour la lisibilité
+# FIGURE — Projection 2D sur les axes LD1 (irradiation) et LD1 (pansement)
 # ════════════════════════════════════════════════════════════════════════
-rng = np.random.default_rng(0)
 
-def jitter(n, centre, ecart=0.08):
-    return rng.normal(loc=centre, scale=ecart, size=n)
+# 4 groupes croisés dose × traitement (frais uniquement)
+#groupes_2d = [
+#    ((etats == 'frais') & (doses == 0)  & (traitements == 'NT'), 'tab:blue',    '0gy — NT'),
+#    ((etats == 'frais') & (doses == 45) & (traitements == 'NT'), 'xkcd:scarlet','45gy — NT'),
+#    ((etats == 'frais') & (doses == 0)  & (traitements == '+P'), 'tab:cyan',    '0gy — +P'),
+#    ((etats == 'frais') & (doses == 45) & (traitements == '+P'), 'tab:orange',  '45gy — +P'),
+#]
 
-fig, ax = plt.subplots(figsize=(9, 4))
+#fig, ax = plt.subplots(figsize=(9, 7))
 
-y_0gy = jitter(len(scores_P_0gy), 1)
-y_45gy = jitter(len(scores_P_45gy), 0)
-y_NT45gy = jitter(len(scores_NT_45gy), -1)
+#for masque, couleur, label in groupes_2d:
+#    if not masque.any():
+#        continue
 
-ax.scatter(scores_P_0gy, y_0gy, color='tab:cyan',
-           s=60, alpha=0.85, edgecolor='k', label='+P - non irradié')
-ax.scatter(scores_P_45gy, y_45gy, color='tab:orange',
-           s=60, alpha=0.85, edgecolor='k', label='+P — irradié')
-ax.scatter(scores_NT_45gy, y_NT45gy, color='xkcd:scarlet',
-           s=60, alpha=0.85, edgecolor='k', label='NT — irradié')
+#    x_vals = score_ld1(X[masque], pca_dose, lda_dose)
+#    y_vals = score_ld1(X[masque], pca_pans, lda_pans)
+#    labels_pts = [etiquette_courte(s, z) for s, z in zip(souris_id[masque], zones[masque])]
 
-# annotation de chaque point avec "numéro souris-zone"
-for x, y, lbl in zip(scores_P_0gy, y_0gy, labels_P_0gy):
-    ax.annotate(lbl, xy=(x, y), xytext=(0, 8), textcoords='offset points',
-                ha='center', fontsize=7, color='tab:cyan')
+#    ax.scatter(x_vals, y_vals, color=couleur, s=60, alpha=0.85,
+#               edgecolor='k', label=label, zorder=3)
 
-for x, y, lbl in zip(scores_P_45gy, y_45gy, labels_P_45gy):
-    ax.annotate(lbl, xy=(x, y), xytext=(0, 8), textcoords='offset points',
-                ha='center', fontsize=7, color='tab:orange')
+#    for x, y, lbl in zip(x_vals, y_vals, labels_pts):
+#        ax.annotate(lbl, xy=(x, y), xytext=(0, 8), textcoords='offset points',
+#                    ha='center', fontsize=7, color=couleur)
 
-for x, y, lbl in zip(scores_NT_45gy, y_NT45gy, labels_NT_45gy):
-    ax.annotate(lbl, xy=(x, y), xytext=(0, 8), textcoords='offset points',
-                ha='center', fontsize=7, color='xkcd:scarlet')
-
-ax.axvline(0, color='grey', linestyle='--', lw=1, label='seuil de décision (LD1 NT)')
-ax.set_yticks([-1, 0, 1])
-ax.set_yticklabels(['NT — irradié', '+P — irradié', '+P — non irradié'])
-ax.set_ylim(-1.5, 1.5)
-ax.set_xlabel("Score LD1 (axe du dommage, entraîné sur NT)")
-ax.set_title("Classification des échantillons +P via le LD1 entraîné sur NT")
-ax.legend(loc='best', fontsize=8)
-plt.tight_layout()
-plt.show()
+#ax.axhline(0, color='grey', linestyle='--', lw=1)
+#ax.axvline(0, color='grey', linestyle='--', lw=1)
+#ax.set_xlabel("Score LD1 — Irradiation (0gy vs 45gy)")
+#ax.set_ylabel("Score LD1 — Pansement (NT vs +P)")
+#ax.set_title("Projection des spectres sur les axes irradiation × pansement")
+#ax.legend(loc='best', fontsize=8)
+#plt.tight_layout()
+#plt.show()
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -533,26 +553,26 @@ plt.show()
 # ════════════════════════════════════════════════════════════════════════
 # FIGURE 2 — Spectre discriminant LD1
 # ════════════════════════════════════════════════════════════════════════
-#disc_NTFi = pca_NTFi.components_.T @ lda_NTFi.scalings_[:, 0]
-#disc_NTFi = disc_NTFi / np.linalg.norm(disc_NTFi)   # normalisation (optionnel mais cohérent avec vos autres figures)
+disc_NTFi = pca_NTFi.components_.T @ lda_NTFi.scalings_[:, 0]
+disc_NTFi = disc_NTFi / np.linalg.norm(disc_NTFi)   # normalisation (optionnel mais cohérent avec vos autres figures)
 
 #disc_NTFr = pca_NTFr.components_.T @ lda_NTFr.scalings_[:, 0]
 #disc_NTFr = disc_NTFr / np.linalg.norm(disc_NTFr)   # normalisation (optionnel mais cohérent avec vos autres figures)
 
-#fig2, ax2 = plt.subplots(figsize=(11, 6))
+fig2, ax2 = plt.subplots(figsize=(11, 6))
 
-#ax2.plot(w, disc_NTFi, label='NT', color='tab:orange', lw=1.2)
-#ax2.plot(w, disc_NTFr, label='+P', color='tab:green', lw=1.2)
-#ax2.axhline(0, color='grey', lw=0.5)
-#ax2.set_xlabel("Raman shift(cm⁻¹)")
-#ax2.set_ylabel("LD1 wheight")
-#ax2.set_title("Discriminating spectrum LD1 — effet de la dose — +P vs NT")
-#annoter_pics(ax2, w, disc_NTFi, n_pics=50, couleur='black')
+ax2.plot(w, disc_NTFi, label='Effet dose', color='xkcd:scarlet', lw=1.2)
+#ax2.plot(w, disc_NTFr, label='Effet pansement', color='tab:green', lw=1.2)
+ax2.axhline(0, color='grey', lw=0.5)
+ax2.set_xlabel("Raman shift(cm⁻¹)")
+ax2.set_ylabel("LD1 wheight")
+ax2.set_title("Effet de la dose (NT) femelles")
+annoter_pics(ax2, w, disc_NTFi, n_pics=50, couleur='black')
 #annoter_pics(ax2, w, disc_NTFr, n_pics=50, couleur='black')
-#ax2.legend()
+ax2.legend()
 
-#plt.tight_layout()
-#plt.show()
+plt.tight_layout()
+plt.show()
 
 
 

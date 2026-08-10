@@ -411,7 +411,7 @@ def traiter_acquisitions_verre(liste_fichiers, traiter_etalon=True, als=True, bu
 
         if als==True:
             #spectre sans rayon cosmiques, sans étalon et sans fluorescence
-            i_corr_SF, baseline= corriger_fluorescence_als(i_corr_F, lam=lam)
+            i_corr_SF = corriger_fluorescence_als(i_corr_F, lam=lam)
         else:
             i_corr_SF = corriger_fluorescence(i_corr_F, min_bubble_widths=bubblewidth)
 
@@ -420,7 +420,7 @@ def traiter_acquisitions_verre(liste_fichiers, traiter_etalon=True, als=True, bu
 
     else:
         if als ==True:
-            i_SF, baseline = corriger_fluorescence_als(i)
+            i_SF = corriger_fluorescence_als(i)
 
         else:
             i_SF = corriger_fluorescence(i)
@@ -589,3 +589,14 @@ def extraire_fichiers_j2_fixe(matiere, jour, petri, souris, zone, fichiers_par_z
     
     return fichiers_zone
 
+racine8 = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\exp_2"
+def lecteur_gelose(batch, petri):
+    dossier = os.path.join(racine8, batch, 'frais', petri)
+    pattern = os.path.join(dossier, f"*petri*")
+    tous_les_fichiers = sorted(glob.glob(pattern))
+    
+    if not tous_les_fichiers:
+        print(f"Aucun fichier trouvé avec le pattern : {pattern}")
+        return []
+
+    return tous_les_fichiers
