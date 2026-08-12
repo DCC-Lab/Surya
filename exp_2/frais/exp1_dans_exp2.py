@@ -25,15 +25,8 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.model_selection import LeaveOneGroupOut, cross_val_predict
 from sklearn.metrics import classification_report, balanced_accuracy_score, ConfusionMatrixDisplay
 
-from extract_data import traiter_acquisitions_gellose, lecteur_données_frais, lecteur_données_fixes, lecteur_données_moy
-
-
-
-
-
-
-
-from extract_data import traiter_acquisitions_verre, extraire_fichiers_jour_0, extraire_fichiers_j2_fixe,  extraire_fichiers_jour_4, extraire_fichiers_jours_8_11, soustraire_spectre, lecteur_gelose, extraire_fichiers_jour_2
+from extract_data import traiter_acquisitions_gellose, lecteur_données_frais, lecteur_données_fixes, lecteur_données_moy, traiter_acquisitions_verre, extraire_fichiers_jour_0, extraire_fichiers_j2_fixe,  extraire_fichiers_jour_4, extraire_fichiers_jours_8_11, soustraire_spectre, lecteur_gelose, extraire_fichiers_jour_2
+from config import CONFIG
 
 
 

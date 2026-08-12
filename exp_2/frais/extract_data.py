@@ -370,12 +370,11 @@ def caracteriser_motif_fixe(intensite_ref_brute=i_ref, fenetre_lissage=101, ordr
     return t_lambda, lisse
  
  
-def corriger_motif_fixe(wn_echantillon, intensite_echantillon, t_lambda):
+def corriger_motif_fixe(wn_echantillon, intensite_echantillon, t_lambda, wn_ref=w_ref):
     """
     Applique la correction de motif fixe à un spectre échantillon.
     Interpole t_lambda sur la grille de l'échantillon si nécessaire.
     """
-    wn_ref = w_ref
 
     if len(wn_ref) != len(wn_echantillon) or not np.allclose(wn_ref, wn_echantillon):
         t_interp = np.interp(wn_echantillon, wn_ref, t_lambda)
@@ -537,55 +536,7 @@ def soustraire_spectre(wn_echantillon, intensite_echantillon, wn_nocif, intensit
 # AVERAGE DATA FROM FILE LIST + REMOVE STANDARDIZATION + REMOVE FLUORESCENCE + REMOVE ROGUE SPECTRUM + NORMALIZATION/CENTERING
 # ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-CONFIG = {
-    'batch#1': {
-        'petri1':  ('S48-G', 45, 'FNT'),
-        'petri2':  ('S48-D', 0,  'FNT'),
-        'petri3':  ('S38-G', 45, 'FNT'),
-        'petri4':  ('S38-D', 0,  'FNT'),
-        'petri5':  ('S40-G', 45, 'FNT'),
-        'petri6':  ('S40-D', 0,  'FNT'),
-        'petri7':  ('S47-G', 45, 'FNT'),
-        'petri8':  ('S47-D', 0,  'FNT'),
-        # 'petri9':  ('S39-G', 0,  'FNT'),
-        # 'petri10': ('S39-D', 0,  'FNT'),
-    },
-    'batch#2': {
-        'petri11': ('S45-G', 45, 'F+P'),
-        'petri12': ('S45-D', 0,  'F+P'),
-        'petri13': ('S41-G', 45, 'F+P'),
-        'petri14': ('S41-D', 0,  'F+P'),
-        'petri15': ('S42-G', 45, 'F+P'),
-        'petri16': ('S42-D', 0,  'F+P'),
-        'petri17': ('S44-G', 45, 'F+P'),
-        'petri18': ('S44-D', 0,  'F+P'),
-        'petri19': ('S46-G', 45, 'F+P'),
-        'petri20': ('S46-D', 0,  'F+P'),
-    },
-     'batch#3': {
-         'petri21': ('S33-G', 45, 'MNT'),
-         'petri22': ('S33-D', 0,  'MNT'),
-         'petri23': ('S37-G', 45, 'MNT'),
-         'petri24': ('S37-D', 0,  'MNT'),
-         'petri25': ('S30-G', 45, 'MNT'),
-         'petri26': ('S30-D', 0,  'MNT'),
-         'petri27': ('S32-G', 45, 'M+P'),
-         'petri28': ('S32-D', 0,  'M+P'),
-         'petri29': ('S36-G', 45, 'M+P'),
-         'petri30': ('S36-D', 0,  'M+P'),
-         'petri31': ('S27-G', 45, 'M+P'),
-         'petri32': ('S27-D', 0,  'M+P'),
-     },
-    'batch#4': {
-         'petri33': ('S29-G', 0,  'MNT'),
-         'petri34': ('S29-D', 0,  'MNT'),
-         'petri35': ('S31-G', 45, 'MNT'),
-         'petri36': ('S31-D', 0,  'MNT'),
-         'petri37': ('S34-G', 45, 'M+P'),
-         'petri38': ('S34-D', 0,  'M+P'),
-
-     },
-}
+from config import CONFIG
 
 def charger_nocif(config):
     i_s = []
@@ -604,21 +555,28 @@ def charger_nocif(config):
 
 i_arr_nocif = charger_nocif(CONFIG)
 
-def ajust_spectrum(list_fich_echantillon, i_nocif=i_arr_nocif, wn_min=600, wn_max=3025):
-
+def adjust_spectrum(list_fich_echantillon, i_nocif=i_arr_nocif, wn_min=600, wn_max=3000):
     w, i = correction_data(list_fich_echantillon)
-    w, i_corr = soustraire_spectre(w, i, w, i_nocif)
+    i_corr = soustraire_spectre(w, i, w, i_nocif)
 
     masque = (w >= wn_min) & (w <= wn_max)
-    w_masque, i_masque =  w[masque], i_corr[masque]
+    w_masque, i_masque = w[masque], i_corr[masque]
 
     intensite_centree = i_masque - np.mean(i_masque)
-    i_nrml = intensite_centree / np.max(intensite_centree)
+    i_nrml = intensite_centree / np.max(np.abs(intensite_centree))
 
     return w_masque, i_nrml
 
 
+w1, i1 = traiter_acquisitions(extract_frais('batch#1', 'petri1', 'z1'))
+w2, i2 = correction_data(extract_frais('batch#1', 'petri1', 'z1'))
+w3, i3 = adjust_spectrum(extract_frais('batch#1', 'petri1', 'z1'))
 
+plt.plot(w1, i1, label=1)
+plt.plot(w2, i2, label=2)
+plt.plot(w3, i3, label=3)
+plt.legend()
+plt.show()
     
 
 
