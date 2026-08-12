@@ -254,20 +254,7 @@ def charger_spectres(config, etat, i_nocif, moyenne=False):
 
     return np.array(spectres), etiquettes, w
 
-def charger_nocif(config):
-    i_s = []
 
-    for batch, petris in config.items():
-        for petri, (echantillon, dose, type_) in petris.items():
-            fichiers = lecteur_gelose(batch, petri)
-            if not fichiers:
-                continue
-            w, i = traiter_acquisitions_gellose(fichiers)
-            i_s.append(i)
-            if not i_s:
-                raise ValueError("Aucun spectre de gélose (nocif) n'a pu être chargé.")
-            i_arr = np.array(i_s)
-    return np.mean(i_arr, axis=0)
 
 
 def parser_etiquettes(etiquettes):
