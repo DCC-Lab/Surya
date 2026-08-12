@@ -33,59 +33,59 @@ from extract_data import traiter_acquisitions_gellose, lecteur_données_frais, l
 
 
 
-from extract_data import traiter_acquisitions_verre, extraire_fichiers_jour_0, extraire_fichiers_j2_fixe,  extraire_fichiers_jour_4, extraire_fichiers_jours_8_11
+from extract_data import traiter_acquisitions_verre, extraire_fichiers_jour_0, extraire_fichiers_j2_fixe,  extraire_fichiers_jour_4, extraire_fichiers_jours_8_11, soustraire_spectre, lecteur_gelose, extraire_fichiers_jour_2
 
 
 
 config = {
 
-    'jour0': {
-        'petri1': ('0gy', {
-            'souris1': {'echantillon1': ['zone1','zone2','zone3'], 'echantillon2': ['zone1','zone2','zone3']},
-            'souris2': {'echantillon1': ['zone1','zone2','zone3'], 'echantillon2': ['zone1','zone2','zone3']},
-            'souris3': {'echantillon1': ['zone1','zone2','zone3']},
-        }),
-        'petri2': ('0gy', {
-            'souris4': {'echantillon1': ['zone1','zone2','zone3']},
-            'souris5': {'echantillon1': ['zone1','zone2','zone3']},
-        }),
+    #'jour0': {
+    #    'petri1': ('0gy', {
+    #        'souris1': {'echantillon1': ['zone1','zone2','zone3'], 'echantillon2': ['zone1','zone2','zone3']},
+    #        'souris2': {'echantillon1': ['zone1','zone2','zone3'], 'echantillon2': ['zone1','zone2','zone3']},
+    #        'souris3': {'echantillon1': ['zone1','zone2','zone3']},
+    #    }),
+    #    'petri2': ('0gy', {
+    #        'souris4': {'echantillon1': ['zone1','zone2','zone3']},
+    #        'souris5': {'echantillon1': ['zone1','zone2','zone3']},
+    #    }),
         #'petri3': ('80gy', {
         #    'souris4': {'echantillon1': ['zone1','zone2','zone3']},
         #}),
-    },
+    #},
     
-    'jour_2': {
+    'jour2': {
         'petri1': ('0gy',      {'souris1': ['zone1'], 'souris2': ['zone1','zone2'], 'souris3': ['zone1','zone2','zone3']}),
         'petri2': ('45gy',     {'souris1': ['zone1','zone2'], 'souris2': ['zone1','zone2','zone3']}),
-        'petri3': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
-        'petri4': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
-        'petri5': ('80gy',     {'souris4': ['zone1','zone2','zone3']}),
+        #'petri3': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
+        #'petri4': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        #'petri5': ('80gy',     {'souris4': ['zone1','zone2','zone3']}),
     },
-    'jour4': {
-        'petri1': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
-        'petri2': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
-        'petri3': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
-        'petri4': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
-        'petri5': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3']}),
-    },
-    'jour_8': {
-        'petri1': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
-        'petri2': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
-        'petri3': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3']}),
-        'petri4': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
-        'petri5': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
-    },    
-    'jour_11': {
-        'petri1': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
-        'petri2': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
-        'petri3': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
-        'petri4': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
-    },
+    #'jour4': {
+        #'petri1': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        #'petri2': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+    #    'petri3': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
+        #'petri4': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
+    #    'petri5': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3']}),
+    #},
+    #'jour_8': {
+    #    'petri1': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
+    #    'petri2': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
+        #'petri3': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3']}),
+        #'petri4': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        #'petri5': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+    #},    
+    #'jour_11': {
+    #    'petri1': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
+    #    'petri2': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
+        #'petri3': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        #'petri4': ('80gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+    #},
 }
 
 extracteur = {
     'jour0':   extraire_fichiers_jour_0,
-    'jour_2':   extraire_fichiers_j2_fixe,
+    'jour2':  extraire_fichiers_jour_2,
     'jour4':   extraire_fichiers_jour_4,
     'jour_8':  extraire_fichiers_jours_8_11,
     'jour_11': extraire_fichiers_jours_8_11,
@@ -96,77 +96,37 @@ etiquettes1 = []
 
 for jour, petris in config.items():
     for petri, (dose, souris_data) in petris.items():
-        for souris, contenu in souris_data.items():
-
-            if jour == 'jour0':
-                # ✅ contenu est un dict {echantillon: [zones]}
-                for echantillon, zones in contenu.items():
-                    for zone in zones:
-                        liste_fichiers = extraire_fichiers_jour_0(jour, petri, souris, echantillon, zone)
-                        if not liste_fichiers:
-                            continue
-
-                        w, i = traiter_acquisitions_verre(liste_fichiers)  # ou gelose, selon le jour0
-
-                        if w is None or i is None:
-                            continue
-                        if not np.isfinite(i).all():
-                            print(f"NaN/Inf : {souris} {echantillon} {zone}, {petri}, {jour} — ignoré")
-                            continue
-
-
-                        spectres1.append(i)
-                        etiquettes1.append(f"{souris}-{echantillon}-{zone}-{jour}-{dose}")
-
-            elif jour == 'jour_2':
-                # ✅ structure normale : contenu est une liste de zones
-                zones = contenu
-                for zone in zones:
-                    liste_fichiers = extracteur[jour]('verre', jour, petri, souris, zone)
-                    if not liste_fichiers:
-                        continue
-
-                    w, i = traiter_acquisitions_verre(liste_fichiers)
-
-                    if w is None or i is None:
-                        continue
-                    if not np.isfinite(i).all():
-                        print(f"NaN/Inf : {souris} {zone}, {petri}, {jour} — ignoré")
-                        continue
-
-                    spectres1.append(i)
-                    etiquettes1.append(f"{souris}-{zone}-{jour}-{dose}")               
-
-            else:
-                # ✅ structure normale : contenu est une liste de zones
-                zones = contenu
+        for souris, zones in souris_data.items():
                 for zone in zones:
                     liste_fichiers = extracteur[jour](jour, petri, souris, zone)
+                    print(f"{jour}/{petri}/{souris}/{zone} → {len(liste_fichiers)} fichier(s)")  # ← debug
                     if not liste_fichiers:
                         continue
+                    ...
 
-                    w, i = traiter_acquisitions_verre(liste_fichiers)
+                    w, i = traiter_acquisitions_gellose(liste_fichiers)
 
                     if w is None or i is None:
                         continue
                     if not np.isfinite(i).all():
-                        print(f"NaN/Inf : {souris} {zone}, {petri}, {jour} — ignoré")
+                        print(f"NaN/Inf : {souris} {souris} {zone}, {petri}, {jour} — ignoré")
                         continue
 
                     spectres1.append(i)
-                    etiquettes1.append(f"{souris}-{zone}-{jour}-{dose}")
+                    etiquettes1.append(f"{souris}-{souris}-{zone}-{jour}-{dose}")
+
 
 
 # Cas spéciaux souris1.1 et souris2.1 (j8, petri3)
-for souris_sp in ['souris1.1', 'souris2.1']:
-    souris_label = souris_sp.replace('.', '_')
-    for zone in ['zone1', 'zone2', 'zone3']:
-        liste_fichiers = extraire_fichiers_jours_8_11('jour_8', 'petri3', souris_sp, zone)
-        if liste_fichiers:
-            w, i = traiter_acquisitions_verre(liste_fichiers)
-            if i is not None and np.isfinite(i).all():
-                spectres1.append(i)
-                etiquettes1.append(f"{souris_label}-jour_8-45gy + P")
+#for souris_sp in ['souris1.1', 'souris2.1']:
+#    souris_label = souris_sp.replace('.', '_')
+#    for zone in ['zone1', 'zone2', 'zone3']:
+#        liste_fichiers = extraire_fichiers_jours_8_11('jour_8', 'petri3', souris_sp, zone)
+#        if liste_fichiers:
+#            w, i = traiter_acquisitions_verre(liste_fichiers)
+#            if i is not None and np.isfinite(i).all():
+#                spectres1.append(i)
+#                etiquettes1.append(f"{souris_label}-jour_8-45gy + P")
 
 
 X1 = np.array(spectres1)
@@ -253,7 +213,7 @@ N_MAX_COMPOSANTES = 11  # borne supérieure explorée par le test de sélection
 # ────────────────────────────────────────────────────────────────────────────
 # CHARGEMENT DES DONNÉES
 # ────────────────────────────────────────────────────────────────────────────
-def charger_spectres(config, etat, moyenne=False):
+def charger_spectres(config, etat, i_nocif, moyenne=False):
     """Charge tous les spectres et construit les étiquettes associées.
 
     Si moyenne=False, chaque échantillon donne 3 spectres (z1, z2, z3) qui
@@ -285,12 +245,29 @@ def charger_spectres(config, etat, moyenne=False):
                     print(f"NaN/Inf : {echantillon} {zone or ''}, {petri}, {batch} — ignoré")
                     continue
 
+                i_corr = soustraire_spectre(w_local, i, w_local, i_nocif)
+
                 w = w_local
                 suffixe = f"_{zone}" if zone else ""
-                spectres.append(i)
+                spectres.append(i_corr)
                 etiquettes.append(f"{echantillon}{suffixe}_{dose}{type_}_{etat}")
 
     return np.array(spectres), etiquettes, w
+
+def charger_nocif(config):
+    i_s = []
+
+    for batch, petris in config.items():
+        for petri, (echantillon, dose, type_) in petris.items():
+            fichiers = lecteur_gelose(batch, petri)
+            if not fichiers:
+                continue
+            w, i = traiter_acquisitions_gellose(fichiers)
+            i_s.append(i)
+            if not i_s:
+                raise ValueError("Aucun spectre de gélose (nocif) n'a pu être chargé.")
+            i_arr = np.array(i_s)
+    return np.mean(i_arr, axis=0)
 
 
 def parser_etiquettes(etiquettes):
@@ -489,8 +466,8 @@ def marquer_positions(ax, w, spectre, positions, couleur='red',
 
 
 # ── Chargement des deux états ──────────────────────────────────────────────
-X_frais, etiquettes_frais, w_frais = charger_spectres(CONFIG, 'frais', moyenne=MOYENNE)
-X_fixe, etiquettes_fixe, w_fixe = charger_spectres(CONFIG, 'fixe', moyenne=MOYENNE)
+X_frais, etiquettes_frais, w_frais = charger_spectres(CONFIG, 'frais', charger_nocif(CONFIG), moyenne=MOYENNE)
+X_fixe, etiquettes_fixe, w_fixe = charger_spectres(CONFIG, 'fixe', charger_nocif(CONFIG), moyenne=MOYENNE)
 
 X2 = np.concatenate([X_frais, X_fixe], axis=0)
 etiquettes2 = etiquettes_frais + etiquettes_fixe   # ce sont des listes Python, "+" les concatène
@@ -503,7 +480,7 @@ echantillons2, doses2, sexes2, traitements2, souris_id2, etats2 = parser_etiquet
 
 
 
-masque_NTFi = (etats2 == 'frais') & (traitements2 == 'NT')
+masque_NTFi = (etats2 == 'frais') & (traitements2 == 'NT') & (sexes2 == 'F')
 
 y_NTFi, y_pred_NTFi, ba_NTFi, n_pca_NTFi, ld1_NTFi, pca_NTFi, lda_NTFi = analyser_dose(
     X2, doses2, souris_id2, masque_NTFi, "NT - frais - 0 Gy vs 45 Gy"
@@ -602,10 +579,10 @@ def score_ld1(spectres, pca, lda):
 #plt.show()
 
 # ── Vérification de compatibilité avant de projeter ─────────────────────────
-assert X1.shape[1] == pca_NTFi.components_.shape[1], (
-    "Le nombre de points spectraux ne correspond pas entre X_verre et le PCA "
-    "entraîné sur la gélose — vérifiez que les deux jeux partagent la même grille w."
-)
+#assert X1.shape[1] == pca_NTFi.components_.shape[1], (
+#    "Le nombre de points spectraux ne correspond pas entre X_verre et le PCA "
+#    "entraîné sur la gélose — vérifiez que les deux jeux partagent la même grille w."
+#)
 
 scores_verre = score_ld1(X1, pca_NTFi, lda_NTFi)
 

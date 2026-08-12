@@ -159,19 +159,19 @@ i_s_moy = np.mean(i_s_arr, axis=0)
 
 std_s = np.std(i_s_arr, axis=0)
 
+wg1, ip1z1 = traiter_acquisitions_gellose(lecteur_données('batch#1', 'petri1'))
+i_corr1 = soustraire_spectre(w, i_p1z1, w, i_s_moy, ordre_baseline=1, fenetres_fit=None)
+i_corr2 = soustraire_spectre(w, i_p1z1, w, i_s_moy, ordre_baseline=2, fenetres_fit=None)
 
-i_corr = soustraire_spectre(w, i_p1z1, w, i_s_moy, ordre_baseline=1, fenetres_fit=None)
 
 
+plt.plot(w, i_s_moy, label='Spectre gélose moyenné', color='xkcd:royal blue', lw=0.8)
+up = i_s_moy + std_s
+low = i_s_moy - std_s
+plt.fill_between(w, low, up, color='xkcd:royal blue', alpha=0.2)
 
-#plt.plot(w, i_s_moy, label='Spectre gélose moyenné', color='xkcd:royal blue', lw=0.8)
-#up = i_s_moy + std_s
-#low = i_s_moy - std_s
-#plt.fill_between(w, low, up, color='xkcd:royal blue', alpha=0.2)
-
-plt.plot(w, i_corr, label='corrigé')
-plt.plot(w, i_p1z1, label='pas corrigé (avec gélose)')
-plt.plot(w, i_s_moy, label='spectre moyen de la gélose')
+plt.plot(w, i_corr1, label='corrigé')
+plt.plot(w, i_p1z1, label='non corrigé')
 
 plt.title('Petri 2 z1')
 plt.xlabel('Raman shift (cm⁻¹)')
@@ -179,3 +179,4 @@ plt.ylabel('Intensity')
 plt.legend()
 plt.tight_layout()
 plt.show()
+

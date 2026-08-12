@@ -406,22 +406,18 @@ def traiter_acquisitions_verre(liste_fichiers, traiter_etalon=True, als=True, bu
     i_verre_corr = corriger_motif_fixe(raman_shift_to_nm(wn_verre, 785), i_verre, raman_shift_to_nm(wn_ref, 785), t_lambda)
 
     if traiter_etalon:
-        #spectre sans rayon cosmiques et sans étalon
         i_corr_F = corriger_motif_fixe(raman_shift_to_nm(wn, 785), i, raman_shift_to_nm(wn_ref, 785), t_lambda)
 
-        if als==True:
-            #spectre sans rayon cosmiques, sans étalon et sans fluorescence
-            i_corr_SF = corriger_fluorescence_als(i_corr_F, lam=lam)
+        if als == True:
+            i_corr_SF, baseline = corriger_fluorescence_als(i_corr_F, lam=lam)   # ← dépaqueter ici
         else:
             i_corr_SF = corriger_fluorescence(i_corr_F, min_bubble_widths=bubblewidth)
 
-        #spectre sans rayon cosmiques, sans étalon, sans fluorescence et sans verre
         intensite = soustraire_spectre(wn, i_corr_SF, wn_verre, i_verre_corr)
 
     else:
-        if als ==True:
-            i_SF = corriger_fluorescence_als(i)
-
+        if als == True:
+            i_SF, baseline = corriger_fluorescence_als(i)   # ← dépaqueter ici aussi
         else:
             i_SF = corriger_fluorescence(i)
         intensite = soustraire_spectre(wn, i_SF, wn_verre, i_verre_corr)
@@ -600,3 +596,27 @@ def lecteur_gelose(batch, petri):
         return []
 
     return tous_les_fichiers
+
+racine2 = r"\\cafeine3.crulrg.ulaval.ca\Goliath\Goliath\labdata\dcclab\surya\exp_1"
+
+def extraire_fichiers_jour_2(jour, petri, souris, zone):
+    dossier = os.path.join(racine2, jour, "raman", petri)
+
+    if petri == 'petri1' and souris == 'souris1':
+        pattern = os.path.join(dossier, f"{souris}*")
+
+    else:
+        pattern = os.path.join(dossier, f"{souris}*{zone}*")
+
+    dossiers_trouves = sorted(glob.glob(pattern))
+    
+    if not dossiers_trouves:
+        #print(f"Pour le {jour} la {zone} de la {souris} du {petri} n'existe pas")
+        return []
+
+    fichiers_zone = sorted(glob.glob(os.path.join(dossiers_trouves[0], "*.txt")))
+    #print(f'Fichiers de la {zone} du {petri} du {jour} : {fichiers_zone}')
+    
+    return fichiers_zone
+
+extraire_fichiers_jour_2("jour2", "petri1", "souris1", "zone1")
