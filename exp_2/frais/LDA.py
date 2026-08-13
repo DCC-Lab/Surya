@@ -25,9 +25,14 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.model_selection import LeaveOneGroupOut, cross_val_predict
 from sklearn.metrics import classification_report, balanced_accuracy_score, ConfusionMatrixDisplay
 
-from extract_data import traiter_acquisitions_gellose, lecteur_données_frais, lecteur_données_fixes, lecteur_données_moy, soustraire_spectre, lecteur_gelose
+from extract_data import adjust_spectrum, extract_frais, extract_fixe, lecteur_données_moy_frais, lecteur_données_moy_fixe
 
-
+lecteurs = {
+    'frais':extract_frais,
+    'fixe':extract_fixe,
+    'moyenfrais':lecteur_données_moy_frais,
+    'moyenfixe': lecteur_données_moy_fixe
+}
 
 
 
@@ -35,58 +40,8 @@ from extract_data import traiter_acquisitions_gellose, lecteur_données_frais, l
 # ────────────────────────────────────────────────────────────────────────────
 # CONFIGURATION
 # ────────────────────────────────────────────────────────────────────────────
-CONFIG = {
-    'batch#1': {
-        'petri1':  ('S48-G', 45, 'FNT'),
-        'petri2':  ('S48-D', 0,  'FNT'),
-        'petri3':  ('S38-G', 45, 'FNT'),
-        'petri4':  ('S38-D', 0,  'FNT'),
-        'petri5':  ('S40-G', 45, 'FNT'),
-        'petri6':  ('S40-D', 0,  'FNT'),
-        'petri7':  ('S47-G', 45, 'FNT'),
-        'petri8':  ('S47-D', 0,  'FNT'),
-        # 'petri9':  ('S39-G', 0,  'FNT'),
-        # 'petri10': ('S39-D', 0,  'FNT'),
-    },
-    'batch#2': {
-        'petri11': ('S45-G', 45, 'F+P'),
-        'petri12': ('S45-D', 0,  'F+P'),
-        'petri13': ('S41-G', 45, 'F+P'),
-        'petri14': ('S41-D', 0,  'F+P'),
-        'petri15': ('S42-G', 45, 'F+P'),
-        'petri16': ('S42-D', 0,  'F+P'),
-        'petri17': ('S44-G', 45, 'F+P'),
-        'petri18': ('S44-D', 0,  'F+P'),
-        'petri19': ('S46-G', 45, 'F+P'),
-        'petri20': ('S46-D', 0,  'F+P'),
-    },
-     'batch#3': {
-         'petri21': ('S33-G', 45, 'MNT'),
-         'petri22': ('S33-D', 0,  'MNT'),
-         'petri23': ('S37-G', 45, 'MNT'),
-         'petri24': ('S37-D', 0,  'MNT'),
-         'petri25': ('S30-G', 45, 'MNT'),
-         'petri26': ('S30-D', 0,  'MNT'),
-         'petri27': ('S32-G', 45, 'M+P'),
-         'petri28': ('S32-D', 0,  'M+P'),
-         'petri29': ('S36-G', 45, 'M+P'),
-         'petri30': ('S36-D', 0,  'M+P'),
-         'petri31': ('S27-G', 45, 'M+P'),
-         'petri32': ('S27-D', 0,  'M+P'),
-    },
-    #'batch#4': {
-    #     'petri33': ('S29-G', 0,  'MNT'),
-    #     'petri34': ('S29-D', 0,  'MNT'),
-    #     'petri35': ('S31-G', 45, 'MNT'),
-    #     'petri36': ('S31-D', 0,  'MNT'),
-    #     'petri37': ('S34-G', 45, 'M+P'),
-    #     'petri38': ('S34-D', 0,  'M+P'),
+from config import CONFIG
 
-    # },
-}
-
-MOYENNE = False   # True -> une valeur moyennée par pétri (lecteur_données_moy)
-                  # False -> 3 spectres par pétri, un par zone (z1/z2/z3)
 
 N_MAX_COMPOSANTES = 11  # borne supérieure explorée par le test de sélection
 
@@ -95,7 +50,7 @@ N_MAX_COMPOSANTES = 11  # borne supérieure explorée par le test de sélection
 # ────────────────────────────────────────────────────────────────────────────
 # CHARGEMENT DES DONNÉES
 # ────────────────────────────────────────────────────────────────────────────
-def charger_spectres(config, etat, i_nocif, moyenne=False):
+def charger_spectres(config, etat):
     """Charge tous les spectres et les étiquettes
     """
     spectres, etiquettes = [], []
@@ -103,50 +58,30 @@ def charger_spectres(config, etat, i_nocif, moyenne=False):
 
     for batch, petris in config.items():
         for petri, (echantillon, dose, type_) in petris.items():
-            if moyenne:
-                a_lire = [(None, lecteur_données_moy(batch, petri))]
-            elif etat == 'frais':
-                a_lire = [(z, lecteur_données_frais(batch, petri, z)) for z in ['z1', 'z2', 'z3']]
-                etat = 'frais'
+            if 'moyenne' in etat:
+                a_lire = [(None, lecteurs[etat](batch, petri))]
             else:
-                a_lire = [(z, lecteur_données_fixes(batch, petri, z)) for z in ['z1', 'z2', 'z3']]
-                etat = 'fixe'
+                a_lire = [(z, lecteurs[etat](batch, petri, z)) for z in ['z1', 'z2', 'z3']]
 
             for zone, liste_fichiers in a_lire:
                 if not liste_fichiers:
                     continue
 
-                w_local, i = traiter_acquisitions_gellose(liste_fichiers)
+                w_local, i = adjust_spectrum(liste_fichiers, retirer_nocif=True)
                 if w_local is None or i is None:
                     continue
                 if not np.isfinite(i).all():
                     print(f"NaN/Inf : {echantillon} {zone or ''}, {petri}, {batch} — ignoré")
                     continue
 
-                i_corr = soustraire_spectre(w_local, i, w_local, i_nocif)
-
                 w = w_local
                 suffixe = f"_{zone}" if zone else ""
-                spectres.append(i_corr)
+                spectres.append(i)
                 etiquettes.append(f"{echantillon}{suffixe}_{dose}{type_}_{etat}")
 
     return np.array(spectres), etiquettes, w
 
 
-def charger_nocif(config):
-    i_s = []
-
-    for batch, petris in config.items():
-        for petri, (echantillon, dose, type_) in petris.items():
-            fichiers = lecteur_gelose(batch, petri)
-            if not fichiers:
-                continue
-            w, i = traiter_acquisitions_gellose(fichiers)
-            i_s.append(i)
-            if not i_s:
-                raise ValueError("Aucun spectre de gélose (nocif) n'a pu être chargé.")
-            i_arr = np.array(i_s)
-    return np.mean(i_arr, axis=0)
 
 def parser_etiquettes(etiquettes):
     """Extrait échantillon, dose, sexe, traitement, id souris, état (frais/fixe), zone."""
@@ -231,7 +166,6 @@ En résumé : c'est une recherche du nombre optimal de composantes PCA, en obser
 
 
 
-
 def evaluer_lda(X_sub, y, groupes, n_pca, titre):
     """Pipeline PCA+LDA, entièrement re-fit à chaque pli LeaveOneGroupOut."""
     pipe = Pipeline([
@@ -247,48 +181,6 @@ def evaluer_lda(X_sub, y, groupes, n_pca, titre):
     print(f"Balanced accuracy : {ba:.1%}\n")
 
     return y_pred, ba
-
-# ════════════════════════════════════════════════════════════════════════════
-# Analyse dose (0gy vs 45gy)
-# ════════════════════════════════════════════════════════════════════════════
-def analyser_dose(X, doses, souris_id, masque1, masque2, titre_suffixe, n_max=N_MAX_COMPOSANTES):
-
-    X_tot = np.array()
-    X1 = X[masque1]
-    X2 = X[masque2]
-    X_sub = X_tot.concatenate([X1, X2], axis=0)
-
-
-    y_sub = np.array([f"{d}gy" for d in doses[masque1]])
-    groupes_sub = souris_id[masque1]
-
-    n_pca = choisir_n_composantes(X_sub, y_sub, groupes_sub, n_max,
-                                   f"Choix N_PCA — {titre_suffixe}")
-
-    y_pred, ba = evaluer_lda(X_sub, y_sub, groupes_sub, n_pca, f"DOSE — {titre_suffixe}")
-
-    # La PCA/LDA "finales" (fit sur tout X_sub) servent uniquement à reconstruire
-    # le spectre discriminant LD1 — pas à évaluer la performance (ba vient de la CV ci-dessus)
-    pca = PCA(n_components=n_pca)
-    X_pca = pca.fit_transform(X_sub)
-    lda = LinearDiscriminantAnalysis()
-    X_lda = lda.fit_transform(X_pca, y_sub)   # (n_échantillons, 1) — 2 classes
-
-    return y_sub, y_pred, ba, n_pca, X_lda[:, 0], pca, lda
-
-def analyser_traitement(X, traitements, souris_id, masque, titre_suffixe):
-    X_sub = X[masque]
-    y_sub = traitements[masque]          # ← on compare NT vs +P, pas 0gy vs 45gy
-    groupes_sub = souris_id[masque]
-
-    n_pca = choisir_n_composantes(X_sub, y_sub, groupes_sub, N_MAX_COMPOSANTES,
-                                   f"Choix N_PCA — {titre_suffixe}")
-
-    pca = PCA(n_components=n_pca)
-    X_pca = pca.fit_transform(X_sub)
-    y_pred, ba = evaluer_lda(X_pca, y_sub, groupes_sub, f"TRAITEMENT — {titre_suffixe}")
-
-    return y_sub, y_pred, ba, n_pca
 
 
 def entrainer_lda(X, y_labels, souris_id, masque, titre_suffixe, n_max=N_MAX_COMPOSANTES):
@@ -390,8 +282,8 @@ def etiquette_courte(id_souris, zone):
 
 
 # ── Chargement des deux états ──────────────────────────────────────────────
-X_frais, etiquettes_frais, w_frais = charger_spectres(CONFIG, 'frais', charger_nocif(CONFIG), moyenne=MOYENNE)
-X_fixe, etiquettes_fixe, w_fixe = charger_spectres(CONFIG, 'fixe', charger_nocif(CONFIG), moyenne=MOYENNE)
+X_frais, etiquettes_frais, w_frais = charger_spectres(CONFIG, 'frais')
+X_fixe, etiquettes_fixe, w_fixe = charger_spectres(CONFIG, 'fixe')
 
 X = np.concatenate([X_frais, X_fixe], axis=0)
 etiquettes = etiquettes_frais + etiquettes_fixe   # ce sont des listes Python, "+" les concatène
@@ -399,48 +291,81 @@ w = w_frais   # en supposant que w_frais == w_fixe (mêmes wavenumbers pour les 
 
 echantillons, doses, sexes, traitements, souris_id, etats, zones = parser_etiquettes(etiquettes)
 
-
-
-
-# étiquette de dose sous forme de chaîne, pour tout le dataset
 y_dose = np.array([f"{d}gy" for d in doses])
 
+# À définir une seule fois, en dehors de la fonction (au niveau du module)
+_fig_ld1, _ax_ld1 = None, None
 
 
-masque_NTFi = (etats == 'frais') & (traitements == 'NT') & (sexes == 'F')
+def matrice_confusion(masque, discriminant, titre):
+    global _fig_ld1, _ax_ld1
 
-y_NTFi, y_pred_NTFi, ba_NTFi, n_pca_NTFi, ld1_NTFi, pca_NTFi, lda_NTFi = entrainer_lda(
-    X, y_dose, souris_id, masque_NTFi, "NT - Frais femelles - 0 Gy vs 45 Gy"
-)
+    if discriminant == 'dose':
+        y_labels = y_dose
+        ordre_classes = ["0gy", "45gy"]
+        display_labels = ["Non-irradiated", "Irradiated"]
+    else:
+        y_labels = traitements
+        ordre_classes = ["+P", "NT"]
+        display_labels = ["Pansement", "Non traité"]
+
+    y, y_pred, ba, n_pca, ld1, pca, lda = entrainer_lda(X, y_labels, souris_id, masque, titre)
+
+    fig1, ax1 = plt.subplots(figsize=(6, 5))
+    ConfusionMatrixDisplay.from_predictions(
+        y, y_pred, ax=ax1,
+        labels=ordre_classes,
+        colorbar=True,
+        normalize='true',
+        im_kw={'vmin': 0, 'vmax': 1},
+        cmap='RdPu',
+        display_labels=display_labels
+    )
+    ax1.set_title(f" {titre} - Effet {discriminant} - ({n_pca} comp., BA={ba:.1%})")
+    plt.tight_layout()
+    plt.show()
 
 
 
+    return (y, y_pred, ba, n_pca, ld1, pca, lda, f'Effet {discriminant}')
 
-masque_NTFr = (etats == 'frais') & (traitements == 'NT')
 
-y_NTFr, y_pred_NTFr, ba_NTFr, n_pca_NTFr, ld1_NTFr, pca_NTFr, lda_NTFr = entrainer_lda(
-    X, y_dose, souris_id, masque_NTFr, "NT - Frais- sexe confondu - 0 Gy vs 45 Gy "
-)
+
+def afficher_ld1(info1, titre, info2=None):
+    y1, y_pred1, ba1, n_pca1, ld1_1, pca1, lda1, titre1 = info1
+    disc1 = pca1.components_.T @ lda1.scalings_[:, 0]
+    disc1 = disc1 / np.linalg.norm(disc1)
+
+    fig, ax = plt.subplots(figsize=(11, 6))
+
+    ax.plot(w, disc1, label=titre1, color='xkcd:scarlet', lw=1.2)
+
+    if info2 != None:
+        y2, y_pred2, ba2, n_pca2, ld1_2, pca2, lda2, titre2 = info2
+        disc2 = pca2.components_.T @ lda2.scalings_[:, 0]
+        disc2 = disc2 / np.linalg.norm(disc2)
+
+        ax.plot(w, disc2, label=titre2, color='xkcd:blue', lw=1.2)
+
+    ax.axhline(0, color='grey', lw=0.5)
+    ax.set_title(titre)
+    #annoter_pics(ax, w, disc_NTFi, n_pics=50, couleur='black')
+    #annoter_pics(ax, w, disc_NTFr, n_pics=50, couleur='black')
+    ax.legend()
+    ax.set_xlabel("Raman shift(cm⁻¹)")
+    ax.set_ylabel("LD1 wheight")
+    plt.tight_layout()
+    plt.show()
+
+
+
 
 
 
 # ════════════════════════════════════════════════════════════════════════
 # FIGURE 1 — Matrice de confusion (avec colorbar)
 # ════════════════════════════════════════════════════════════════════════
-fig1, ax1 = plt.subplots(figsize=(6, 5))
 
-ConfusionMatrixDisplay.from_predictions(
-    y_NTFi, y_pred_NTFi, ax=ax1,
-    colorbar=True,              # ← gradient affiché
-    normalize='true',
-    im_kw={'vmin': 0, 'vmax': 1}, 
-    cmap='RdPu',
-    display_labels=["Non-irradiated", "Irradiated"]
-)
-ax1.set_title(f"Effect of irradiation - female fresh ({n_pca_NTFi} comp., BA={ba_NTFi:.1%})")
-
-plt.tight_layout()
-plt.show()
 
 
 def score_ld1(spectres, pca, lda):
@@ -511,52 +436,7 @@ def score_ld1(spectres, pca, lda):
 #plt.show()
 
 
-# ════════════════════════════════════════════════════════════════════════
-# FIGURE 1 — Matrice de confusion (avec colorbar)
-# ════════════════════════════════════════════════════════════════════════
-fig1, ax1 = plt.subplots(figsize=(6, 5))
 
-ConfusionMatrixDisplay.from_predictions(
-    y_NTFr, y_pred_NTFr, ax=ax1,
-    colorbar=True,              # ← gradient affiché
-    normalize='true',
-    im_kw={'vmin': 0, 'vmax': 1}, 
-    cmap='RdPu',
-    display_labels=["Non-irradiated", "Irradiated"]
-)
-ax1.set_title(f"Effect of irradiation - female fresh ({n_pca_NTFr} comp., BA={ba_NTFr:.1%})")
-
-plt.tight_layout()
-plt.show()
-
-
-
-
-
-
-# ════════════════════════════════════════════════════════════════════════
-# FIGURE 2 — Spectre discriminant LD1
-# ════════════════════════════════════════════════════════════════════════
-disc_NTFi = pca_NTFi.components_.T @ lda_NTFi.scalings_[:, 0]
-disc_NTFi = disc_NTFi / np.linalg.norm(disc_NTFi)   # normalisation (optionnel mais cohérent avec vos autres figures)
-
-disc_NTFr = pca_NTFr.components_.T @ lda_NTFr.scalings_[:, 0]
-disc_NTFr = disc_NTFr / np.linalg.norm(disc_NTFr)   # normalisation (optionnel mais cohérent avec vos autres figures)
-
-fig2, ax2 = plt.subplots(figsize=(11, 6))
-
-ax2.plot(w, disc_NTFi, label='Effet irradiation femelles', color='xkcd:scarlet', lw=1.2)
-ax2.plot(w, disc_NTFr, label='Effet irradiation sexes confondus', color='tab:green', lw=1.2)
-ax2.axhline(0, color='grey', lw=0.5)
-ax2.set_xlabel("Raman shift(cm⁻¹)")
-ax2.set_ylabel("LD1 wheight")
-ax2.set_title("Effet de l'irradiation femelles vs effet de l'irradiation sexes confondus")
-#annoter_pics(ax2, w, disc_NTFi, n_pics=50, couleur='black')
-#annoter_pics(ax2, w, disc_NTFr, n_pics=50, couleur='black')
-ax2.legend()
-
-plt.tight_layout()
-plt.show()
 
 
 

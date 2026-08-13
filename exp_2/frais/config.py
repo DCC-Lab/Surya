@@ -37,13 +37,12 @@ CONFIG = {
          'petri31': ('S27-G', 45, 'M+P'),
          'petri32': ('S27-D', 0,  'M+P'),
      },
-    'batch#4': {
-         'petri33': ('S29-G', 0,  'MNT'),
-         'petri34': ('S29-D', 0,  'MNT'),
-         'petri35': ('S31-G', 45, 'MNT'),
-         'petri36': ('S31-D', 0,  'MNT'),
-         'petri37': ('S34-G', 45, 'M+P'),
-         'petri38': ('S34-D', 0,  'M+P'),
-
-     },
+    #'batch#4': {
+    #     'petri33': ('S29-G', 0,  'MNT'),
+    #     'petri34': ('S29-D', 0,  'MNT'),
+    #     'petri35': ('S31-G', 45, 'MNT'),
+    #     'petri36': ('S31-D', 0,  'MNT'),
+    #     'petri37': ('S34-G', 45, 'M+P'),
+    #     'petri38': ('S34-D', 0,  'M+P'),
+    # },
 }
