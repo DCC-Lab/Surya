@@ -443,7 +443,7 @@ def supprimer_fluorescence_als(intensite, lam=1e6, p=0.01, n_iter=15):
 
     intensite_corrigee = intensite - baseline
 
-    return intensite_corrigee
+    return intensite_corrigee, baseline
 
 
 
@@ -453,7 +453,7 @@ def supprimer_fluorescence_als(intensite, lam=1e6, p=0.01, n_iter=15):
 
 t_lambda, lisse = caracteriser_motif_fixe()
 
-def correction_data(liste_fichiers, traiter_etalon=True, als=True, bubblewidth=None, lam=1e6, p=0.05):
+def correction_data(liste_fichiers, traiter_etalon=True, als=True, bubblewidth=None, lam=1e6, p=0.01):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
     Soustrait le spectre du verre et corrige la fluorescence.
@@ -467,16 +467,16 @@ def correction_data(liste_fichiers, traiter_etalon=True, als=True, bubblewidth=N
         #spectre sans rayon cosmiques et sans étalon
         i_corr_F = corriger_motif_fixe(w, i, t_lambda)
         if als==True:
-            intensite = supprimer_fluorescence_als(i_corr_F, lam=lam, p=p)
+            intensite, baseline = supprimer_fluorescence_als(i_corr_F, lam=lam, p=p)
         else:
             intensite = supprimer_fluorescence(i_corr_F, min_bubble_widths=bubblewidth)
     else:
         if als==True:
-            intensite = supprimer_fluorescence_als(i, lam=lam, p=p)
+            intensite, baseline = supprimer_fluorescence_als(i, lam=lam, p=p)
         else:
             intensite = supprimer_fluorescence(i, min_bubble_widths=bubblewidth)
     
-    return w, intensite
+    return w, intensite, baseline
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────────
@@ -554,7 +554,7 @@ def charger_nocif(config):
             fichiers = extract_gelose(batch, petri)
             if not fichiers:
                 continue
-            w, i = correction_data(fichiers)
+            w, i, baseline = correction_data(fichiers)
             i_s.append(i)
             if not i_s:
                 raise ValueError("Aucun spectre de gélose (nocif) n'a pu être chargé.")
@@ -564,8 +564,8 @@ def charger_nocif(config):
 i_arr_nocif = charger_nocif(CONFIG)
 
 def adjust_spectrum(list_fich_echantillon, i_nocif=i_arr_nocif, retirer_nocif=True, wn_min=600, wn_max=3000):
-    w, i = correction_data(list_fich_echantillon)
-    if soustraire_spectre:
+    w, i, baseline = correction_data(list_fich_echantillon)
+    if retirer_nocif:
         i_corr = soustraire_spectre(w, i, w, i_nocif)
     else:
         i_corr = i
@@ -579,13 +579,14 @@ def adjust_spectrum(list_fich_echantillon, i_nocif=i_arr_nocif, retirer_nocif=Tr
     return w_masque, i_nrml
 
 
-w1, i1 = traiter_acquisitions(extract_frais('batch#1', 'petri1', 'z1'))
-w2, i2 = correction_data(extract_frais('batch#1', 'petri1', 'z1'))
-w3, i3 = adjust_spectrum(extract_frais('batch#1', 'petri1', 'z1'))
+w1, i1, baseline1 = correction_data(extract_frais('batch#1', 'petri1', 'z1'), traiter_etalon=True, als=True, bubblewidth=None)
+w2, i2 = traiter_acquisitions(extract_frais('batch#1', 'petri1', 'z1'))
+w3, i3, baseline2 = correction_data(extract_frais('batch#1', 'petri1', 'z1'), traiter_etalon=True, als=True, bubblewidth=None, lam=1e7, p=0.01)
 
-plt.plot(w1, i1, label=1)
-plt.plot(w2, i2, label=2)
-plt.plot(w3, i3, label=3)
+#plt.plot(w1, i1, label=1)
+plt.plot(w1, baseline, label='1')
+plt.plot(w2, i2, label='2')
+plt.plot(w3, baseline2, label='3')
 plt.legend()
 plt.show()
     

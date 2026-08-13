@@ -25,7 +25,7 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.model_selection import LeaveOneGroupOut, cross_val_predict
 from sklearn.metrics import classification_report, balanced_accuracy_score, ConfusionMatrixDisplay
 
-from extract_data import adjust_spectrum, extract_frais, extract_fixe, lecteur_données_moy_frais, lecteur_données_moy_fixe, charger_nocif, soustraire_spectre, lecteur_gelose
+from extract_data import adjust_spectrum, extract_frais, extract_fixe, lecteur_données_moy_frais, lecteur_données_moy_fixe
 
 lecteurs = {
     'frais':extract_frais,
@@ -67,7 +67,7 @@ def charger_spectres(config, etat):
                 if not liste_fichiers:
                     continue
 
-                w_local, i = adjust_spectrum(liste_fichiers, soustraire_spectre=True)
+                w_local, i = adjust_spectrum(liste_fichiers, retirer_nocif=True)
                 if w_local is None or i is None:
                     continue
                 if not np.isfinite(i).all():
@@ -297,7 +297,7 @@ y_dose = np.array([f"{d}gy" for d in doses])
 _fig_ld1, _ax_ld1 = None, None
 
 
-def matrice_confusion(masque, discriminant, titre, graph=False, couleur=None, nouvelle_figure_ld1=False):
+def matrice_confusion(masque, discriminant, titre):
     global _fig_ld1, _ax_ld1
 
     if discriminant == 'dose':
@@ -321,37 +321,43 @@ def matrice_confusion(masque, discriminant, titre, graph=False, couleur=None, no
         cmap='RdPu',
         display_labels=display_labels
     )
-    ax1.set_title(f" {titre} - Effet {discriminant} - {masque} ({n_pca} comp., BA={ba:.1%})")
+    ax1.set_title(f" {titre} - Effet {discriminant} - ({n_pca} comp., BA={ba:.1%})")
     plt.tight_layout()
     plt.show()
 
-    disc = None
-    if graph:
-        # Reconstruire le spectre discriminant LD1
-        disc = pca.components_.T @ lda.scalings_[:, 0]
-        disc = disc / np.linalg.norm(disc)
-
-        # Créer une nouvelle figure LD1 seulement si on n'en a pas déjà une
-        # (ou si l'utilisateur le demande explicitement)
-        if nouvelle_figure_ld1 or _ax_ld1 is None:
-            _fig_ld1, _ax_ld1 = plt.subplots(figsize=(11, 6))
-            _ax_ld1.axhline(0, color='grey', lw=0.5)
-            _ax_ld1.set_xlabel("Raman shift (cm⁻¹)")
-            _ax_ld1.set_ylabel("LD1 weight")
-            _ax_ld1.set_title("Spectres discriminants LD1")
-
-        _ax_ld1.plot(w, disc, label=titre, color=couleur, lw=1.2)
-        _ax_ld1.legend()
-
-    return y, y_pred, ba, n_pca, ld1, pca, lda, disc
 
 
-def afficher_ld1():
-    """À appeler une fois que tous les spectres voulus ont été ajoutés."""
-    if _fig_ld1 is not None:
-        plt.figure(_fig_ld1.number)
-        plt.tight_layout()
-        plt.show()
+    return (y, y_pred, ba, n_pca, ld1, pca, lda, f'Effet {discriminant}')
+
+
+
+def afficher_ld1(info1, titre, info2=None):
+    y1, y_pred1, ba1, n_pca1, ld1_1, pca1, lda1, titre1 = info1
+    disc1 = pca1.components_.T @ lda1.scalings_[:, 0]
+    disc1 = disc1 / np.linalg.norm(disc1)
+
+    fig, ax = plt.subplots(figsize=(11, 6))
+
+    ax.plot(w, disc1, label=titre1, color='xkcd:scarlet', lw=1.2)
+
+    if info2 != None:
+        y2, y_pred2, ba2, n_pca2, ld1_2, pca2, lda2, titre2 = info2
+        disc2 = pca2.components_.T @ lda2.scalings_[:, 0]
+        disc2 = disc2 / np.linalg.norm(disc2)
+
+        ax.plot(w, disc2, label=titre2, color='xkcd:blue', lw=1.2)
+
+    ax.axhline(0, color='grey', lw=0.5)
+    ax.set_title(titre)
+    #annoter_pics(ax, w, disc_NTFi, n_pics=50, couleur='black')
+    #annoter_pics(ax, w, disc_NTFr, n_pics=50, couleur='black')
+    ax.legend()
+    ax.set_xlabel("Raman shift(cm⁻¹)")
+    ax.set_ylabel("LD1 wheight")
+    plt.tight_layout()
+    plt.show()
+
+
 
 
 
