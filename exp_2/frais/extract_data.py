@@ -155,7 +155,7 @@ def extract_frais(batch, petri, zone):
 
     return tous_les_fichiers
 
-def extract_fixed(batch, petri, zone):
+def extract_fixe(batch, petri, zone):
     dossier = os.path.join(racine2, batch, 'fixe', petri)
     pattern = os.path.join(dossier, f"*{zone}*.txt")
     tous_les_fichiers = sorted(glob.glob(pattern))
@@ -167,8 +167,16 @@ def extract_fixed(batch, petri, zone):
     return tous_les_fichiers
 
 
-def lecteur_données_moy(batch, petri):
+def lecteur_données_moy_frais(batch, petri, zone):
     dossier = os.path.join(racine2, batch, 'frais', petri)
+    pattern = os.path.join(dossier, f'*z*.txt')
+    tous_les_fichiers= sorted(glob.glob(pattern))
+    if not tous_les_fichiers:
+        return []
+    return tous_les_fichiers
+
+def lecteur_données_moy_fixe(batch, petri, zone):
+    dossier = os.path.join(racine2, batch, 'fixe', petri)
     pattern = os.path.join(dossier, f'*z*.txt')
     tous_les_fichiers= sorted(glob.glob(pattern))
     if not tous_les_fichiers:
@@ -440,7 +448,7 @@ def supprimer_fluorescence_als(intensite, lam=1e6, p=0.01, n_iter=15):
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────────
-# AVERAGE DATA FROM FILE LIST + REMOVE STANDARDIZATION + REMOVE FLUORESCENCE
+# AVERAGE DATA FROM FILE LIST + REMOVE STANDARDIZATION EFFECT + REMOVE FLUORESCENCE
 # ──────────────────────────────────────────────────────────────────────────────────────────
 
 t_lambda, lisse = caracteriser_motif_fixe()
@@ -555,9 +563,12 @@ def charger_nocif(config):
 
 i_arr_nocif = charger_nocif(CONFIG)
 
-def adjust_spectrum(list_fich_echantillon, i_nocif=i_arr_nocif, wn_min=600, wn_max=3000):
+def adjust_spectrum(list_fich_echantillon, i_nocif=i_arr_nocif, retirer_nocif=True, wn_min=600, wn_max=3000):
     w, i = correction_data(list_fich_echantillon)
-    i_corr = soustraire_spectre(w, i, w, i_nocif)
+    if soustraire_spectre:
+        i_corr = soustraire_spectre(w, i, w, i_nocif)
+    else:
+        i_corr = i
 
     masque = (w >= wn_min) & (w <= wn_max)
     w_masque, i_masque = w[masque], i_corr[masque]
