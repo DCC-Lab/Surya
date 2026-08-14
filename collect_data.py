@@ -5,6 +5,8 @@ from pathlib import Path
 import subprocess
 import pandas as pd
 import time
+import hashlib, json
+import uuid
 
 """
 This code will read all the spectral files from a root directory and
@@ -21,6 +23,13 @@ if __name__ == "__main__":
     # Start here
 
 """
+
+def cache_name(params, prefix="cache", ext=".pkl"):
+    params['node'] = uuid.getnode()
+    s = json.dumps(params, sort_keys=True, default=str)
+    h = hashlib.sha256(s.encode()).hexdigest()[:16]
+    return f"{prefix}_{h}{ext}"
+
 def get_all_data_file_paths(root, invisible_files = False, progress = True, use_cache = True):
     """
     Get the list of files at a given root directory
@@ -32,10 +41,11 @@ def get_all_data_file_paths(root, invisible_files = False, progress = True, use_
     if not Path(root).exists():
         raise ValueError(f"The path {root} does not exist")
 
-    cache = Path("all_files-cache.txt")
+    cache = cache_name({"root":root,"invisible_files":invisible_files}, prefix="data_files", ext=".txt")
+
     all_files = []
     
-    if use_cache and cache.exists():
+    if use_cache and Path(cache).exists():
         with open(cache, "r", encoding="utf-8") as file_path:
             all_files = file_path.read().splitlines()
             if all_files and all_files[0].startswith(root):
@@ -239,10 +249,12 @@ def get_files_metadata(all_files, header = True, extended = True, use_cache = Tr
     all_properties = []
 
     # If we can use the cache, we do
-    summary = "surya-dataset-description"
-    if use_cache and Path(summary+".pkl").exists():
-        df = pd.read_pickle(Path(summary+".pkl"))
+    cache = cache_name({"root":root,"header":header,"extended":extended}, prefix="files_metadata", ext=".pkl")
+
+    if use_cache and Path(cache).exists():
+        df = pd.read_pickle(Path(cache))
         if set(all_files).issubset(df["file"]):
+            print(f"Cache read from {cache}")
             return df
         # If not, we need to retrieve it
 
@@ -266,6 +278,7 @@ def get_files_metadata(all_files, header = True, extended = True, use_cache = Tr
             properties.update(extended_properties)
         all_properties.append(properties)
 
+
     # A panda dataframe is like an excel file with column titles
     # Put into a Panda dataframe and save everything for review
 
@@ -275,10 +288,13 @@ def get_files_metadata(all_files, header = True, extended = True, use_cache = Tr
     convert_to_int = {"exp","petri","jour", "souris", "index", "dose", "test", "zone", "batch"}
     df = df.astype({c: "Int64" for c in convert_to_int if c in df.columns})
 
+    summary = "surya-dataset-description"
     df.to_excel(summary+".xlsx", index=False)
-    df.to_pickle(summary+".pkl")
-
     print(f"Summary written to {summary}")
+
+    df.to_pickle(cache)
+    print(f"Cache written to {cache}")
+
     return df
 
 def helper_find_root_directory():
@@ -300,8 +316,7 @@ if __name__ == "__main__":
 
     # A panda dataframe is like an excel file with column titles, it is the best structure for data
     # Put into a Panda dataframe and save everything for review
-    df = get_files_metadata(all_files, header = False, extended=False, use_cache = False)
-
+    df = get_files_metadata(all_files, header = True, extended=True, use_cache = True)
 
     # Manual additions to metadata from labbook
     masque = (df['exp'] == 2) & (df['batch'] == 1) & (df['petri'] == 1)
