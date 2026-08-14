@@ -220,3 +220,10 @@ __marimo__/
 .streamlit/secrets.toml
 .DS_Store
 
+all_files-cache.txt
+summary.xlsx
+surya-dataset.xlsx
+surya-dataset-description.pkl
+surya-dataset-description.xlsx
+surya-dataset.pkl
+~$surya-dataset-description.xlsx
