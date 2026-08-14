@@ -125,6 +125,17 @@ def extract_properties_from_path(file):
 
     return properties
 
+def extract_extended_properties_from_path(file):
+    extended_properties = {}
+
+    # Fetch file stats (slow)
+    file_info = Path(file).stat()
+    
+    extended_properties['size_in_bytes'] = file_info.st_size
+    extended_properties['modification_time'] = datetime.datetime.fromtimestamp(file_info.st_mtime)
+
+    return extended_properties
+
 if __name__ == "__main__":
     root = "/Volumes/Labdata/dcclab/surya"
     all_files = get_all_files(root)
@@ -139,11 +150,17 @@ if __name__ == "__main__":
     for i, file in enumerate(all_files):
         if time.time() > next_time:
             print(f"{i} of {count}")
-            next_time = time.time() + 1
+            next_time += 1
 
         properties = extract_properties_from_path(file)
+
+        # This is slow: do only if needed (file size and modification times)
+        #
+        # extended_properties = extract_extended_properties_from_path(file)
+        # properties.update(extended_properties)
+
         all_properties.append(properties)
 
     df = pd.DataFrame(all_properties)
-    df.to_excel("summary.xlsx", index=False)
+    df.to_excel("surya-dataset.xlsx", index=False)
 
