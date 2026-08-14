@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import glob
 import os
-
+from pathlib import Path
 from scipy.signal import savgol_filter
 from scipy.interpolate import UnivariateSpline
 from orpl.baseline_removal import bubblefill
@@ -15,8 +15,22 @@ from scipy.sparse.linalg import spsolve
 # ─────────────────────────────────────────────
 # RACINES
 # ─────────────────────────────────────────────
-racine1 = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\exp_1"
-racine2 = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\exp_2"
+
+# root_local = Path(r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya")
+root_local = Path(r"/Volumes/Goliath/dcclab/surya")
+# root_local = Path(r"/Users/dccote/surya")
+root_cafeine = r"\\cafeine3.crulrg.ulaval.ca\Goliath\Goliath\labdata\dcclab\surya"
+
+
+
+# dir_exp1 = root_local / "exp_1"
+# dir_exp2 = root_local / "exp_2"
+# dir_exp1_frais = root_local / "exp_2"
+
+
+
+racine1 = root_local / "exp_1"
+racine2 = root_local / "exp_2"
 racine3 = r"\\cafeine3.crulrg.ulaval.ca\Goliath\Goliath\labdata\dcclab\surya\exp_1"
 
 # ─────────────────────────────────────────────
@@ -335,16 +349,12 @@ def traiter_acquisitions(liste_fichiers):
 # REMOVE STANDARDIZATION EFFECT
 # ──────────────────────────────────────────────────────────────────────────────────────────
 
-racine = r"C:\Users\chloe\OneDrive - Université Laval\Stage_été_2026\Projet_Surya\exp_1\spectre_lumière_blanche"
-fichiers = sorted(glob.glob(os.path.join(racine, '*.txt')))
-w_ref, i_ref = traiter_acquisitions(fichiers)
-
 def raman_shift_to_nm(shift_cm1, laser_nm):
     nu_laser = 1e7 / laser_nm          # cm^-1
     nu_scattered = nu_laser - shift_cm1  # Stokes
     return 1e7 / nu_scattered           # nm
 
-def caracteriser_motif_fixe(intensite_ref_brute=i_ref, fenetre_lissage=101, ordre_poly=3, methode='savgol'):
+def caracteriser_motif_fixe(intensite_ref_brute=None, fenetre_lissage=101, ordre_poly=3, methode='savgol'):
     """
     Caractérise la fonction de motif fixe t(λ) à partir d'un spectre de
     référence spectralement lisse (ex: verre fluorescent NIST SRM 2241,
@@ -378,7 +388,7 @@ def caracteriser_motif_fixe(intensite_ref_brute=i_ref, fenetre_lissage=101, ordr
     return t_lambda, lisse
  
  
-def corriger_motif_fixe(wn_echantillon, intensite_echantillon, t_lambda, wn_ref=w_ref):
+def corriger_motif_fixe(wn_echantillon, intensite_echantillon, t_lambda, wn_ref=None):
     """
     Applique la correction de motif fixe à un spectre échantillon.
     Interpole t_lambda sur la grille de l'échantillon si nécessaire.
@@ -451,7 +461,6 @@ def supprimer_fluorescence_als(intensite, lam=1e6, p=0.01, n_iter=15):
 # AVERAGE DATA FROM FILE LIST + REMOVE STANDARDIZATION EFFECT + REMOVE FLUORESCENCE
 # ──────────────────────────────────────────────────────────────────────────────────────────
 
-t_lambda, lisse = caracteriser_motif_fixe()
 
 def correction_data(liste_fichiers, traiter_etalon=True, als=True, bubblewidth=None, lam=1e6, p=0.01):
     """
@@ -561,9 +570,13 @@ def charger_nocif(config):
             i_arr = np.array(i_s)
     return np.mean(i_arr, axis=0)
 
-i_arr_nocif = charger_nocif(CONFIG)
+# i_arr_nocif = charger_nocif(CONFIG)
 
-def adjust_spectrum(list_fich_echantillon, i_nocif=i_arr_nocif, retirer_nocif=True, wn_min=600, wn_max=3000):
+def adjust_spectrum(list_fich_echantillon, i_nocif=None, retirer_nocif=True, wn_min=600, wn_max=3000):
+
+    if i_nocif is None:
+        i_nocif = charger_nocif(CONFIG)
+
     w, i, baseline = correction_data(list_fich_echantillon)
     if retirer_nocif:
         i_corr = soustraire_spectre(w, i, w, i_nocif)
@@ -578,17 +591,17 @@ def adjust_spectrum(list_fich_echantillon, i_nocif=i_arr_nocif, retirer_nocif=Tr
 
     return w_masque, i_nrml
 
+# print("Starting code")
+# w1, i1, baseline1 = correction_data(extract_frais('batch#1', 'petri1', 'z1'), traiter_etalon=True, als=True, bubblewidth=None)
+# w2, i2 = traiter_acquisitions(extract_frais('batch#1', 'petri1', 'z1'))
+# w3, i3, baseline2 = correction_data(extract_frais('batch#1', 'petri1', 'z1'), traiter_etalon=True, als=True, bubblewidth=None, lam=1e7, p=0.01)
 
-w1, i1, baseline1 = correction_data(extract_frais('batch#1', 'petri1', 'z1'), traiter_etalon=True, als=True, bubblewidth=None)
-w2, i2 = traiter_acquisitions(extract_frais('batch#1', 'petri1', 'z1'))
-w3, i3, baseline2 = correction_data(extract_frais('batch#1', 'petri1', 'z1'), traiter_etalon=True, als=True, bubblewidth=None, lam=1e7, p=0.01)
-
-#plt.plot(w1, i1, label=1)
-plt.plot(w1, baseline, label='1')
-plt.plot(w2, i2, label='2')
-plt.plot(w3, baseline2, label='3')
-plt.legend()
-plt.show()
+# #plt.plot(w1, i1, label=1)
+# plt.plot(w1, baseline, label='1')
+# plt.plot(w2, i2, label='2')
+# plt.plot(w3, baseline2, label='3')
+# plt.legend()
+# plt.show()
     
 
 
@@ -678,20 +691,12 @@ def tester_als_settings(wn, i_corr_F, combos, wn_min=800, wn_max=2200):
 
 
 
+if __name__ == "__main__":
+    print("Debut lecture donnees")
+    racine = root_local / Path(r"exp_1/spectre_lumière_blanche")
+    fichiers = sorted(glob.glob(os.path.join(racine, '*.txt')))
+    print("Debut traitement acquisitions")
+    w_ref, i_ref = traiter_acquisitions(fichiers)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#extraire_fichiers_jour_2("jour2", "petri1", "souris1", "zone1")
-
+    print("Debut caracteriser motif fixe")
+    t_lambda, lisse = caracteriser_motif_fixe(intensite_ref_brute=i_ref)
