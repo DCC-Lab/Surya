@@ -70,48 +70,59 @@ def extract_properties_from_path(file):
     """
     properties = {}
 
+    def to_int_values(properties):
+        for key, value in properties.items():
+            try:
+                if str(int(value)) == value:
+                    properties[key] = int(value)
+            except:
+                properties[key] = value.lower()
+
+        return properties
+
+
     # Extraction de exp
     pattern = r"exp_?(?P<exp>\d)"
     match = re.search(pattern, file,  re.IGNORECASE)
     if match is not None:
-        properties.update(match.groupdict())
+        properties.update(to_int_values(match.groupdict()))
 
     # Extraction de petri
     pattern = r"petri(?P<petri>\d)"
     match = re.search(pattern, file,  re.IGNORECASE)
     if match is not None:
-        properties.update(match.groupdict())
+        properties.update(to_int_values(match.groupdict()))
 
     # Extraction du jour
     pattern = r"jour(?P<jour>\d+)"
     match = re.search(pattern, file,  re.IGNORECASE)
     if match is not None:
-        properties.update(match.groupdict())
+        properties.update(to_int_values(match.groupdict()))
 
     # Extraction de la souris
     pattern = r"[\W_\d]S(?:ouri).?(?P<souris>\d)"
     match = re.search(pattern, file,  re.IGNORECASE)
     if match is not None:
-        properties.update(match.groupdict())
+        properties.update(to_int_values(match.groupdict()))
 
     # Extraction de la modalite
     pattern = r"(?P<modalite>raman|drs|speckles)"
     match = re.search(pattern, file,  re.IGNORECASE)
     if match is not None:
-        properties.update(match.groupdict())
+        properties.update(to_int_values(match.groupdict()))
 
     # Extraction de la dose
     pattern = r"(?P<dose>\d+)Gy"
     match = re.search(pattern, file,  re.IGNORECASE)
     if match is not None:
-        properties.update(match.groupdict())
+        properties.update(to_int_values(match.groupdict()))
 
 
     # Extraction de la zone
     pattern = r"\W[Zz]o?n?e?(?P<zone>\d+)"
     match = re.search(pattern, file,  re.IGNORECASE)
     if match is not None:
-        properties.update(match.groupdict())
+        properties.update(to_int_values(match.groupdict()))
 
     # Extraction de l'heure d'acquisition'
     pattern = r"__(?P<index>\d+)__(?P<heure>\d+)-(?P<minutes>\d+)-(?P<s>\d+)-(?P<ms>\d+)"
@@ -131,14 +142,14 @@ def extract_properties_from_path(file):
     pattern = r"\WHauteur(?P<hauteur>\d+)"
     match = re.search(pattern, file,  re.IGNORECASE)
     if match is not None:
-        properties.update(match.groupdict())
+        properties.update(to_int_values(match.groupdict()))
 
 
     # Extraction du cote
     pattern = r"-(?P<cote>[DG])-"
     match = re.search(pattern, file,  re.IGNORECASE)
     if match is not None:
-        properties.update(match.groupdict())
+        properties.update(to_int_values(match.groupdict()))
 
     # Extraction du mot test, si present
     pattern = r"tests?"
@@ -150,7 +161,13 @@ def extract_properties_from_path(file):
     pattern = r"(?P<target>white|blanche|dark|black|verre|gel+ose|anneau|adn)"
     match = re.search(pattern, file,  re.IGNORECASE)
     if match is not None:
-        properties.update(match.groupdict())
+        groups = match.groupdict()
+        if "gellose" in groups.values():
+            groups['target'] = "gelose"
+        if "blanche" in groups.values():
+            groups['target'] = "white"
+
+        properties.update(to_int_values(groups))
 
     properties['file'] = file
 
@@ -196,7 +213,7 @@ def extract_header_from_spectral_file(file):
 
 
 if __name__ == "__main__":
-    root = "/Volumes/labdata/dcclab/surya" # Pour DCC
+    root = "/Volumes/Labdata/dcclab/surya" # Pour DCC
     # root = r"\\cafeine3.crulrg.ulaval.ca\Goliath\Goliath\labdata\dcclab\surya" # Pour Chloe
 
     all_files = get_all_files(root)
@@ -225,6 +242,7 @@ if __name__ == "__main__":
 
         all_properties.append(properties)
 
+    # A panda dataframe is like an excel file with column titles
     # Put into a Panda dataframe and save everything for review
     df = pd.DataFrame(all_properties)
     summary = "surya-dataset-description"
@@ -232,3 +250,34 @@ if __name__ == "__main__":
     df.to_pickle(summary+".pkl")
 
     print(f"Summary written to {summary}")
+
+    # How to manipulate a panda Dataframe:
+    
+    print("\n\n== Example : list all columns ==\n")
+    print(df.columns)
+
+    print("\n\n== Example : list exp only ==\n")
+    print(df.exp)
+
+    # Keep only those with exp == 1
+    print("\n\n== Example :  exp_1 only ==\n")
+    print(df[df['exp'] == 1])
+
+    # Keep only those with exp == 1 and jour == 8
+    print("\n\n== Example :  exp_1 only, jour 8 ==\n")
+    print(df[ (df['exp'] == 1)  & (df['jour'] == 8) ])    
+
+    # Keep only those with exp_1 Raman
+    print("\n\n== Example :  exp_1 only, Raman ==\n")
+    print(df[ (df['exp'] == 1)  & (df['modalite'] == 'raman') ])        
+
+    # Keep only those with exp_1 Raman with a dose
+    print("\n\n== Example :  exp_1 only, Raman with dose ==\n")
+    print(df[ (df['exp'] == 1)  & (df['modalite'] == 'raman') & (df['dose'].notna()) ])
+
+
+    print("\n\n== List of all values per key ==\n")
+    for col in df.columns:
+        if col in ['time','file']:
+            continue
+        print(f"{col:20s} ({df[col].nunique()} valeurs) : {sorted(df[col].dropna().unique(), key=str)}")
