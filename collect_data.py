@@ -8,15 +8,20 @@ import time
 
 """
 This code will read all the spectral files from a root directory and
-extract all the metadata about the spectra (mouse, petri, dose, etc...)
+extract all the metadata about the spectra (mouse, petri, dose, etc...).
+
+It will store everything in a Panda Dataframe, which is similar to an Excel file.
+It will try to avoid recomputing everything every time and will keep a "cached" copy
+and use it whenever it is possible.
 
 At the bottom of the file, you will find example code that gets run when running this file.
+You will find many examples on how to filter a DataFrame.
 
 if __name__ == "__main__":
     # Start here
 
 """
-def get_all_data_files(root, invisible_files = False, progress = True, use_cache = True):
+def get_all_data_file_paths(root, invisible_files = False, progress = True, use_cache = True):
     """
     Get the list of files at a given root directory
 
@@ -31,8 +36,8 @@ def get_all_data_files(root, invisible_files = False, progress = True, use_cache
     all_files = []
     
     if use_cache and cache.exists():
-        with open(cache, "r", encoding="utf-8") as file:
-            all_files = file.read().splitlines()
+        with open(cache, "r", encoding="utf-8") as file_path:
+            all_files = file_path.read().splitlines()
             if all_files and all_files[0].startswith(root):
                 print(f"Cache read from {cache}")
             else:
@@ -58,14 +63,14 @@ def get_all_data_files(root, invisible_files = False, progress = True, use_cache
         print(".")
 
         if use_cache:
-            with open(cache, "w", encoding="utf-8") as file:
+            with open(cache, "w", encoding="utf-8") as file_path:
                 for line in all_files:
-                    file.write(line + "\n")
+                    file_path.write(line + "\n")
                 print(f"Cache saved to {cache}. Delete the file if you organize the data differently")
 
     return all_files
 
-def extract_properties_from_path(file):
+def extract_properties_from_path(file_path):
     """
     We match the text of the path with various patterns to extract the metadata,
     which we return in a dictionary
@@ -86,50 +91,50 @@ def extract_properties_from_path(file):
 
     # Extraction de exp
     pattern = r"exp_?(?P<exp>\d)"
-    match = re.search(pattern, file,  re.IGNORECASE)
+    match = re.search(pattern, file_path,  re.IGNORECASE)
     if match is not None:
         properties.update(to_int_values(match.groupdict()))
 
     # Extraction de petri
     pattern = r"petri(?P<petri>\d)"
-    match = re.search(pattern, file,  re.IGNORECASE)
+    match = re.search(pattern, file_path,  re.IGNORECASE)
     if match is not None:
         properties.update(to_int_values(match.groupdict()))
 
     # Extraction du jour
     pattern = r"jour(?P<jour>\d+)"
-    match = re.search(pattern, file,  re.IGNORECASE)
+    match = re.search(pattern, file_path,  re.IGNORECASE)
     if match is not None:
         properties.update(to_int_values(match.groupdict()))
 
     # Extraction de la souris
     pattern = r"[\W_\d]S(?:ouri).?(?P<souris>\d)"
-    match = re.search(pattern, file,  re.IGNORECASE)
+    match = re.search(pattern, file_path,  re.IGNORECASE)
     if match is not None:
         properties.update(to_int_values(match.groupdict()))
 
     # Extraction de la modalite
     pattern = r"(?P<modalite>raman|drs|speckles)"
-    match = re.search(pattern, file,  re.IGNORECASE)
+    match = re.search(pattern, file_path,  re.IGNORECASE)
     if match is not None:
         properties.update(to_int_values(match.groupdict()))
 
     # Extraction de la dose
     pattern = r"(?P<dose>\d+)Gy"
-    match = re.search(pattern, file,  re.IGNORECASE)
+    match = re.search(pattern, file_path,  re.IGNORECASE)
     if match is not None:
         properties.update(to_int_values(match.groupdict()))
 
 
     # Extraction de la zone
     pattern = r"\W[Zz]o?n?e?(?P<zone>\d+)"
-    match = re.search(pattern, file,  re.IGNORECASE)
+    match = re.search(pattern, file_path,  re.IGNORECASE)
     if match is not None:
         properties.update(to_int_values(match.groupdict()))
 
     # Extraction de l'heure d'acquisition'
     pattern = r"__(?P<index>\d+)__(?P<heure>\d+)-(?P<minutes>\d+)-(?P<s>\d+)-(?P<ms>\d+)"
-    match = re.search(pattern, file,  re.IGNORECASE)
+    match = re.search(pattern, file_path,  re.IGNORECASE)
     if match is not None:
         groups = match.groupdict()
 
@@ -143,32 +148,32 @@ def extract_properties_from_path(file):
 
     # Extraction de la hauteur, si presente
     pattern = r"\WHauteur(?P<hauteur>\d+)"
-    match = re.search(pattern, file,  re.IGNORECASE)
+    match = re.search(pattern, file_path,  re.IGNORECASE)
     if match is not None:
         properties.update(to_int_values(match.groupdict()))
 
 
     # Extraction de la fixation
     pattern = r"(?P<fixation>frais|fixe)"
-    match = re.search(pattern, file,  re.IGNORECASE)
+    match = re.search(pattern, file_path,  re.IGNORECASE)
     if match is not None:
         properties.update(to_int_values(match.groupdict()))
 
     # Extraction du cote
     pattern = r"-(?P<cote>[DG])-"
-    match = re.search(pattern, file,  re.IGNORECASE)
+    match = re.search(pattern, file_path,  re.IGNORECASE)
     if match is not None:
         properties.update(to_int_values(match.groupdict()))
 
     # Extraction du mot test, si present
     pattern = r"tests?"
-    match = re.search(pattern, file,  re.IGNORECASE)
+    match = re.search(pattern, file_path,  re.IGNORECASE)
     if match is not None:
         properties['test'] = True
 
     # Extraction de certains keywords, si present
     pattern = r"(?P<keyword>white|blanche|dark|black|verre|gel+ose|anneau|adn)"
-    match = re.search(pattern, file,  re.IGNORECASE)
+    match = re.search(pattern, file_path,  re.IGNORECASE)
     if match is not None:
         groups = match.groupdict()
         if "gellose" in groups.values():
@@ -176,35 +181,38 @@ def extract_properties_from_path(file):
 
         properties.update(to_int_values(groups))
 
-    properties['file'] = file
+    properties['file'] = file_path
 
     return properties
 
-def extract_extended_properties_from_path(file):
+def extract_extended_properties_from_path(file_path):
     """
-    Get more information about the file, but slow.
+    Get more information about the file_path, but slow.
     Returns a dictionary with the properties
     """
     extended_properties = {}
 
-    # Fetch file stats (slow)
-    file_info = Path(file).stat()
-    
-    extended_properties['size_in_bytes'] = file_info.st_size
-    # Others possible
+    # Fetch file_path stats (slow)
+    try:
+        file_info = Path(file_path).stat()
+        
+        extended_properties['size_in_bytes'] = file_info.st_size
+        # Others possible
+    except Exception as e:
+        pass # We just give up if unable to do it
 
     return extended_properties
 
-def extract_header_from_spectral_file(file):
+def extract_header_from_spectral_file(file_path):
     """
     Since we use Ocean Optics Raman QEPro, we read the header of the 
-    file a extract the metadata from the header, which we return in a
+    file_path a extract the metadata from the header, which we return in a
     dictionary
 
     """
     properties = {}
     try:
-        with open(file,"r", encoding="utf-8", errors="ignore") as file:
+        with open(file_path,"r", encoding="utf-8", errors="ignore") as file:
             first_line = file.readline()
             if first_line.startswith("Data from"):
                 # It is a Raman spectral file
@@ -216,9 +224,9 @@ def extract_header_from_spectral_file(file):
                             properties[f"Spectrum:{entry[0]}"] = entry[1]
                     if ">>>>>Begin Spectral Data<<<<<" in line:
                         break
-                        
+
     except Exception as e:
-        print(f"Warning: {path} is not recognized (probably accented characters)")
+        print(f"Warning: {file_path} is not recognized (probably accented characters)")
 
     return properties
 
@@ -236,20 +244,20 @@ def get_files_metadata(all_files, header = True, extended = True, use_cache = Tr
     # We show progress every 2 seconds
     next_progress_print = time.time() + 2
 
-    for i, file in enumerate(all_files):
+    for i, file_path in enumerate(all_files):
         if time.time() > next_progress_print:
             print(f"Processing file {i} of {len(all_files)}")
             next_progress_print += 2
 
-        properties = extract_properties_from_path(file)
+        properties = extract_properties_from_path(file_path)
 
-        # This is slow: they must open and read the file
+        # This is slow: they must open and read the file_path
         if header:
-            header_properties = extract_header_from_spectral_file(file)
+            header_properties = extract_header_from_spectral_file(file_path)
             properties.update(header_properties)
 
         if extended:
-            extended_properties = extract_extended_properties_from_path(file)
+            extended_properties = extract_extended_properties_from_path(file_path)
             properties.update(extended_properties)
         all_properties.append(properties)
 
@@ -274,20 +282,20 @@ def helper_find_root_directory():
                 "/home/dccadmin/labdata/dcclab/surya",
                 "."]
     for path in options:
-        if Path(path).exists() and ("surya" in str(Path(path).resolve())):
+        if Path(path).exists() and ("surya" in str(Path(path).resolve()).lower()):
             return path
 
 if __name__ == "__main__":
     root =  helper_find_root_directory()
 
-    all_files = get_all_data_files(root, use_cache=True)
-    all_files = [ file for file in all_files if file.endswith('txt') ]  # Keep only data files
-    all_files = [ file for file in all_files if "old" not in file]      # exp_2_old is not useful, we remove it
-    all_files = [ file for file in all_files if "archives" not in file] # archives is not useful, we remove it 
+    all_files = get_all_data_file_paths(root, use_cache=True)
+    all_files = [ file_path for file_path in all_files if file_path.endswith('txt') ]  # Keep only data files
+    all_files = [ file_path for file_path in all_files if "old" not in file_path]      # exp_2_old is not useful, we remove it
+    all_files = [ file_path for file_path in all_files if "archives" not in file_path] # archives is not useful, we remove it 
 
     # A panda dataframe is like an excel file with column titles, it is the best structure for data
     # Put into a Panda dataframe and save everything for review
-    df = get_files_metadata(all_files, use_cache = True)
+    df = get_files_metadata(all_files, header = True, extended=True, use_cache = True)
 
     # How to manipulate a panda Dataframe:
     
