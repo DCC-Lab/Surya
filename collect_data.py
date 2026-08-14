@@ -145,6 +145,12 @@ def extract_properties_from_path(file):
         properties.update(to_int_values(match.groupdict()))
 
 
+    # Extraction de la fixation
+    pattern = r"(?P<fixation>frais|fixe)"
+    match = re.search(pattern, file,  re.IGNORECASE)
+    if match is not None:
+        properties.update(to_int_values(match.groupdict()))
+
     # Extraction du cote
     pattern = r"-(?P<cote>[DG])-"
     match = re.search(pattern, file,  re.IGNORECASE)
@@ -246,7 +252,7 @@ if __name__ == "__main__":
     df = pd.DataFrame(all_properties)
 
     # We can force the type of certain columns to be clean
-    KEEP_AS_STR = {"modalite", "time", "cote", "target","file"}
+    KEEP_AS_STR = {"modalite", "time", "cote", "target","file","fixation"}
     df = df.astype({c: "Int64" for c in df.columns if c not in KEEP_AS_STR})
 
     summary = "surya-dataset-description"
@@ -277,6 +283,9 @@ if __name__ == "__main__":
 
     print("\n\n== Example :  exp_1 only, Raman with dose ==\n")
     print(df[ (df['exp'] == 1)  & (df['modalite'] == 'raman') & (df['dose'].notna()) ])
+
+    print("\n\n== Example :  Frais seulement ==\n")
+    print(df[ (df['fixation'] == 'frais') ])
 
     print("\n\n== List of all values per key ==\n")
     for col in df.columns:
