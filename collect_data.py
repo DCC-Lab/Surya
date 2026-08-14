@@ -136,7 +136,7 @@ def extract_properties_from_path(file):
                         microsecond=int(groups['ms'])*1000)
 
         properties['time'] = my_time
-        properties['index'] = groups['index']
+        properties['index'] = int(groups['index'])
 
     # Extraction de la hauteur, si presente
     pattern = r"\WHauteur(?P<hauteur>\d+)"
@@ -164,8 +164,6 @@ def extract_properties_from_path(file):
         groups = match.groupdict()
         if "gellose" in groups.values():
             groups['target'] = "gelose"
-        if "blanche" in groups.values():
-            groups['target'] = "white"
 
         properties.update(to_int_values(groups))
 
@@ -244,7 +242,13 @@ if __name__ == "__main__":
 
     # A panda dataframe is like an excel file with column titles
     # Put into a Panda dataframe and save everything for review
+
     df = pd.DataFrame(all_properties)
+
+    # We can force the type of certain columns to be clean
+    KEEP_AS_STR = {"modalite", "time", "cote", "target","file"}
+    df = df.astype({c: "Int64" for c in df.columns if c not in KEEP_AS_STR})
+
     summary = "surya-dataset-description"
     df.to_excel(summary+".xlsx", index=False)
     df.to_pickle(summary+".pkl")
@@ -259,25 +263,23 @@ if __name__ == "__main__":
     print("\n\n== Example : list exp only ==\n")
     print(df.exp)
 
-    # Keep only those with exp == 1
     print("\n\n== Example :  exp_1 only ==\n")
     print(df[df['exp'] == 1])
 
-    # Keep only those with exp == 1 and jour == 8
     print("\n\n== Example :  exp_1 only, jour 8 ==\n")
     print(df[ (df['exp'] == 1)  & (df['jour'] == 8) ])    
 
-    # Keep only those with exp_1 Raman
     print("\n\n== Example :  exp_1 only, Raman ==\n")
     print(df[ (df['exp'] == 1)  & (df['modalite'] == 'raman') ])        
 
-    # Keep only those with exp_1 Raman with a dose
     print("\n\n== Example :  exp_1 only, Raman with dose ==\n")
     print(df[ (df['exp'] == 1)  & (df['modalite'] == 'raman') & (df['dose'].notna()) ])
 
+    print("\n\n== Example :  exp_1 only, Raman with dose ==\n")
+    print(df[ (df['exp'] == 1)  & (df['modalite'] == 'raman') & (df['dose'].notna()) ])
 
     print("\n\n== List of all values per key ==\n")
     for col in df.columns:
         if col in ['time','file']:
             continue
-        print(f"{col:20s} ({df[col].nunique()} valeurs) : {sorted(df[col].dropna().unique(), key=str)}")
+        print(f"{col:20s} ({df[col].nunique()} valeurs) : {sorted(df[col].dropna().unique().tolist(), key=str)}")
