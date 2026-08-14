@@ -125,6 +125,11 @@ def extract_properties_from_path(file_path):
     if match is not None:
         properties.update(to_int_values(match.groupdict()))
 
+    # Extraction de la batch
+    pattern = r"batch#(?P<batch>\d+)"
+    match = re.search(pattern, file_path,  re.IGNORECASE)
+    if match is not None:
+        properties.update(to_int_values(match.groupdict()))
 
     # Extraction de la zone
     pattern = r"\W[Zz]o?n?e?(?P<zone>\d+)"
@@ -267,7 +272,7 @@ def get_files_metadata(all_files, header = True, extended = True, use_cache = Tr
     df = pd.DataFrame(all_properties)
 
     # We can force the type of certain columns to be clean
-    convert_to_int = {"exp","petri","jour", "souris", "index", "dose", "test", "zone"}
+    convert_to_int = {"exp","petri","jour", "souris", "index", "dose", "test", "zone", "batch"}
     df = df.astype({c: "Int64" for c in convert_to_int if c in df.columns})
 
     df.to_excel(summary+".xlsx", index=False)
@@ -295,7 +300,7 @@ if __name__ == "__main__":
 
     # A panda dataframe is like an excel file with column titles, it is the best structure for data
     # Put into a Panda dataframe and save everything for review
-    df = get_files_metadata(all_files, header = True, extended=True, use_cache = True)
+    df = get_files_metadata(all_files, header = False, extended=False, use_cache = False)
 
     # How to manipulate a panda Dataframe:
     
