@@ -6,6 +6,16 @@ import subprocess
 import pandas as pd
 import time
 
+"""
+This code will read all the spectral files from a root directory and
+extract all the metadata about the spectra (mouse, petri, dose, etc...)
+
+At the bottom of the file, you will find example code that gets run when running this file.
+
+if __name__ == "__main__":
+    # Start here
+
+"""
 def get_all_files(root, invisible_files = False, progress = True, use_cache = True):
     """
     Get the list of files at a given root directory
@@ -20,7 +30,7 @@ def get_all_files(root, invisible_files = False, progress = True, use_cache = Tr
     if use_cache and cache.exists():
         with open(cache, "r", encoding="utf-8") as file:
             all_files = file.read().splitlines()
-            if all_files[0].startswith(root):
+            if all_files and all_files[0].startswith(root):
                 print(f"Cache read from {cache}")
             else:
                 all_files = []
@@ -28,15 +38,18 @@ def get_all_files(root, invisible_files = False, progress = True, use_cache = Tr
     if not all_files:
         print("No cache, reading from disk")
         next_progress_print = time.time() + 2
-        for root, dirs, files in os.walk(root):
+        for dirpath, dirs, files in os.walk(root):
             for name in files:
-                if "/." in name and not invisible_files:
+                path = os.path.join(dirpath, name)
+                if "/." in path and not invisible_files:
                     continue
 
-                path = os.path.join(root, name)
                 if progress and time.time() > next_progress_print:
                     print(".", end = "")
                     next_progress_print = time.time() + 2
+
+                if not Path(path).exists():
+                    print(f"Warning: {path} is not recognized (probably accented characters)")
 
                 all_files.append(path)
         print(".")
@@ -50,6 +63,11 @@ def get_all_files(root, invisible_files = False, progress = True, use_cache = Tr
     return all_files
 
 def extract_properties_from_path(file):
+    """
+    We match the text of the path with various patterns to extract the metadata,
+    which we return in a dictionary
+
+    """
     properties = {}
 
     # Extraction de exp
@@ -140,7 +158,8 @@ def extract_properties_from_path(file):
 
 def extract_extended_properties_from_path(file):
     """
-    Get more information about the file, but slow
+    Get more information about the file, but slow.
+    Returns a dictionary with the properties
     """
     extended_properties = {}
 
@@ -153,6 +172,12 @@ def extract_extended_properties_from_path(file):
     return extended_properties
 
 def extract_header_from_spectral_file(file):
+    """
+    Since we use Ocean Optics Raman QEPro, we read the header of the 
+    file a extract the metadata from the header, which we return in a
+    dictionary
+
+    """
     properties = {}
     with open(file,"r", encoding="utf-8", errors="ignore") as file:
         first_line = file.readline()
@@ -171,23 +196,22 @@ def extract_header_from_spectral_file(file):
 
 
 if __name__ == "__main__":
-    # root = "/Volumes/labdata/dcclab/surya" # Pour DCC
-    root = r"\\cafeine3.crulrg.ulaval.ca\Goliath\Goliath\labdata\dcclab\surya" # Pour Chloe
+    root = "/Volumes/labdata/dcclab/surya" # Pour DCC
+    # root = r"\\cafeine3.crulrg.ulaval.ca\Goliath\Goliath\labdata\dcclab\surya" # Pour Chloe
 
     all_files = get_all_files(root)
-    all_files = [ file for file in all_files if file.endswith('txt') ]
-    all_files = [ file for file in all_files if "/." not in file]
-    all_files = [ file for file in all_files if "old" not in file]
-    all_files = [ file for file in all_files if "archives" not in file]
+    all_files = [ file for file in all_files if file.endswith('txt') ]  # Keep only data files
+    all_files = [ file for file in all_files if "old" not in file]      # exp_2_old is not useful, we remove it
+    all_files = [ file for file in all_files if "archives" not in file] # archives is not useful, we remove it 
 
     all_properties = []
-    count = len(all_files)
-    start_time = time.time()
-    next_progress_print = start_time + 2
+
+    # We show progress every 2 seconds
+    next_progress_print = time.time() + 2
+
     for i, file in enumerate(all_files):
         if time.time() > next_progress_print:
-            elapsed_time = time.time() - start_time
-            print(f"{i} of {count} [{100*elapsed_time/float(i):.3f}s/ 100 items, {elapsed_time/float(i)*(count-i):.1f}s left]")
+            print(f"{i} of {len(all_files)}")
             next_progress_print += 2
 
         properties = extract_properties_from_path(file)
@@ -201,6 +225,7 @@ if __name__ == "__main__":
 
         all_properties.append(properties)
 
+    # Put into a Panda dataframe and save everything for review
     df = pd.DataFrame(all_properties)
     summary = "surya-dataset-description"
     df.to_excel(summary+".xlsx", index=False)
