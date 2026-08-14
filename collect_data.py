@@ -108,7 +108,7 @@ def extract_properties_from_path(file_path):
         properties.update(to_int_values(match.groupdict()))
 
     # Extraction de la souris
-    pattern = r"[\W_\d]S(?:ouri).?(?P<souris>\d)"
+    pattern = r"[\W_\d]S(?:ouris?)?(?P<souris>\d+)"
     match = re.search(pattern, file_path,  re.IGNORECASE)
     if match is not None:
         properties.update(to_int_values(match.groupdict()))
@@ -208,7 +208,7 @@ def extract_extended_properties_from_path(file_path):
 
     return extended_properties
 
-def extract_header_from_spectral_file(file_path):
+def extract_header_from_path(file_path):
     """
     Since we use Ocean Optics Raman QEPro, we read the header of the 
     file_path a extract the metadata from the header, which we return in a
@@ -258,7 +258,7 @@ def get_files_metadata(all_files, header = True, extended = True, use_cache = Tr
 
         # This is slow: they must open and read the file_path
         if header:
-            header_properties = extract_header_from_spectral_file(file_path)
+            header_properties = extract_header_from_path(file_path)
             properties.update(header_properties)
 
         if extended:
@@ -300,7 +300,14 @@ if __name__ == "__main__":
 
     # A panda dataframe is like an excel file with column titles, it is the best structure for data
     # Put into a Panda dataframe and save everything for review
-    df = get_files_metadata(all_files, header = True, extended=True, use_cache = False)
+    df = get_files_metadata(all_files, header = False, extended=False, use_cache = False)
+
+
+    # Manual additions to metadata from labbook
+    masque = (df['exp'] == 2) & (df['batch'] == 1) & (df['petri'] == 1)
+    df.loc[masque, 'dose'] = 45
+    df.loc[masque, 'sexe'] = 'f'
+    df.loc[masque, 'traitement'] = False
 
     # How to manipulate a panda Dataframe:
     
@@ -330,7 +337,7 @@ if __name__ == "__main__":
     print(df[ (df['fixation'] == 'frais') ])
 
     print("\n\n== Example : Extraire batch 1, petri 1  ==\n")
-    print(df[ (df['exp'] == 2) & (df['batch'] == 1 ) & (df['petri'] == 1 ) ])
+    print(df[ (df['exp'] == 2) & (df['batch'] == 1 ) & (df['petri'] == 1 ) ]['souris'])
 
     print("\n\n== List of all values per key ==\n")
     for col in df.columns:
