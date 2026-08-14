@@ -178,7 +178,7 @@ def extract_properties_from_path(file_path):
 
 
     # Extraction de certains keywords, si present
-    pattern = r"(?P<keyword>white|blanche|dark|black|verre|gel+ose|anneau|adn|petri_)"
+    pattern = r"(?P<keyword>white|blanche|dark|black|verre|gel+ose|anneau|adn|petri_|echantillon1|enchantillon2)"
     match = re.search(pattern, file_path,  re.IGNORECASE)
     if match is not None:
         groups = match.groupdict()
@@ -278,11 +278,8 @@ def get_files_metadata(all_files, header = True, extended = True, use_cache = Tr
     convert_to_int = {"exp","petri","jour", "souris", "index", "dose", "test", "zone", "batch"}
     df = df.astype({c: "Int64" for c in convert_to_int if c in df.columns})
 
-    df.to_excel(summary+".xlsx", index=False)
-    df.to_pickle(summary+".pkl")
 
-    print(f"Summary written to {summary}")
-    return df
+    return df, summary
 
 def helper_find_root_directory():
     options = [ "/Volumes/Labdata/dcclab/surya",
@@ -293,6 +290,42 @@ def helper_find_root_directory():
         if Path(path).exists() and ("surya" in str(Path(path).resolve()).lower()):
             return path
 
+
+# if we have more informations on the data
+def complete_dataframe(config1, config2, dataframe, name="surya-dataset-description" ):
+
+    # adding data in panda dataframe
+    for batch, petris in config1.items():
+        for petri, (echantillon, dose, type_) in petris.items():
+            num_batch = int(re.search(r'\d+', batch).group())
+            num_petri = int(re.search(r'\d+', petri).group())
+            masque = (dataframe['exp'] == 2) & (dataframe['batch'] == num_batch) & (dataframe['petri'] == num_petri)
+            dataframe.loc[masque, 'dose'] = dose
+            dataframe.loc[masque, 'sexe'] = type_[0].lower()
+            dataframe.loc[masque, 'traitement'] = 'NT' not in type_
+
+    for jour, petris in config2.items():
+        for petri, (doses, souris_data) in petris.items():
+            num_petri = int(re.search(r'\d+', petri).group())
+            num_jour = int(re.search(r'\d+', jour).group())
+            dose = int(re.search(r'\d+', doses).group())
+            traitement = '+' in doses
+
+            masque1 = (dataframe['exp'] == 1) & (dataframe['jour'] == num_jour) & (dataframe['petri'] == num_petri)
+            dataframe.loc[masque1, 'dose'] = dose
+            dataframe.loc[masque1, 'traitement'] = traitement
+
+            for souris, info in souris_data.items():
+                num_souris = int(re.search(r'\d+', souris).group())
+                masque2 = masque1 & (dataframe['souris'] == num_souris)
+                sexe = 'f' if num_souris in (1, 2, 3) else 'm'
+                dataframe.loc[masque2, 'sexe'] = sexe
+
+    dataframe.to_excel(name+".xlsx", index=False)
+    dataframe.to_pickle(name+".pkl")
+    
+
+
 if __name__ == "__main__":
     root =  helper_find_root_directory()
 
@@ -302,20 +335,11 @@ if __name__ == "__main__":
     all_files = [ file_path for file_path in all_files if "archives" not in file_path] # archives is not useful, we remove it 
 
     # A panda dataframe is like an excel file with column titles, it is the best structure for data
-    # Put into a Panda dataframe and save everything for review
-    df = get_files_metadata(all_files, header = False, extended=False, use_cache = False)
+    # Put into a Panda dataframe 
+    df, summary = get_files_metadata(all_files, header = False, extended = False, use_cache = False)
 
-    # adding information
-    from config import CONFIG
-
-    for batch, petris in CONFIG.items():
-        for petri, (echantillon, dose, type_) in petris.items():
-            num_batch = int(re.search(r'\d+', batch).group())
-            num_petri = int(re.search(r'\d+', petri).group())
-            masque = (df['exp'] == 2) & (df['batch'] == num_batch) & (df['petri'] == num_petri)
-            df.loc[masque, 'dose'] = dose
-            df.loc[masque, 'sexe'] = type_[0].lower()
-            df.loc[masque, 'traitement'] = 'NT' not in type_
+    from config import CONFIG1, CONFIG2
+    complete_dataframe(CONFIG1, CONFIG2, df, summary) #add information manually
 
     # How to manipulate a panda Dataframe:
     
@@ -345,7 +369,7 @@ if __name__ == "__main__":
     print(df[ (df['fixation'] == 'frais') ])
 
     print("\n\n== Example : Extraire batch 1, petri 1  ==\n")
-    print(df[ (df['exp'] == 2) & (df['batch'] == 2 ) ]['sexe'])
+    print(df[ (df['exp'] == 1) & (df['jour'] == 0 ) ]['sexe'])
 
     print("\n\n== List of all values per key ==\n")
     for col in df.columns:
