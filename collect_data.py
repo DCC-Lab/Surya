@@ -96,7 +96,7 @@ def extract_properties_from_path(file_path):
         properties.update(to_int_values(match.groupdict()))
 
     # Extraction de petri
-    pattern = r"petri(?P<petri>\d)"
+    pattern = r"petri(?P<petri>\d+)"
     match = re.search(pattern, file_path,  re.IGNORECASE)
     if match is not None:
         properties.update(to_int_values(match.groupdict()))
@@ -300,7 +300,7 @@ if __name__ == "__main__":
 
     # A panda dataframe is like an excel file with column titles, it is the best structure for data
     # Put into a Panda dataframe and save everything for review
-    df = get_files_metadata(all_files, header = False, extended=False, use_cache = False)
+    df = get_files_metadata(all_files, header = True, extended=True, use_cache = False)
 
     # How to manipulate a panda Dataframe:
     
@@ -309,6 +309,7 @@ if __name__ == "__main__":
 
     print("\n\n== Example : list exp only ==\n")
     print(df.exp)
+    print(df['exp'])
 
     print("\n\n== Example :  exp_1 only ==\n")
     print(df[df['exp'] == 1])
@@ -327,6 +328,9 @@ if __name__ == "__main__":
 
     print("\n\n== Example :  Frais seulement ==\n")
     print(df[ (df['fixation'] == 'frais') ])
+
+    print("\n\n== Example : Extraire batch 1, petri 1  ==\n")
+    print(df[ (df['exp'] == 2) & (df['batch'] == 1 ) & (df['petri'] == 1 ) ])
 
     print("\n\n== List of all values per key ==\n")
     for col in df.columns:
