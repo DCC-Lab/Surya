@@ -283,7 +283,10 @@ def etiquette_courte(id_souris, zone):
 
 # ── Chargement des deux états ──────────────────────────────────────────────
 X_frais, etiquettes_frais, w_frais = charger_spectres(CONFIG, 'frais')
+print(etiquettes_frais)
 X_fixe, etiquettes_fixe, w_fixe = charger_spectres(CONFIG, 'fixe')
+
+
 
 X = np.concatenate([X_frais, X_fixe], axis=0)
 etiquettes = etiquettes_frais + etiquettes_fixe   # ce sont des listes Python, "+" les concatène

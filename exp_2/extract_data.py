@@ -584,7 +584,7 @@ w2, i2 = traiter_acquisitions(extract_frais('batch#1', 'petri1', 'z1'))
 w3, i3, baseline2 = correction_data(extract_frais('batch#1', 'petri1', 'z1'), traiter_etalon=True, als=True, bubblewidth=None, lam=1e7, p=0.01)
 
 #plt.plot(w1, i1, label=1)
-plt.plot(w1, baseline, label='1')
+plt.plot(w1, baseline1, label='1')
 plt.plot(w2, i2, label='2')
 plt.plot(w3, baseline2, label='3')
 plt.legend()
