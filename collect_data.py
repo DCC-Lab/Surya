@@ -171,8 +171,8 @@ def extract_header_from_spectral_file(file):
 
 
 if __name__ == "__main__":
-    root = "/Volumes/labdata/dcclab/surya" # Pour DCC
-    #root = "." # Directement sur le serveur
+    # root = "/Volumes/labdata/dcclab/surya" # Pour DCC
+    root = r"\\cafeine3.crulrg.ulaval.ca\Goliath\Goliath\labdata\dcclab\surya" # Pour Chloe
 
     all_files = get_all_files(root)
     all_files = [ file for file in all_files if file.endswith('txt') ]
