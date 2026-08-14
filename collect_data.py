@@ -1,14 +1,29 @@
 import os
 import re
-from datetime import datetime, time
+import datetime
 from pathlib import Path
 import subprocess
 import pandas as pd
+import time
 
-def get_all_files():
-    for root, dirs, files in os.walk("."):
-          for name in files:
-              yield(os.path.join(root, name))
+def get_all_files(root):
+    cache = Path("all_files-cache.txt")
+    all_files = []
+    
+    if cache.exists():
+        with open(cache, "r", encoding="utf-8") as file:
+            all_files = file.read().splitlines()
+    else:
+        for root, dirs, files in os.walk(root):
+            for name in files:
+                path = os.path.join(root, name)
+                all_files.append(path)
+
+        with open(cache, "w", encoding="utf-8") as file:
+            for line in all_files:
+                file.write(line + "\n")
+
+    return all_files
 
 def extract_properties_from_path(file):
     properties = {}
@@ -67,7 +82,7 @@ def extract_properties_from_path(file):
     if match is not None:
         groups = match.groupdict()
 
-        my_time = time( hour=int(groups['heure']),
+        my_time = datetime.time( hour=int(groups['heure']),
                         minute=int(groups['minutes']), 
                         second=int(groups['s']),
                         microsecond=int(groups['ms'])*1000)
@@ -101,33 +116,34 @@ def extract_properties_from_path(file):
     if match is not None:
         properties.update(match.groupdict())
 
-    # Fetch file stats
-    file_info = Path(file).stat()
+    # # Fetch file stats
+    # file_info = Path(file).stat()
     
-    properties['size_in_bytes'] = file_info.st_size
-    properties['modification_time'] = datetime.fromtimestamp(file_info.st_mtime)
+    # properties['size_in_bytes'] = file_info.st_size
+    # properties['modification_time'] = datetime.datetime.fromtimestamp(file_info.st_mtime)
     properties['file'] = file
 
     return properties
 
 if __name__ == "__main__":
-    all_files = get_all_files()
+    root = "/Volumes/Labdata/dcclab/surya"
+    all_files = get_all_files(root)
     all_files = [ file for file in all_files if file.endswith('txt') ]
     all_files = [ file for file in all_files if "/." not in file]
     all_files = [ file for file in all_files if "old" not in file]
+    all_files = [ file for file in all_files if "archives" not in file]
 
+    all_properties = []
+    count = len(all_files)
+    next_time = time.time() + 2
+    for i, file in enumerate(all_files):
+        if time.time() > next_time:
+            print(f"{i} of {count}")
+            next_time = time.time() + 1
 
-    # all_properties = { file:extract_properties_from_path(file) for file in all_files }
-    all_properties = [ extract_properties_from_path(file) for file in all_files ]
+        properties = extract_properties_from_path(file)
+        all_properties.append(properties)
 
     df = pd.DataFrame(all_properties)
     df.to_excel("summary.xlsx", index=False)
-
-    # for file, properties in all_properties.items():
-    #     if "test" in properties:
-    #         continue
-
-    #     if "souris" not in properties:
-    #         print(file)
-
 
