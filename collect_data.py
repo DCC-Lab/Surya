@@ -16,9 +16,12 @@ if __name__ == "__main__":
     # Start here
 
 """
-def get_all_files(root, invisible_files = False, progress = True, use_cache = True):
+def get_all_data_files(root, invisible_files = False, progress = True, use_cache = True):
     """
     Get the list of files at a given root directory
+
+    Since this is a lengthy operation on the network, we keep the result and
+    use it if use_cache is True
 
     """
     if not Path(root).exists():
@@ -36,7 +39,7 @@ def get_all_files(root, invisible_files = False, progress = True, use_cache = Tr
                 all_files = []
 
     if not all_files:
-        print("No cache, reading from disk")
+        print("No cache for files list, reading from disk")
         next_progress_print = time.time() + 2
         for dirpath, dirs, files in os.walk(root):
             for name in files:
@@ -163,13 +166,13 @@ def extract_properties_from_path(file):
     if match is not None:
         properties['test'] = True
 
-    # Extraction du target/type, si present
-    pattern = r"(?P<target>white|blanche|dark|black|verre|gel+ose|anneau|adn)"
+    # Extraction de certains keywords, si present
+    pattern = r"(?P<keyword>white|blanche|dark|black|verre|gel+ose|anneau|adn)"
     match = re.search(pattern, file,  re.IGNORECASE)
     if match is not None:
         groups = match.groupdict()
         if "gellose" in groups.values():
-            groups['target'] = "gelose"
+            groups['keyword'] = "gelose"
 
         properties.update(to_int_values(groups))
 
@@ -200,50 +203,54 @@ def extract_header_from_spectral_file(file):
 
     """
     properties = {}
-    with open(file,"r", encoding="utf-8", errors="ignore") as file:
-        first_line = file.readline()
-        if first_line.startswith("Data from"):
-            # It is a Raman spectral file
-            for line in file:
-                line = line.strip()
-                if len(line) > 0:
-                    entry = line.split(":", 1)
-                    if len(entry) == 2 :
-                        properties[f"Spectrum:{entry[0]}"] = entry[1]
-                if ">>>>>Begin Spectral Data<<<<<" in line:
-                    break
+    try:
+        with open(file,"r", encoding="utf-8", errors="ignore") as file:
+            first_line = file.readline()
+            if first_line.startswith("Data from"):
+                # It is a Raman spectral file
+                for line in file:
+                    line = line.strip()
+                    if len(line) > 0:
+                        entry = line.split(":", 1)
+                        if len(entry) == 2 :
+                            properties[f"Spectrum:{entry[0]}"] = entry[1]
+                    if ">>>>>Begin Spectral Data<<<<<" in line:
+                        break
+                        
+    except Exception as e:
+        print(f"Warning: {path} is not recognized (probably accented characters)")
 
     return properties
 
-
-if __name__ == "__main__":
-    root = "/Volumes/Labdata/dcclab/surya" # Pour DCC
-    # root = r"\\cafeine3.crulrg.ulaval.ca\Goliath\Goliath\labdata\dcclab\surya" # Pour Chloe
-
-    all_files = get_all_files(root)
-    all_files = [ file for file in all_files if file.endswith('txt') ]  # Keep only data files
-    all_files = [ file for file in all_files if "old" not in file]      # exp_2_old is not useful, we remove it
-    all_files = [ file for file in all_files if "archives" not in file] # archives is not useful, we remove it 
-
+def get_files_metadata(all_files, header = True, extended = True, use_cache = True):
     all_properties = []
+
+    # If we can use the cache, we do
+    summary = "surya-dataset-description"
+    if use_cache and Path(summary+".pkl").exists():
+        df = pd.read_pickle(Path(summary+".pkl"))
+        if set(all_files).issubset(df["file"]):
+            return df
+        # If not, we need to retrieve it
 
     # We show progress every 2 seconds
     next_progress_print = time.time() + 2
 
     for i, file in enumerate(all_files):
         if time.time() > next_progress_print:
-            print(f"{i} of {len(all_files)}")
+            print(f"Processing file {i} of {len(all_files)}")
             next_progress_print += 2
 
         properties = extract_properties_from_path(file)
 
         # This is slow: they must open and read the file
-        # header_properties = extract_header_from_spectral_file(file)
-        # properties.update(header_properties)
+        if header:
+            header_properties = extract_header_from_spectral_file(file)
+            properties.update(header_properties)
 
-        # extended_properties = extract_extended_properties_from_path(file)
-        # properties.update(extended_properties)
-
+        if extended:
+            extended_properties = extract_extended_properties_from_path(file)
+            properties.update(extended_properties)
         all_properties.append(properties)
 
     # A panda dataframe is like an excel file with column titles
@@ -252,14 +259,35 @@ if __name__ == "__main__":
     df = pd.DataFrame(all_properties)
 
     # We can force the type of certain columns to be clean
-    KEEP_AS_STR = {"modalite", "time", "cote", "target","file","fixation"}
-    df = df.astype({c: "Int64" for c in df.columns if c not in KEEP_AS_STR})
+    convert_to_int = {"exp","petri","jour", "souris", "index", "dose", "test", "zone"}
+    df = df.astype({c: "Int64" for c in convert_to_int if c in df.columns})
 
-    summary = "surya-dataset-description"
     df.to_excel(summary+".xlsx", index=False)
     df.to_pickle(summary+".pkl")
 
     print(f"Summary written to {summary}")
+    return df
+
+def helper_find_root_directory():
+    options = [ "/Volumes/Labdata/dcclab/surya",
+                r"\\cafeine3.crulrg.ulaval.ca\Goliath\Goliath\labdata\dcclab\surya",
+                "/home/dccadmin/labdata/dcclab/surya",
+                "."]
+    for path in options:
+        if Path(path).exists() and ("surya" in str(Path(path).resolve())):
+            return path
+
+if __name__ == "__main__":
+    root =  helper_find_root_directory()
+
+    all_files = get_all_data_files(root, use_cache=True)
+    all_files = [ file for file in all_files if file.endswith('txt') ]  # Keep only data files
+    all_files = [ file for file in all_files if "old" not in file]      # exp_2_old is not useful, we remove it
+    all_files = [ file for file in all_files if "archives" not in file] # archives is not useful, we remove it 
+
+    # A panda dataframe is like an excel file with column titles, it is the best structure for data
+    # Put into a Panda dataframe and save everything for review
+    df = get_files_metadata(all_files, use_cache = True)
 
     # How to manipulate a panda Dataframe:
     
@@ -289,6 +317,6 @@ if __name__ == "__main__":
 
     print("\n\n== List of all values per key ==\n")
     for col in df.columns:
-        if col in ['time','file']:
+        if col in ['time','file','size_in_bytes'] or col.startswith("Spectrum:"):
             continue
         print(f"{col:20s} ({df[col].nunique()} valeurs) : {sorted(df[col].dropna().unique().tolist(), key=str)}")
