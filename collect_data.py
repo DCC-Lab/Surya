@@ -173,7 +173,7 @@ def extract_properties_from_path(file_path):
         properties['index'] = int(groups['index'])
 
     # Extraction de l'index en l'absence de heure d'acquisition
-    pattern = r"__(?P<index>\d+)__(?P<index2>\d{3,5})"
+    pattern = r"__(?P<index>\d+)__(?P<index2>\d{5})"
     match = re.search(pattern, file_path,  re.IGNORECASE)
     if match is not None:
         groups = match.groupdict()
@@ -373,17 +373,15 @@ def get_files_metadata(all_files, header = True, extended = True, use_cache = Tr
     return df, summary
 
 def get_mask(df, mask_as_dict):
-    # Le notna() est necessaire: sans lui les colonnes Int64 donnent pd.NA au lieu
-    # de False pour les valeurs manquantes, et df[masque] leve alors une ValueError.
-    masque = pd.Series(True, index=df.index)
+    mask = pd.Series(True, index=df.index)
     for key, value in mask_as_dict.items():
         if key not in df.columns:
             continue
-        masque &= (df[key].notna() & (df[key] == value))
+        mask &= (df[key].notna() & (df[key] == value))
 
-    return masque
+    return mask
 
-def verifier_unicite_metadata(df, ignore=("time", "index", "file", "size_in_bytes"), verbose=True):
+def validate_unique_metadata(df, ignore=("time", "index", "file", "size_in_bytes"), verbose=True):
     """
     Verifie que les metadata de chaque fichier sont uniques.
 
@@ -465,12 +463,65 @@ def complete_dataframe(config1, config2, dataframe, name="surya-dataset-descript
     dataframe.to_pickle(name+".pkl")
     
 
+def correct_acquisition_errors(df):
+    """
+    Some errors occured during acquisition and were noted in the experimenter's labbook.
+    They are corrected here (not in the raw data)
+    """
+
+    def renumber_sequentially_in_time(df, mask):
+        list_rows = df[mask].sort_values('index')['index']
+        if len(set(list_rows)) == len(list_rows):
+            raise ValueError("Les 'index' sont uniques: rien a renumeroter")
+
+        indices = df[mask].sort_values('time').index
+        for i, idx in enumerate(indices):
+            df.loc[idx, 'index'] = i
+
+        list_rows = df[mask].sort_values('index')['index']
+        if len(set(list_rows)) != len(list_rows):
+            raise ValueError("La renumerotation n'a pas fonctionne")
+        else:
+            print("'index' rewritten sequentially")
+
+        return df
+
+    print(f"\n\n== 1. Gestion des erreurs d'acquisition dans exp 2, batch 1, souris 48 (fichiers copies par erreur dans petri 5 et 7) ==")
+    count_before = len(df)
+    mask_a_enlever = get_mask(df, {"exp":2, "souris":48, "batch":1, "petri":7})
+    df = df[~mask_a_enlever]
+    mask_a_enlever = get_mask(df, {"exp":2, "souris":48, "batch":1, "petri":5})
+    df = df[~mask_a_enlever]
+    count_after = len(df)
+    print(f"  Avant/apres : {count_before}/{count_after}, {count_before-count_after} effaces")
+
+    print(f"\n\n== 2. Exp1, jour 2, petri 1, souris 1: l'indice d'acquisition commence a 1, et recommence ensuite a 0. On renomme sequentillement ==")
+    mask_doublons = get_mask(df, {'dose': 0, 'exp': 1, 'fixation': 'fixe', 'jour': 2, 'keyword': 'verre', 'modalite': 'raman', 'petri': 1, 'sexe': 'f', 'souris': 1, 'traitement': False})
+    df = renumber_sequentially_in_time(df, mask_doublons)
+
+    print(f"\n\n== 3. Meme probleme que #2 mais exp 1, jour 4 petri 3 souris 1 ==")
+    mask_doublons = get_mask(df, {'dizaine': 0, 'dose': 0, 'exp': 1, 'fixation': 'fixe', 'jour': 4, 'modalite': 'raman', 'petri': 3, 'sexe': 'f', 'souris': 1, 'traitement': False})
+    df = renumber_sequentially_in_time(df, mask_doublons)
+
+    print(f"\n\n== 4. Meme probleme que #2 et #3 mais exp 1, jour 4 petri 3 souris 2==")
+    mask_doublons = get_mask(df, {'dizaine': 0, 'dose': 0, 'exp': 1, 'fixation': 'fixe', 'jour': 4, 'modalite': 'raman', 'petri': 3, 'sexe': 'f', 'souris': 2, 'traitement': False})
+    df = renumber_sequentially_in_time(df, mask_doublons)
+
+    print(f"\n\n== 5. Meme probleme que #2 et #3 mais exp 1, jour 4 petri 3 souris 2==")
+    mask_doublons = get_mask(df, {'dizaine': 0, 'dose': 60, 'exp': 1, 'fixation': 'fixe', 'index': 8, 'jour': 8, 'modalite': 'raman', 'petri': 4, 'sexe': 'm', 'souris': 5, 'traitement': False, 'zone': 2})
+    df = renumber_sequentially_in_time(df, mask_doublons)
+    
+    print(f"\n\n== 5. Un fichier seul a effacer ==")
+    df = df[ df['file'] != "/Volumes/Labdata/dcclab/surya/exp_1/jour8/frais/Raman/petri2/petri2_souris3_zone1/20260519_jour6_raman_petri2_souris3_45Gy_zone1_RamanShift__0__11-41-01-478.txt"]
+
+    return df
 
 if __name__ == "__main__":
     root =  helper_find_root_directory()
     print(f"Reading from {root}")
   
     pd.set_option('display.max_colwidth', None) 
+    pd.set_option('display.width', None) 
 
     all_files = get_all_data_file_paths(root, use_cache=True)
     all_files = [ file_path for file_path in all_files if file_path.endswith('txt') ]  # Keep only data files
@@ -493,23 +544,18 @@ if __name__ == "__main__":
     df = df[(df['keyword'] != 'blanche')]
     df = df[(df['keyword'] != 'anneau')]
 
-    # Enlever souris 48 dans petri 5 et 7 exp_2 batch1 fix
-    print("# Enlever souris 48 dans petri 5 et 7 exp_2 batch1 fix")
 
     from config import CONFIG1, CONFIG2
-    complete_dataframe(CONFIG1, CONFIG2, df, summary) #add information manually
+    complete_dataframe(CONFIG1, CONFIG2, df, summary) #add information manually    
 
 
-
-    mask_as_dict = {'batch': 2, 'cote': 'd', 'dose': 0, 'exp': 2, 'fixation': 'fixe', 'modalite': 'raman', 'petri': 16, 'sexe': 'f', 'souris': 42, 'traitement': True, 'zone': 1}
-    mask = get_mask(df, mask_as_dict)
-    print(f"{(df[mask])['file'].to_string()}")
-    
+    # Chloe: regarde ici
+    df = correct_acquisition_errors(df)
 
     print("\n\n== Verification de l'unicite des metadata ==\n")
-    doublons = verifier_unicite_metadata(df, ignore=("time", "file", "index", "size_in_bytes"))
+    doublons = validate_unique_metadata(df, ignore=("time", "file","size_in_bytes"))
 
-    # How to manipulate a panda Dataframe:
+    How to manipulate a panda Dataframe:
 
     print("\n\n== Example : list all columns ==\n")
     print(df.columns)
