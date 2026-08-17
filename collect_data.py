@@ -162,13 +162,6 @@ def extract_properties_from_path(file_path):
         properties['time'] = my_time
         properties['index'] = int(groups['index'])
 
-    
-    # Extraction de la zone
-    pattern = r"[\W_\d][Zz]o?n?e?_? ?(?P<zone>\d+)"
-    match = re.search(pattern, file_path,  re.IGNORECASE)
-    if match is not None:
-        properties.update(to_int_values(match.groupdict()))
-
     # Extraction de la hauteur, si presente
     pattern = r"\WHauteur(?P<hauteur>\d+)"
     match = re.search(pattern, file_path,  re.IGNORECASE)
@@ -414,11 +407,12 @@ if __name__ == "__main__":
     all_files = [ file_path for file_path in all_files if "archives" not in file_path] # archives is not useful, we remove it 
 
     # A panda dataframe is like an excel file with column titles, it is the best structure for data
-    # Put into a Panda dataframe and save everything for review
     df = get_files_metadata(all_files, header = False, extended=False, use_cache = False)
 
     from config import CONFIG1, CONFIG2
-    complete_dataframe(CONFIG1, CONFIG2, df, summary) #add information manually
+    # add information manually to finalise dataframe
+    # save everything for review in an excel file
+    complete_dataframe(CONFIG1, CONFIG2, df) 
 
     # How to manipulate a panda Dataframe:
     
