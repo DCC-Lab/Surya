@@ -132,7 +132,7 @@ def extract_properties_from_path(file_path):
         properties.update(to_int_values(match.groupdict()))
 
     # Extraction de la zone
-    pattern = r"\W[Zz]o?n?e?(?P<zone>\d+)"
+    pattern = r"[\W_\d][Zz]o?n?e?_? ?(?P<zone>\d+)"
     match = re.search(pattern, file_path,  re.IGNORECASE)
     if match is not None:
         properties.update(to_int_values(match.groupdict()))
@@ -178,13 +178,15 @@ def extract_properties_from_path(file_path):
 
 
     # Extraction de certains keywords, si present
-    pattern = r"(?P<keyword>white|blanche|dark|black|verre|gel+ose|anneau|adn|petri_|echantillon1|enchantillon2)"
+    pattern = r"(?P<keyword>white|blanche|dark|black|verre|gel+ose|anneau|adn|petri_|echantillon1|echantillon2|inversé|petri[+]gelose)"
     match = re.search(pattern, file_path,  re.IGNORECASE)
     if match is not None:
         groups = match.groupdict()
         if "gellose" in groups.values():
             groups['keyword'] = "gelose"
         if 'petri_' in groups.values():
+            groups['keyword'] = 'petri'
+        if 'petri+gelose' in groups.values():
             groups['keyword'] = 'petri'
 
         properties.update(to_int_values(groups))
