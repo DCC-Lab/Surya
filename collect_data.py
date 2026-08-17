@@ -91,6 +91,8 @@ def extract_properties_from_path(file_path):
     def to_int_values(properties):
         for key, value in properties.items():
             try:
+                if value is None:
+                    continue
                 if str(int(value)) == value:
                     properties[key] = int(value)
             except:
@@ -118,7 +120,13 @@ def extract_properties_from_path(file_path):
         properties.update(to_int_values(match.groupdict()))
 
     # Extraction de la souris
-    pattern = r"[\W_\d]S(?:ouris?)?(?P<souris>\d+)"
+    pattern = r"[\W_\d]S(?:ouris?)?(?P<souris>\d+)\.?(?P<subzone>\d)?"
+    match = re.search(pattern, file_path,  re.IGNORECASE)
+    if match is not None:
+        properties.update(to_int_values(match.groupdict()))
+
+    # Extraction de la "subzone" si dans le mot echantillon
+    pattern = r"echantillon(?P<subzone>\d)"
     match = re.search(pattern, file_path,  re.IGNORECASE)
     if match is not None:
         properties.update(to_int_values(match.groupdict()))
@@ -142,12 +150,14 @@ def extract_properties_from_path(file_path):
         properties.update(to_int_values(match.groupdict()))
 
     # Extraction de la zone
-    pattern = r"\W[Zz]o?n?e?(?P<zone>\d+)"
+    # Le \W ne match pas le "_", il faut donc [\W_] pour attraper "souris2_0Gy_zone1"
+    # et le separateur optionnel pour "zone_1" et "zone 2"
+    pattern = r"[\W_][Zz]o?n?e?[ _-]?(?P<zone>\d+)"
     match = re.search(pattern, file_path,  re.IGNORECASE)
     if match is not None:
         properties.update(to_int_values(match.groupdict()))
 
-    # Extraction de l'heure d'acquisition'
+    # Extraction de l'heure d'acquisition et de l'index
     pattern = r"__(?P<index>\d+)__(?P<heure>\d+)-(?P<minutes>\d+)-(?P<s>\d+)-(?P<ms>\d+)"
     match = re.search(pattern, file_path,  re.IGNORECASE)
     if match is not None:
@@ -160,6 +170,15 @@ def extract_properties_from_path(file_path):
 
         properties['time'] = my_time
         properties['index'] = int(groups['index'])
+
+    # Extraction de l'index en l'absence de heure d'acquisition
+    pattern = r"__(?P<index>\d+)__(?P<index2>\d{3,5})"
+    match = re.search(pattern, file_path,  re.IGNORECASE)
+    if match is not None:
+        groups = match.groupdict()
+
+        properties['index'] = int(groups['index'])
+        properties['index2'] = int(groups['index2'])
 
     # Extraction de la hauteur, si presente
     pattern = r"\WHauteur(?P<hauteur>\d+)"
@@ -188,7 +207,7 @@ def extract_properties_from_path(file_path):
 
 
     # Extraction de certains keywords, si present
-    pattern = r"(?P<keyword>white|blanche|dark|black|verre|gel+ose|anneau|adn|petri_)"
+    pattern = r"(?P<keyword>white|blanche|dark|black|verre|gel+ose|anneau|adn|petri_|methanol|pink)"
     match = re.search(pattern, file_path,  re.IGNORECASE)
     if match is not None:
         groups = match.groupdict()
@@ -288,7 +307,7 @@ def get_files_metadata(all_files, header = True, extended = True, use_cache = Tr
     df = pd.DataFrame(all_properties)
 
     # We can force the type of certain columns to be clean
-    convert_to_int = {"exp","petri","jour", "souris", "index", "dose", "test", "zone", "batch"}
+    convert_to_int = {"exp","petri","jour", "souris", "index", "index2", "dose", "test", "zone", "subzone","batch"}
     df = df.astype({c: "Int64" for c in convert_to_int if c in df.columns})
 
     summary = "surya-dataset-description"
@@ -299,6 +318,55 @@ def get_files_metadata(all_files, header = True, extended = True, use_cache = Tr
     print(f"Cache written to {cache}")
 
     return df
+
+def get_mask(df, mask_as_dict):
+    # Le notna() est necessaire: sans lui les colonnes Int64 donnent pd.NA au lieu
+    # de False pour les valeurs manquantes, et df[masque] leve alors une ValueError.
+    masque = pd.Series(True, index=df.index)
+    for key, value in mask_as_dict.items():
+        if key not in df.columns:
+            continue
+        masque &= (df[key].notna() & (df[key] == value))
+
+    return masque
+
+def verifier_unicite_metadata(df, ignore=("time", "index", "file", "size_in_bytes"), verbose=True):
+    """
+    Verifie que les metadata de chaque fichier sont uniques.
+
+    Pour chaque ligne, on rassemble les metadata dans un dictionnaire, on
+    enleve les colonnes qui sont toujours differentes (time, index, file) puis
+    on verifie que la signature qui reste n'apparait qu'une seule fois.
+
+    Retourne un dictionnaire {signature: [liste des fichiers]} pour les
+    signatures qui apparaissent plus d'une fois (donc les doublons).
+    """
+    colonnes = [c for c in df.columns if c not in ignore and not c.startswith("Spectrum:")]
+
+    signatures = {}
+    for i, row in df[colonnes].iterrows():
+        # Les metadata de cette ligne, sans les valeurs manquantes
+        metadata = {k: v for k, v in row.items() if pd.notna(v)}
+        # Un dict n'est pas hashable: on en fait un tuple trie pour la clef
+        signature = tuple(sorted(metadata.items(), key=lambda kv: str(kv[0])))
+        signatures.setdefault(signature, []).append(i)
+
+    doublons = {sig: idx for sig, idx in signatures.items() if len(idx) > 1}
+
+    if verbose:
+        n_doublons = sum(len(idx) for idx in doublons.values())
+        if not doublons:
+            print(f"Toutes les metadata sont uniques ({len(df)} fichiers, colonnes: {colonnes})")
+        else:
+            print(f"{len(doublons)} signatures non-uniques touchant {n_doublons} fichiers:")
+            for signature, indices in doublons.items():
+                if len(indices) % 5 != 0:
+                    print(f"\n #{len(indices)} {dict(signature)}")
+                    for i in indices:
+                        print(f"    {df.loc[i, 'file']}")
+
+    # On retourne les fichiers plutot que les index, plus utile pour le diagnostic
+    return {sig: df.loc[idx, "file"].tolist() for sig, idx in doublons.items()}
 
 def helper_find_root_directory():
     options = [ "/Volumes/Labdata/dcclab/surya",
@@ -311,6 +379,9 @@ def helper_find_root_directory():
 
 if __name__ == "__main__":
     root =  helper_find_root_directory()
+    print(f"Reading from {root}")
+  
+    pd.set_option('display.max_colwidth', None) 
 
     all_files = get_all_data_file_paths(root, use_cache=True)
     all_files = [ file_path for file_path in all_files if file_path.endswith('txt') ]  # Keep only data files
@@ -321,10 +392,27 @@ if __name__ == "__main__":
     # Put into a Panda dataframe and save everything for review
     df = get_files_metadata(all_files, header = False, extended=False, use_cache = False)
 
-    # adding information
-    from config import CONFIG
+    masque = df['index'].notna()
+    df.loc[masque, 'dizaine'] = df['index'] // 10
 
-    for batch, petris in CONFIG.items():
+    df = df[(df['test'].isna())]
+    df = df[(df['modalite'] == 'raman')]
+    df = df[(df['keyword'] != 'dark')]
+    df = df[(df['keyword'] != 'white')]
+    df = df[(df['keyword'] != 'adn')]
+    df = df[(df['keyword'] != 'black')]
+    df = df[(df['keyword'] != 'blanche')]
+    df = df[(df['keyword'] != 'anneau')]
+
+    # Enlever souris 48 dans petri 5 et 7 exp_2 batch1 fix
+    print("# Enlever souris 48 dans petri 5 et 7 exp_2 batch1 fix")
+
+
+
+    # adding information
+    from config import CONFIG1
+
+    for batch, petris in CONFIG1.items():
         for petri, (echantillon, dose, type_) in petris.items():
             num_batch = int(re.search(r'\d+', batch).group())
             num_petri = int(re.search(r'\d+', petri).group())
@@ -333,8 +421,18 @@ if __name__ == "__main__":
             df.loc[masque, 'sexe'] = type_[0].lower()
             df.loc[masque, 'traitement'] = 'NT' not in type_
 
-    # How to manipulate a panda Dataframe:
+
+
+    mask_as_dict = {'batch': 2, 'cote': 'd', 'dose': 0, 'exp': 2, 'fixation': 'fixe', 'modalite': 'raman', 'petri': 16, 'sexe': 'f', 'souris': 42, 'traitement': True, 'zone': 1}
+    mask = get_mask(df, mask_as_dict)
+    print(f"{(df[mask])['file'].to_string()}")
     
+
+    print("\n\n== Verification de l'unicite des metadata ==\n")
+    doublons = verifier_unicite_metadata(df, ignore=("time", "file", "index", "size_in_bytes"))
+
+    # How to manipulate a panda Dataframe:
+
     print("\n\n== Example : list all columns ==\n")
     print(df.columns)
 
