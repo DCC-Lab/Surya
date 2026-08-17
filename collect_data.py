@@ -2,6 +2,7 @@ import os
 import re
 import datetime
 from pathlib import Path
+from collections import defaultdict
 import subprocess
 import pandas as pd
 import time
@@ -131,11 +132,6 @@ def extract_properties_from_path(file_path):
     if match is not None:
         properties.update(to_int_values(match.groupdict()))
 
-    # Extraction de la zone
-    pattern = r"[\W_\d][Zz]o?n?e?_? ?(?P<zone>\d+)"
-    match = re.search(pattern, file_path,  re.IGNORECASE)
-    if match is not None:
-        properties.update(to_int_values(match.groupdict()))
 
     # Extraction de l'heure d'acquisition'
     pattern = r"__(?P<index>\d+)__(?P<heure>\d+)-(?P<minutes>\d+)-(?P<s>\d+)-(?P<ms>\d+)"
@@ -150,6 +146,13 @@ def extract_properties_from_path(file_path):
 
         properties['time'] = my_time
         properties['index'] = int(groups['index'])
+
+    
+    # Extraction de la zone
+    pattern = r"[\W_\d][Zz]o?n?e?_? ?(?P<zone>\d+)"
+    match = re.search(pattern, file_path,  re.IGNORECASE)
+    if match is not None:
+        properties.update(to_int_values(match.groupdict()))
 
     # Extraction de la hauteur, si presente
     pattern = r"\WHauteur(?P<hauteur>\d+)"
@@ -240,6 +243,58 @@ def extract_header_from_path(file_path):
 
     return properties
 
+
+
+def assign_missing_zone(config_exp1, dataframe, chunk_size=10):
+    '''
+    Fonction permettant l'ajout de zone au fichier qui n'en on pas déjà une d'inscrite
+    fonctionne en séparant les fichiers par groupe de 10 (1 zone par bon de 10)
+    chunk_size : nombre d'acquisitions par zone
+    '''
+    for jour, petris in config_exp1.items():
+        num_jour = int(re.search(r'\d+', jour).group())
+
+        # on ne traite que jour 0, 2 et 4 -- les autres n'ont pas de zones a assigner
+        if num_jour not in (0, 2, 4):
+            continue
+        for petri, (doses, souris_data) in petris.items():
+            num_petri = int(re.search(r'\d+', petri).group())
+
+            for souris, info in souris_data.items():
+                num_souris = int(re.search(r'\d+', souris).group())
+
+                masque_base = (
+                    (dataframe['exp'] == 1)
+                    & (dataframe['jour'] == num_jour)
+                    & (dataframe['petri'] == num_petri)
+                    & (dataframe['souris'] == num_souris)
+                )
+
+                if num_jour == 0:
+                    masques = []
+                    for echantillon, zones in info.items():
+                        num_echantillon = int(re.search(r'\d+', echantillon).group())
+                        masques.append(masque_base & (dataframe['keyword'] == f'echantillon{num_echantillon}'))
+                elif num_jour == 2:
+                    masques = [masque_base & (dataframe['keyword'] == kw) for kw in ['verre', 'gelose']]
+                elif num_jour == 4:
+                    masques = [masque_base]
+
+                for masque in masques:
+                    df_trie = dataframe.loc[masque].sort_values('time')
+                    i = 0
+                    for idx in df_trie.index:
+                        if pd.notna(dataframe.loc[idx, 'zone']):
+                            # zone deja assignee (extraite du nom de fichier) -> on ne touche a rien
+                            continue
+                        else:
+                            dataframe.loc[idx, 'zone'] = i // chunk_size + 1
+                            i += 1
+    return dataframe
+
+
+
+
 def get_files_metadata(all_files, header = True, extended = True, use_cache = True):
     all_properties = []
 
@@ -293,10 +348,12 @@ def helper_find_root_directory():
             return path
 
 
+
+
 # if we have more informations on the data
 def complete_dataframe(config1, config2, dataframe, name="surya-dataset-description" ):
 
-    # adding data in panda dataframe
+    # adding information from exp#2 in panda dataframe
     for batch, petris in config1.items():
         for petri, (echantillon, dose, type_) in petris.items():
             num_batch = int(re.search(r'\d+', batch).group())
@@ -306,6 +363,7 @@ def complete_dataframe(config1, config2, dataframe, name="surya-dataset-descript
             dataframe.loc[masque, 'sexe'] = type_[0].lower()
             dataframe.loc[masque, 'traitement'] = 'NT' not in type_
 
+    # adding information from exp#1 in panda dataframe
     for jour, petris in config2.items():
         for petri, (doses, souris_data) in petris.items():
             num_petri = int(re.search(r'\d+', petri).group())
@@ -341,7 +399,8 @@ if __name__ == "__main__":
     df, summary = get_files_metadata(all_files, header = False, extended = False, use_cache = False)
 
     from config import CONFIG1, CONFIG2
-    complete_dataframe(CONFIG1, CONFIG2, df, summary) #add information manually
+    df_plus_zones = assign_missing_zone(CONFIG2, df)
+    complete_dataframe(CONFIG1, CONFIG2, df_plus_zones, summary) #add information manually
 
     # How to manipulate a panda Dataframe:
     
