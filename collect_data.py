@@ -2,6 +2,7 @@ import os
 import re
 import datetime
 from pathlib import Path
+from collections import defaultdict
 import subprocess
 import pandas as pd
 import time
@@ -152,7 +153,7 @@ def extract_properties_from_path(file_path):
     # Extraction de la zone
     # Le \W ne match pas le "_", il faut donc [\W_] pour attraper "souris2_0Gy_zone1"
     # et le separateur optionnel pour "zone_1" et "zone 2"
-    pattern = r"[\W_][Zz]o?n?e?[ _-]?(?P<zone>\d+)"
+    pattern = r"[\W_\d][Zz]o?n?e?_? ?(?P<zone>\d+)"
     match = re.search(pattern, file_path,  re.IGNORECASE)
     if match is not None:
         properties.update(to_int_values(match.groupdict()))
@@ -179,7 +180,7 @@ def extract_properties_from_path(file_path):
 
         properties['index'] = int(groups['index'])
         properties['index2'] = int(groups['index2'])
-
+    
     # Extraction de la hauteur, si presente
     pattern = r"\WHauteur(?P<hauteur>\d+)"
     match = re.search(pattern, file_path,  re.IGNORECASE)
@@ -267,6 +268,58 @@ def extract_header_from_path(file_path):
 
     return properties
 
+
+
+def assign_missing_zone(config_exp1, dataframe, chunk_size=10):
+    '''
+    Fonction permettant l'ajout de zone au fichier qui n'en on pas déjà une d'inscrite
+    fonctionne en séparant les fichiers par groupe de 10 (1 zone par bon de 10)
+    chunk_size : nombre d'acquisitions par zone
+    '''
+    for jour, petris in config_exp1.items():
+        num_jour = int(re.search(r'\d+', jour).group())
+
+        # on ne traite que jour 0, 2 et 4 -- les autres n'ont pas de zones a assigner
+        if num_jour not in (0, 2, 4):
+            continue
+        for petri, (doses, souris_data) in petris.items():
+            num_petri = int(re.search(r'\d+', petri).group())
+
+            for souris, info in souris_data.items():
+                num_souris = int(re.search(r'\d+', souris).group())
+
+                masque_base = (
+                    (dataframe['exp'] == 1)
+                    & (dataframe['jour'] == num_jour)
+                    & (dataframe['petri'] == num_petri)
+                    & (dataframe['souris'] == num_souris)
+                )
+
+                if num_jour == 0:
+                    masques = []
+                    for echantillon, zones in info.items():
+                        num_echantillon = int(re.search(r'\d+', echantillon).group())
+                        masques.append(masque_base & (dataframe['keyword'] == f'echantillon{num_echantillon}'))
+                elif num_jour == 2:
+                    masques = [masque_base & (dataframe['keyword'] == kw) for kw in ['verre', 'gelose']]
+                elif num_jour == 4:
+                    masques = [masque_base]
+
+                for masque in masques:
+                    df_trie = dataframe.loc[masque].sort_values('time')
+                    i = 0
+                    for idx in df_trie.index:
+                        if pd.notna(dataframe.loc[idx, 'zone']):
+                            # zone deja assignee (extraite du nom de fichier) -> on ne touche a rien
+                            continue
+                        else:
+                            dataframe.loc[idx, 'zone'] = i // chunk_size + 1
+                            i += 1
+    return dataframe
+
+
+
+
 def get_files_metadata(all_files, header = True, extended = True, use_cache = True):
     all_properties = []
 
@@ -317,7 +370,7 @@ def get_files_metadata(all_files, header = True, extended = True, use_cache = Tr
     df.to_pickle(cache)
     print(f"Cache written to {cache}")
 
-    return df
+    return df, summary
 
 def get_mask(df, mask_as_dict):
     # Le notna() est necessaire: sans lui les colonnes Int64 donnent pd.NA au lieu
@@ -377,6 +430,42 @@ def helper_find_root_directory():
         if Path(path).exists() and ("surya" in str(Path(path).resolve()).lower()):
             return path
 
+
+# if we have more informations on the data
+def complete_dataframe(config1, config2, dataframe, name="surya-dataset-description" ):
+
+    # adding data in panda dataframe
+    for batch, petris in config1.items():
+        for petri, (echantillon, dose, type_) in petris.items():
+            num_batch = int(re.search(r'\d+', batch).group())
+            num_petri = int(re.search(r'\d+', petri).group())
+            masque = (dataframe['exp'] == 2) & (dataframe['batch'] == num_batch) & (dataframe['petri'] == num_petri)
+            dataframe.loc[masque, 'dose'] = dose
+            dataframe.loc[masque, 'sexe'] = type_[0].lower()
+            dataframe.loc[masque, 'traitement'] = 'NT' not in type_
+
+    for jour, petris in config2.items():
+        for petri, (doses, souris_data) in petris.items():
+            num_petri = int(re.search(r'\d+', petri).group())
+            num_jour = int(re.search(r'\d+', jour).group())
+            dose = int(re.search(r'\d+', doses).group())
+            traitement = '+' in doses
+
+            masque1 = (dataframe['exp'] == 1) & (dataframe['jour'] == num_jour) & (dataframe['petri'] == num_petri)
+            dataframe.loc[masque1, 'dose'] = dose
+            dataframe.loc[masque1, 'traitement'] = traitement
+
+            for souris, info in souris_data.items():
+                num_souris = int(re.search(r'\d+', souris).group())
+                masque2 = masque1 & (dataframe['souris'] == num_souris)
+                sexe = 'f' if num_souris in (1, 2, 3) else 'm'
+                dataframe.loc[masque2, 'sexe'] = sexe
+
+    dataframe.to_excel(name+".xlsx", index=False)
+    dataframe.to_pickle(name+".pkl")
+    
+
+
 if __name__ == "__main__":
     root =  helper_find_root_directory()
     print(f"Reading from {root}")
@@ -390,7 +479,7 @@ if __name__ == "__main__":
 
     # A panda dataframe is like an excel file with column titles, it is the best structure for data
     # Put into a Panda dataframe and save everything for review
-    df = get_files_metadata(all_files, header = False, extended=False, use_cache = False)
+    df, summary = get_files_metadata(all_files, header = False, extended=False, use_cache = False)
 
     masque = df['index'].notna()
     df.loc[masque, 'dizaine'] = df['index'] // 10
@@ -407,19 +496,8 @@ if __name__ == "__main__":
     # Enlever souris 48 dans petri 5 et 7 exp_2 batch1 fix
     print("# Enlever souris 48 dans petri 5 et 7 exp_2 batch1 fix")
 
-
-
-    # adding information
-    from config import CONFIG1
-
-    for batch, petris in CONFIG1.items():
-        for petri, (echantillon, dose, type_) in petris.items():
-            num_batch = int(re.search(r'\d+', batch).group())
-            num_petri = int(re.search(r'\d+', petri).group())
-            masque = (df['exp'] == 2) & (df['batch'] == num_batch) & (df['petri'] == num_petri)
-            df.loc[masque, 'dose'] = dose
-            df.loc[masque, 'sexe'] = type_[0].lower()
-            df.loc[masque, 'traitement'] = 'NT' not in type_
+    from config import CONFIG1, CONFIG2
+    complete_dataframe(CONFIG1, CONFIG2, df, summary) #add information manually
 
 
 
