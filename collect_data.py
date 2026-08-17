@@ -64,7 +64,7 @@ def get_all_data_file_paths(root, invisible_files = False, progress = True, use_
                     continue
 
                 if progress and time.time() > next_progress_print:
-                    print(".", end = "")
+                    print(".", end = "", flush=True)
                     next_progress_print = time.time() + 2
 
                 if not Path(path).exists():
@@ -472,7 +472,7 @@ if __name__ == "__main__":
   
     pd.set_option('display.max_colwidth', None) 
 
-    all_files = get_all_data_file_paths(root, use_cache=True)
+    all_files = get_all_data_file_paths(root, use_cache=False)
     all_files = [ file_path for file_path in all_files if file_path.endswith('txt') ]  # Keep only data files
     all_files = [ file_path for file_path in all_files if "old" not in file_path]      # exp_2_old is not useful, we remove it
     all_files = [ file_path for file_path in all_files if "archives" not in file_path] # archives is not useful, we remove it 
