@@ -555,7 +555,7 @@ if __name__ == "__main__":
     print("\n\n== Verification de l'unicite des metadata ==\n")
     doublons = validate_unique_metadata(df, ignore=("time", "file","size_in_bytes"))
 
-    How to manipulate a panda Dataframe:
+    # How to manipulate a panda Dataframe:
 
     print("\n\n== Example : list all columns ==\n")
     print(df.columns)
