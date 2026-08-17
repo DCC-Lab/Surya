@@ -226,4 +226,5 @@ surya-dataset.xlsx
 surya-dataset-description.pkl
 surya-dataset-description.xlsx
 surya-dataset.pkl
-~$surya-dataset-description.xlsx
+data_files_*.txt
+files_metadata_*.pkl

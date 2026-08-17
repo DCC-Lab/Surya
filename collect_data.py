@@ -6,6 +6,8 @@ from collections import defaultdict
 import subprocess
 import pandas as pd
 import time
+import hashlib, json
+import uuid
 
 """
 This code will read all the spectral files from a root directory and
@@ -22,6 +24,13 @@ if __name__ == "__main__":
     # Start here
 
 """
+
+def cache_name(params, prefix="cache", ext=".pkl"):
+    params['node'] = uuid.getnode()
+    s = json.dumps(params, sort_keys=True, default=str)
+    h = hashlib.sha256(s.encode()).hexdigest()[:16]
+    return f"{prefix}_{h}{ext}"
+
 def get_all_data_file_paths(root, invisible_files = False, progress = True, use_cache = True):
     """
     Get the list of files at a given root directory
@@ -33,10 +42,11 @@ def get_all_data_file_paths(root, invisible_files = False, progress = True, use_
     if not Path(root).exists():
         raise ValueError(f"The path {root} does not exist")
 
-    cache = Path("all_files-cache.txt")
+    cache = cache_name({"root":root,"invisible_files":invisible_files}, prefix="data_files", ext=".txt")
+
     all_files = []
     
-    if use_cache and cache.exists():
+    if use_cache and Path(cache).exists():
         with open(cache, "r", encoding="utf-8") as file_path:
             all_files = file_path.read().splitlines()
             if all_files and all_files[0].startswith(root):
@@ -132,6 +142,11 @@ def extract_properties_from_path(file_path):
     if match is not None:
         properties.update(to_int_values(match.groupdict()))
 
+    # Extraction de la zone
+    pattern = r"[\W_\d][Zz]o?n?e?_? ?(?P<zone>\d+)"
+    match = re.search(pattern, file_path,  re.IGNORECASE)
+    if match is not None:
+        properties.update(to_int_values(match.groupdict()))
 
     # Extraction de l'heure d'acquisition'
     pattern = r"__(?P<index>\d+)__(?P<heure>\d+)-(?P<minutes>\d+)-(?P<s>\d+)-(?P<ms>\d+)"
@@ -181,15 +196,13 @@ def extract_properties_from_path(file_path):
 
 
     # Extraction de certains keywords, si present
-    pattern = r"(?P<keyword>white|blanche|dark|black|verre|gel+ose|anneau|adn|petri_|echantillon1|echantillon2|inversé|petri[+]gelose)"
+    pattern = r"(?P<keyword>white|blanche|dark|black|verre|gel+ose|anneau|adn|petri_)"
     match = re.search(pattern, file_path,  re.IGNORECASE)
     if match is not None:
         groups = match.groupdict()
         if "gellose" in groups.values():
             groups['keyword'] = "gelose"
         if 'petri_' in groups.values():
-            groups['keyword'] = 'petri'
-        if 'petri+gelose' in groups.values():
             groups['keyword'] = 'petri'
 
         properties.update(to_int_values(groups))
@@ -299,10 +312,12 @@ def get_files_metadata(all_files, header = True, extended = True, use_cache = Tr
     all_properties = []
 
     # If we can use the cache, we do
-    summary = "surya-dataset-description"
-    if use_cache and Path(summary+".pkl").exists():
-        df = pd.read_pickle(Path(summary+".pkl"))
+    cache = cache_name({"root":root,"header":header,"extended":extended}, prefix="files_metadata", ext=".pkl")
+
+    if use_cache and Path(cache).exists():
+        df = pd.read_pickle(Path(cache))
         if set(all_files).issubset(df["file"]):
+            print(f"Cache read from {cache}")
             return df
         # If not, we need to retrieve it
 
@@ -326,6 +341,7 @@ def get_files_metadata(all_files, header = True, extended = True, use_cache = Tr
             properties.update(extended_properties)
         all_properties.append(properties)
 
+
     # A panda dataframe is like an excel file with column titles
     # Put into a Panda dataframe and save everything for review
 
@@ -335,8 +351,14 @@ def get_files_metadata(all_files, header = True, extended = True, use_cache = Tr
     convert_to_int = {"exp","petri","jour", "souris", "index", "dose", "test", "zone", "batch"}
     df = df.astype({c: "Int64" for c in convert_to_int if c in df.columns})
 
+    summary = "surya-dataset-description"
+    df.to_excel(summary+".xlsx", index=False)
+    print(f"Summary written to {summary}")
 
-    return df, summary
+    df.to_pickle(cache)
+    print(f"Cache written to {cache}")
+
+    return df
 
 def helper_find_root_directory():
     options = [ "/Volumes/Labdata/dcclab/surya",
@@ -348,12 +370,10 @@ def helper_find_root_directory():
             return path
 
 
-
-
 # if we have more informations on the data
 def complete_dataframe(config1, config2, dataframe, name="surya-dataset-description" ):
 
-    # adding information from exp#2 in panda dataframe
+    # adding data in panda dataframe
     for batch, petris in config1.items():
         for petri, (echantillon, dose, type_) in petris.items():
             num_batch = int(re.search(r'\d+', batch).group())
@@ -363,7 +383,6 @@ def complete_dataframe(config1, config2, dataframe, name="surya-dataset-descript
             dataframe.loc[masque, 'sexe'] = type_[0].lower()
             dataframe.loc[masque, 'traitement'] = 'NT' not in type_
 
-    # adding information from exp#1 in panda dataframe
     for jour, petris in config2.items():
         for petri, (doses, souris_data) in petris.items():
             num_petri = int(re.search(r'\d+', petri).group())
@@ -395,12 +414,11 @@ if __name__ == "__main__":
     all_files = [ file_path for file_path in all_files if "archives" not in file_path] # archives is not useful, we remove it 
 
     # A panda dataframe is like an excel file with column titles, it is the best structure for data
-    # Put into a Panda dataframe 
-    df, summary = get_files_metadata(all_files, header = False, extended = False, use_cache = False)
+    # Put into a Panda dataframe and save everything for review
+    df = get_files_metadata(all_files, header = False, extended=False, use_cache = False)
 
     from config import CONFIG1, CONFIG2
-    df_plus_zones = assign_missing_zone(CONFIG2, df)
-    complete_dataframe(CONFIG1, CONFIG2, df_plus_zones, summary) #add information manually
+    complete_dataframe(CONFIG1, CONFIG2, df, summary) #add information manually
 
     # How to manipulate a panda Dataframe:
     
@@ -430,7 +448,7 @@ if __name__ == "__main__":
     print(df[ (df['fixation'] == 'frais') ])
 
     print("\n\n== Example : Extraire batch 1, petri 1  ==\n")
-    print(df[ (df['exp'] == 1) & (df['jour'] == 0 ) ]['sexe'])
+    print(df[ (df['exp'] == 2) & (df['batch'] == 2 ) ]['sexe'])
 
     print("\n\n== List of all values per key ==\n")
     for col in df.columns:
