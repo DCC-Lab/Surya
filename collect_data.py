@@ -235,7 +235,7 @@ def extract_properties_from_path(file_path):
 
         properties.update(to_int_values(groups))
 
-    properties['file'] = Path(file_path).relative_to(root)
+    properties['file'] = str(Path(file_path).relative_to(root))
 
     return properties
 
