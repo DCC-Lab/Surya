@@ -229,3 +229,4 @@ surya-dataset.pkl
 data_files_*.txt
 files_metadata_*.pkl
 cache_surya_files.txt
+cache_surya_files_metadata.pkl
