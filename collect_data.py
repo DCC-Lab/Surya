@@ -171,8 +171,8 @@ def extract_properties_from_path(file_path):
     if match is not None:
         properties.update(to_int_values(match.groupdict()))
 
-    # Extraction de l'heure d'acquisition et de l'index
-    pattern = r"__(?P<index>\d+)__(?P<heure>\d+)-(?P<minutes>\d+)-(?P<s>\d+)-(?P<ms>\d+)"
+    # Extraction de l'heure d'acquisition et de l'indice1
+    pattern = r"__(?P<indice1>\d+)__(?P<heure>\d+)-(?P<minutes>\d+)-(?P<s>\d+)-(?P<ms>\d+)"
     match = re.search(pattern, file_path,  re.IGNORECASE)
     if match is not None:
         groups = match.groupdict()
@@ -183,16 +183,16 @@ def extract_properties_from_path(file_path):
                         microsecond=int(groups['ms'])*1000)
 
         properties['time'] = my_time
-        properties['index'] = int(groups['index'])
+        properties['indice1'] = int(groups['indice1'])
 
-    # Extraction de l'index en l'absence de heure d'acquisition
-    pattern = r"__(?P<index>\d+)__(?P<index2>\d{5})"
+    # Extraction de l'indice1 en l'absence de heure d'acquisition
+    pattern = r"__(?P<indice1>\d+)__(?P<indice2>\d{5})"
     match = re.search(pattern, file_path,  re.IGNORECASE)
     if match is not None:
         groups = match.groupdict()
 
-        properties['index'] = int(groups['index'])
-        properties['index2'] = int(groups['index2'])
+        properties['indice1'] = int(groups['indice1'])
+        properties['indice2'] = int(groups['indice2'])
     
     # Extraction de la hauteur, si presente
     pattern = r"\WHauteur(?P<hauteur>\d+)"
@@ -324,7 +324,7 @@ def extract_header_from_path(file_path):
 #                 for masque in masques:
 #                     df_trie = dataframe.loc[masque].sort_values('time')
 #                     i = 0
-#                     for idx in df_trie.index:
+#                     for idx in df_trie.indice1:
 #                         if pd.notna(dataframe.loc[idx, 'zone']):
 #                             # zone deja assignee (extraite du nom de fichier) -> on ne touche a rien
 #                             continue
@@ -348,6 +348,7 @@ def get_files_metadata(root, all_files, header = True, extended = True, use_cach
     df_file_set = {}
     if use_cache and cache_path.exists():
         df = pd.read_pickle(cache_path)
+        df = df.reset_index(drop=True) 
         df_file_set = { str(file) for file in df['file']}
 
     # We show progress every 2 seconds
@@ -375,11 +376,11 @@ def get_files_metadata(root, all_files, header = True, extended = True, use_cach
             properties.update(extended_properties)
         
         single_row = pd.DataFrame([properties])
-        df = pd.concat([df, single_row])
+        df = pd.concat([df, single_row], ignore_index=True)
 
 
     # We can force the type of certain columns to be clean
-    convert_to_int = {"exp","petri","jour", "souris", "index", "index2", "dose", "test", "zone", "subzone","batch"}
+    convert_to_int = {"exp","petri","jour", "souris", "indice1", "indice2", "dose", "test", "zone", "subzone","batch"}
     df = df.astype({c: "Int64" for c in convert_to_int if c in df.columns})
 
 
@@ -401,12 +402,12 @@ def get_mask(df, mask_as_dict):
 
     return mask
 
-def validate_unique_metadata(df, ignore=("time", "index", "file", "size_in_bytes"), verbose=True):
+def validate_unique_metadata(df, ignore=("time", "indice1", "file", "size_in_bytes"), verbose=True):
     """
     Verifie que les metadata de chaque fichier sont uniques.
 
     Pour chaque ligne, on rassemble les metadata dans un dictionnaire, on
-    enleve les colonnes qui sont toujours differentes (time, index, file) puis
+    enleve les colonnes qui sont toujours differentes (time, indice1, file) puis
     on verifie que la signature qui reste n'apparait qu'une seule fois.
 
     Retourne un dictionnaire {signature: [liste des fichiers]} pour les
@@ -436,7 +437,7 @@ def validate_unique_metadata(df, ignore=("time", "index", "file", "size_in_bytes
                     for i in indices:
                         print(f"    {df.loc[i, 'file']}")
 
-    # On retourne les fichiers plutot que les index, plus utile pour le diagnostic
+    # On retourne les fichiers plutot que les indice1, plus utile pour le diagnostic
     return {sig: df.loc[idx, "file"].tolist() for sig, idx in doublons.items()}
 
 def helper_find_root_directory():
@@ -494,19 +495,19 @@ def correct_acquisition_errors(df, name="surya-dataset-description"):
     """
 
     def renumber_sequentially_in_time(df, mask):
-        list_rows = df[mask].sort_values('index')['index']
+        list_rows = df[mask].sort_values('indice1')['indice1']
         if len(set(list_rows)) == len(list_rows):
-            raise ValueError("Les 'index' sont uniques: rien a renumeroter")
+            raise ValueError("Les 'indice1' sont uniques: rien a renumeroter")
 
         indices = df[mask].sort_values('time').index
         for i, idx in enumerate(indices):
-            df.loc[idx, 'index'] = i
+            df.loc[idx, 'indice1'] = i
 
-        list_rows = df[mask].sort_values('index')['index']
+        list_rows = df[mask].sort_values('indice1')['indice1']
         if len(set(list_rows)) != len(list_rows):
-            raise ValueError("La renumerotation n'a pas fonctionne")
+            raise ValueError("Warning: La renumerotation n'a pas fonctionne")
         else:
-            print("'index' rewritten sequentially")
+            print("'indice1' rewritten sequentially")
 
         return df
 
@@ -533,18 +534,18 @@ def correct_acquisition_errors(df, name="surya-dataset-description"):
 
     try:
         print(f"\n\n== 5. Meme probleme que #2 et #3 mais exp 1, jour 4 petri 3 souris 2==")
-        mask_doublons = get_mask(df, {'dizaine': 0, 'exp': 1, 'fixation': 'fixe', 'index': 8, 'jour': 8, 'modalite': 'raman', 'petri': 4, 'souris': 5, 'zone': 2})
+        mask_doublons = get_mask(df, {'dizaine': 0, 'exp': 1, 'fixation': 'fixe', 'indice1': 8, 'jour': 8, 'modalite': 'raman', 'petri': 4, 'souris': 5, 'zone': 2})
         df = renumber_sequentially_in_time(df, mask_doublons)
     except:
         pass
 
     
     # print(f"\n\n== 5. Meme probleme que #2 et #3 mais exp 1, jour 8 petri 3 souris 2==")
-    # mask_doublons = get_mask(df, {'dizaine': 0, 'exp': 1, 'fixation': 'fixe', 'index': 8, 'jour': 8, 'modalite': 'raman', 'petri': 4, 'souris': 5, 'zone': 2})
+    # mask_doublons = get_mask(df, {'dizaine': 0, 'exp': 1, 'fixation': 'fixe', 'indice1': 8, 'jour': 8, 'modalite': 'raman', 'petri': 4, 'souris': 5, 'zone': 2})
     # df = renumber_sequentially_in_time(df, mask_doublons)
     
-    print(f"\n\n== 5. Un fichier seul a effacer ==")
-    df = df[ df['file'] != "/Volumes/Labdata/dcclab/surya/exp_1/jour8/frais/Raman/petri2/petri2_souris3_zone1/20260519_jour6_raman_petri2_souris3_45Gy_zone1_RamanShift__0__11-41-01-478.txt"]
+    print(f"\n\n== 6. Un fichier seul a effacer ==")
+    df = df[ df['file'] != "exp_1/jour8/frais/Raman/petri2/petri2_souris3_zone1/20260519_jour6_raman_petri2_souris3_45Gy_zone1_RamanShift__0__11-41-01-478.txt"]
 
     df.to_excel(name+".xlsx", index=False)
     df.to_pickle(name+".pkl")
@@ -570,11 +571,12 @@ if __name__ == "__main__":
     # Put into a Panda dataframe and save everything for review
     df1, summary = get_files_metadata(root, all_files, header = True, extended=True, use_cache = True)
 
-    masque = (df1['exp'] == 2)
-    print(f"voici les fichiers avec batch dans l'exp2: {df1[masque]['batch']}" )
+    # masque = ( (df1['exp'] == 2) & df1['batch'].notna() )
+    # print(f"voici les fichiers avec batch dans l'exp2: {df1[masque]['batch']}" )
     
-    masque = df1['index'].notna()
-    df1.loc[masque, 'dizaine'] = df1['index'] // 10
+    masque = df1['indice1'].notna()
+
+    df1.loc[masque, 'dizaine'] = df1['indice1'] // 10
 
 
     df1 = df1[(df1['test'].isna())]
@@ -589,14 +591,12 @@ if __name__ == "__main__":
 
 
     from config import CONFIG1, CONFIG2
-    df2 = complete_dataframe(CONFIG1, CONFIG2, df1, summary) #add information manually    
+    df = complete_dataframe(CONFIG1, CONFIG2, df1, summary) #add information manually    
 
-
-    # Chloe: regarde ici
-    df = correct_acquisition_errors(df2)
+    df = correct_acquisition_errors(df)
     
     masque = (df['exp'] == 1) & (df['petri'] == 1) & (df['souris'] == 1) & (df['jour'] == 2) & (df['modalite'] == 'raman') & (df['fixation'] == 'fixe') & (df['keyword'] == 'verre')
-    print(f'voici le dataframe raman exp1 jour2 petri1 souris1{df[masque]['index']}')
+    print(f'voici le dataframe raman exp1 jour2 petri1 souris1{df[masque]['indice1']}')
 
     print("\n\n== Verification de l'unicite des metadata ==\n")
     doublons = validate_unique_metadata(df, ignore=("time", "file","size_in_bytes"))
