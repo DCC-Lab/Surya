@@ -560,7 +560,7 @@ if __name__ == "__main__":
 
     # A panda dataframe is like an excel file with column titles, it is the best structure for data
     # Put into a Panda dataframe and save everything for review
-    df1, summary = get_files_metadata(all_files, header=False, extended=False, use_cache = False)
+    df1, summary = get_files_metadata(all_files, header=False, extended=False, use_cache = True)
 
     masque = (df1['exp'] == 2)
     print(f"voici les fichiers avec batch dans l'exp2: {df1[masque]['batch']}" )

@@ -720,15 +720,21 @@ if __name__ == "__main__":
     # print("Starting code")
     fichiers = extract_frais('batch#1', 'petri1', 'z1')
     w1, i1, baseline1 = correction_data(fichiers, traiter_etalon=True, als=True, bubblewidth=None, p=0.09)
-    w3, i3, baseline2 = correction_data(fichiers, traiter_etalon=True, als=True, bubblewidth=None, lam=1e6, p=0.01)
+    w2, i2, baseline2 = correction_data(fichiers, traiter_etalon=True, als=True, bubblewidth=None, lam=1e6, p=0.01)
     w2, i2 = traiter_acquisitions(fichiers)
     w2, i2 = traiter_acquisitions(fichiers)
-    i1, baseline3 = supprimer_fluorescence_arpls(i2, lam=1e7, ratio=1e-6, n_iter=50, pad=100)
-    plt.plot(w3, i3, label=2)
-    plt.plot(w1, baseline1, label='1')
-    plt.plot(w2, i2, label='brute')
-    plt.plot(w1, i1, label='1')
-    plt.plot(w1, baseline2, label='2')
+    i4, baseline3 = supprimer_fluorescence_arpls(i2, lam=1e7, ratio=1e-6, n_iter=50, pad=100)
+    i4, baseline4 = supprimer_fluorescence_arpls(i1, lam=1e7, ratio=1e-6, n_iter=50, pad=100)
+
+
+    plt.plot(w1, i1, label=1)
+    plt.plot(w1, baseline1, label=1)
+    plt.plot(w2, i2, label=2)
+    plt.plot(w2, baseline2, label=2)
+
+    #plt.plot(w1, i1, label='1')
+
+    plt.plot(w1, baseline4, label='4')
 
     plt.legend()
     plt.show()
