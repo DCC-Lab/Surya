@@ -25,6 +25,8 @@ if __name__ == "__main__":
 
 """
 
+DEBUG = True
+
 def cache_name(params, prefix="cache", ext=".pkl"):
     params['node'] = uuid.getnode()
     s = json.dumps(params, sort_keys=True, default=str)
@@ -44,7 +46,9 @@ def get_all_data_file_paths(root, invisible_files=False, progress=True, use_cach
     if not Path(root).exists():
         raise ValueError(f"The path {root} does not exist")
 
-    cache = cache_name({"root":root,"invisible_files":invisible_files}, prefix="data_files", ext=".txt")
+    # cache = cache_name({"root":root,"invisible_files":invisible_files}, prefix="data_files", ext=".txt")
+    cache_filename = "cache_surya_files.txt"
+    cache = Path(root) / Path(cache_filename)
 
     all_files = []
 
@@ -54,13 +58,9 @@ def get_all_data_file_paths(root, invisible_files=False, progress=True, use_cach
             print(f"Cache trop vieux ({age_hours:.1f}h), on ignore")
             use_cache = False
     
-    if use_cache and Path(cache).exists():
+    if use_cache and cache.exists():
         with open(cache, "r", encoding="utf-8") as file_path:
             all_files = file_path.read().splitlines()
-            if all_files and all_files[0].startswith(root):
-                print(f"Cache read from {cache}")
-            else:
-                all_files = []
 
     if not all_files:
         print("No cache for files list, reading from disk")
@@ -78,7 +78,10 @@ def get_all_data_file_paths(root, invisible_files=False, progress=True, use_cach
                 if not Path(path).exists():
                     print(f"Warning: {path} is not recognized (probably accented characters)")
 
-                all_files.append(path)
+                file_relative_path = str(Path(path).relative_to(root))
+                all_files.append(file_relative_path)
+                print(file_relative_path)
+
         print(".")
 
         if use_cache:
@@ -96,6 +99,8 @@ def extract_properties_from_path(file_path):
 
     """
     properties = {}
+
+    file_path = str(file_path)
 
     def to_int_values(properties):
         for key, value in properties.items():
@@ -230,7 +235,7 @@ def extract_properties_from_path(file_path):
 
         properties.update(to_int_values(groups))
 
-    properties['file'] = file_path
+    properties['file'] = Path(file_path).relative_to(root)
 
     return properties
 
@@ -331,27 +336,32 @@ def extract_header_from_path(file_path):
 
 
 
-def get_files_metadata(all_files, header = True, extended = True, use_cache = True):
+def get_files_metadata(root, all_files, header = True, extended = True, use_cache = True):
     all_properties = []
 
     # If we can use the cache, we do
-    cache = cache_name({"root":root,"header":header,"extended":extended}, prefix="files_metadata", ext=".pkl")
-    summary = "surya-dataset-description"
+    # cache = cache_name({"header":header,"extended":extended}, prefix="files_metadata", ext=".pkl")
+    cache_filename = "cache_surya_files_metadata.pkl"
+    cache_path = Path(root) / Path(cache_filename)
 
-    if use_cache and Path(cache).exists():
-        df = pd.read_pickle(Path(cache))
-        if set(all_files).issubset(df["file"]):
-            print(f"Cache read from {cache}")
-            return df, summary
-        # If not, we need to retrieve it
+    df = pd.DataFrame()
+    df_file_set = {}
+    if use_cache and cache_path.exists():
+        df = pd.read_pickle(cache_path)
+        df_file_set = { str(file) for file in df['file']}
 
     # We show progress every 2 seconds
     next_progress_print = time.time() + 2
 
-    for i, file_path in enumerate(all_files):
+    for i, file_relative_path in enumerate(all_files):
+        if file_relative_path in df_file_set:
+            continue
+
         if time.time() > next_progress_print:
             print(f"Processing file {i} of {len(all_files)}")
             next_progress_print += 2
+
+        file_path = Path(root) / file_relative_path
 
         properties = extract_properties_from_path(file_path)
 
@@ -363,24 +373,22 @@ def get_files_metadata(all_files, header = True, extended = True, use_cache = Tr
         if extended:
             extended_properties = extract_extended_properties_from_path(file_path)
             properties.update(extended_properties)
-        all_properties.append(properties)
+        
+        single_row = pd.DataFrame([properties])
+        df = pd.concat([df, single_row])
 
-
-    # A panda dataframe is like an excel file with column titles
-    # Put into a Panda dataframe and save everything for review
-
-    df = pd.DataFrame(all_properties)
 
     # We can force the type of certain columns to be clean
     convert_to_int = {"exp","petri","jour", "souris", "index", "index2", "dose", "test", "zone", "subzone","batch"}
     df = df.astype({c: "Int64" for c in convert_to_int if c in df.columns})
 
-    
+
+    summary = "surya-dataset-description"    
     df.to_excel(summary+".xlsx", index=False)
     print(f"Summary written to {summary}")
 
-    df.to_pickle(cache)
-    print(f"Cache written to {cache}")
+    df.to_pickle(cache_path)
+    print(f"Cache updated and written to {cache_path}")
 
     return df, summary
 
@@ -545,7 +553,7 @@ def correct_acquisition_errors(df, name="surya-dataset-description"):
 
 if __name__ == "__main__":
     root =  helper_find_root_directory()
-    print(f"Reading from {root}")
+    print(f"Root path is: {root}")
   
     pd.set_option('display.max_colwidth', None) 
     pd.set_option('display.width', None) 
@@ -560,7 +568,7 @@ if __name__ == "__main__":
 
     # A panda dataframe is like an excel file with column titles, it is the best structure for data
     # Put into a Panda dataframe and save everything for review
-    df1, summary = get_files_metadata(all_files, header=False, extended=False, use_cache = True)
+    df1, summary = get_files_metadata(root, all_files, header = True, extended=True, use_cache = True)
 
     masque = (df1['exp'] == 2)
     print(f"voici les fichiers avec batch dans l'exp2: {df1[masque]['batch']}" )
