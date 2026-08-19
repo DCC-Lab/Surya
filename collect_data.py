@@ -52,11 +52,11 @@ def get_all_data_file_paths(root, invisible_files=False, progress=True, use_cach
 
     all_files = []
 
-    if use_cache and Path(cache).exists():
-        age_hours = (time.time() - Path(cache).stat().st_mtime) / 3600
-        if age_hours > max_cache_age_hours:
-            print(f"Cache trop vieux ({age_hours:.1f}h), on ignore")
-            use_cache = False
+    # if use_cache and Path(cache).exists():
+    #     age_hours = (time.time() - Path(cache).stat().st_mtime) / 3600
+    #     if age_hours > max_cache_age_hours:
+    #         print(f"Cache trop vieux ({age_hours:.1f}h), on ignore")
+    #         use_cache = False
     
     if use_cache and cache.exists():
         with open(cache, "r", encoding="utf-8") as file_path:
