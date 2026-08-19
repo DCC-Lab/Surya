@@ -31,7 +31,7 @@ def cache_name(params, prefix="cache", ext=".pkl"):
     h = hashlib.sha256(s.encode()).hexdigest()[:16]
     return f"{prefix}_{h}{ext}"
 
-def get_all_data_file_paths(root, invisible_files = False, progress = True, use_cache = True):
+def get_all_data_file_paths(root, invisible_files=False, progress=True, use_cache=True, max_cache_age_hours=24):
     """
     Get the list of files at a given root directory
 
@@ -39,12 +39,20 @@ def get_all_data_file_paths(root, invisible_files = False, progress = True, use_
     use it if use_cache is True
 
     """
+
+    
     if not Path(root).exists():
         raise ValueError(f"The path {root} does not exist")
 
     cache = cache_name({"root":root,"invisible_files":invisible_files}, prefix="data_files", ext=".txt")
 
     all_files = []
+
+    if use_cache and Path(cache).exists():
+        age_hours = (time.time() - Path(cache).stat().st_mtime) / 3600
+        if age_hours > max_cache_age_hours:
+            print(f"Cache trop vieux ({age_hours:.1f}h), on ignore")
+            use_cache = False
     
     if use_cache and Path(cache).exists():
         with open(cache, "r", encoding="utf-8") as file_path:
@@ -208,14 +216,17 @@ def extract_properties_from_path(file_path):
 
 
     # Extraction de certains keywords, si present
-    pattern = r"(?P<keyword>white|blanche|dark|black|verre|gel+ose|anneau|adn|petri_|methanol|pink)"
-    match = re.search(pattern, file_path,  re.IGNORECASE)
+    # Extraction de certains keywords, si present
+    pattern = r"(?P<keyword>white|blanche|dark|black|verre|gel+ose|anneau|adn|petri_|methanol|pink|\d+\s*min\s*plus\s*tards?)"
+    match = re.search(pattern, file_path, re.IGNORECASE)
     if match is not None:
         groups = match.groupdict()
         if "gellose" in groups.values():
             groups['keyword'] = "gelose"
         if 'petri_' in groups.values():
             groups['keyword'] = 'petri'
+        if groups['keyword'] is not None and re.match(r"\d+\s*min\s*plus\s*tards?", groups['keyword'], re.IGNORECASE):
+            groups['keyword'] = 'plus_tard'
 
         properties.update(to_int_values(groups))
 
@@ -270,52 +281,52 @@ def extract_header_from_path(file_path):
 
 
 
-def assign_missing_zone(config_exp1, dataframe, chunk_size=10):
-    '''
-    Fonction permettant l'ajout de zone au fichier qui n'en on pas déjà une d'inscrite
-    fonctionne en séparant les fichiers par groupe de 10 (1 zone par bon de 10)
-    chunk_size : nombre d'acquisitions par zone
-    '''
-    for jour, petris in config_exp1.items():
-        num_jour = int(re.search(r'\d+', jour).group())
+# def assign_missing_zone(config_exp1, dataframe, chunk_size=10):
+#     '''
+#     Fonction permettant l'ajout de zone au fichier qui n'en on pas déjà une d'inscrite
+#     fonctionne en séparant les fichiers par groupe de 10 (1 zone par bon de 10)
+#     chunk_size : nombre d'acquisitions par zone
+#     '''
+#     for jour, petris in config_exp1.items():
+#         num_jour = int(re.search(r'\d+', jour).group())
 
-        # on ne traite que jour 0, 2 et 4 -- les autres n'ont pas de zones a assigner
-        if num_jour not in (0, 2, 4):
-            continue
-        for petri, (doses, souris_data) in petris.items():
-            num_petri = int(re.search(r'\d+', petri).group())
+#         # on ne traite que jour 0, 2 et 4 -- les autres n'ont pas de zones a assigner
+#         if num_jour not in (0, 2, 4):
+#             continue
+#         for petri, (doses, souris_data) in petris.items():
+#             num_petri = int(re.search(r'\d+', petri).group())
 
-            for souris, info in souris_data.items():
-                num_souris = int(re.search(r'\d+', souris).group())
+#             for souris, info in souris_data.items():
+#                 num_souris = int(re.search(r'\d+', souris).group())
 
-                masque_base = (
-                    (dataframe['exp'] == 1)
-                    & (dataframe['jour'] == num_jour)
-                    & (dataframe['petri'] == num_petri)
-                    & (dataframe['souris'] == num_souris)
-                )
+#                 masque_base = (
+#                     (dataframe['exp'] == 1)
+#                     & (dataframe['jour'] == num_jour)
+#                     & (dataframe['petri'] == num_petri)
+#                     & (dataframe['souris'] == num_souris)
+#                 )
 
-                if num_jour == 0:
-                    masques = []
-                    for echantillon, zones in info.items():
-                        num_echantillon = int(re.search(r'\d+', echantillon).group())
-                        masques.append(masque_base & (dataframe['keyword'] == f'echantillon{num_echantillon}'))
-                elif num_jour == 2:
-                    masques = [masque_base & (dataframe['keyword'] == kw) for kw in ['verre', 'gelose']]
-                elif num_jour == 4:
-                    masques = [masque_base]
+#                 if num_jour == 0:
+#                     masques = []
+#                     for echantillon, zones in info.items():
+#                         num_echantillon = int(re.search(r'\d+', echantillon).group())
+#                         masques.append(masque_base & (dataframe['keyword'] == f'echantillon{num_echantillon}'))
+#                 elif num_jour == 2:
+#                     masques = [masque_base & (dataframe['keyword'] == kw) for kw in ['verre', 'gelose']]
+#                 elif num_jour == 4:
+#                     masques = [masque_base]
 
-                for masque in masques:
-                    df_trie = dataframe.loc[masque].sort_values('time')
-                    i = 0
-                    for idx in df_trie.index:
-                        if pd.notna(dataframe.loc[idx, 'zone']):
-                            # zone deja assignee (extraite du nom de fichier) -> on ne touche a rien
-                            continue
-                        else:
-                            dataframe.loc[idx, 'zone'] = i // chunk_size + 1
-                            i += 1
-    return dataframe
+#                 for masque in masques:
+#                     df_trie = dataframe.loc[masque].sort_values('time')
+#                     i = 0
+#                     for idx in df_trie.index:
+#                         if pd.notna(dataframe.loc[idx, 'zone']):
+#                             # zone deja assignee (extraite du nom de fichier) -> on ne touche a rien
+#                             continue
+#                         else:
+#                             dataframe.loc[idx, 'zone'] = i // chunk_size + 1
+#                             i += 1
+#     return dataframe
 
 
 
@@ -325,12 +336,13 @@ def get_files_metadata(all_files, header = True, extended = True, use_cache = Tr
 
     # If we can use the cache, we do
     cache = cache_name({"root":root,"header":header,"extended":extended}, prefix="files_metadata", ext=".pkl")
+    summary = "surya-dataset-description"
 
     if use_cache and Path(cache).exists():
         df = pd.read_pickle(Path(cache))
         if set(all_files).issubset(df["file"]):
             print(f"Cache read from {cache}")
-            return df
+            return df, summary
         # If not, we need to retrieve it
 
     # We show progress every 2 seconds
@@ -363,7 +375,7 @@ def get_files_metadata(all_files, header = True, extended = True, use_cache = Tr
     convert_to_int = {"exp","petri","jour", "souris", "index", "index2", "dose", "test", "zone", "subzone","batch"}
     df = df.astype({c: "Int64" for c in convert_to_int if c in df.columns})
 
-    summary = "surya-dataset-description"
+    
     df.to_excel(summary+".xlsx", index=False)
     print(f"Summary written to {summary}")
 
@@ -461,9 +473,13 @@ def complete_dataframe(config1, config2, dataframe, name="surya-dataset-descript
 
     dataframe.to_excel(name+".xlsx", index=False)
     dataframe.to_pickle(name+".pkl")
+
+    return dataframe
+
+
     
 
-def correct_acquisition_errors(df):
+def correct_acquisition_errors(df, name="surya-dataset-description"):
     """
     Some errors occured during acquisition and were noted in the experimenter's labbook.
     They are corrected here (not in the raw data)
@@ -496,23 +512,34 @@ def correct_acquisition_errors(df):
     print(f"  Avant/apres : {count_before}/{count_after}, {count_before-count_after} effaces")
 
     print(f"\n\n== 2. Exp1, jour 2, petri 1, souris 1: l'indice d'acquisition commence a 1, et recommence ensuite a 0. On renomme sequentillement ==")
-    mask_doublons = get_mask(df, {'dose': 0, 'exp': 1, 'fixation': 'fixe', 'jour': 2, 'keyword': 'verre', 'modalite': 'raman', 'petri': 1, 'sexe': 'f', 'souris': 1, 'traitement': False})
+    mask_doublons = get_mask(df, { 'exp': 1, 'fixation': 'fixe', 'jour': 2, 'keyword': 'verre', 'modalite': 'raman', 'petri': 1, 'souris': 1})
     df = renumber_sequentially_in_time(df, mask_doublons)
 
     print(f"\n\n== 3. Meme probleme que #2 mais exp 1, jour 4 petri 3 souris 1 ==")
-    mask_doublons = get_mask(df, {'dizaine': 0, 'dose': 0, 'exp': 1, 'fixation': 'fixe', 'jour': 4, 'modalite': 'raman', 'petri': 3, 'sexe': 'f', 'souris': 1, 'traitement': False})
+    mask_doublons = get_mask(df, {'dizaine': 0, 'exp': 1, 'fixation': 'fixe', 'jour': 4, 'modalite': 'raman', 'petri': 3, 'souris': 1})
     df = renumber_sequentially_in_time(df, mask_doublons)
 
     print(f"\n\n== 4. Meme probleme que #2 et #3 mais exp 1, jour 4 petri 3 souris 2==")
-    mask_doublons = get_mask(df, {'dizaine': 0, 'dose': 0, 'exp': 1, 'fixation': 'fixe', 'jour': 4, 'modalite': 'raman', 'petri': 3, 'sexe': 'f', 'souris': 2, 'traitement': False})
+    mask_doublons = get_mask(df, {'dizaine': 0, 'exp': 1, 'fixation': 'fixe', 'jour': 4, 'modalite': 'raman', 'petri': 3, 'souris': 2})
     df = renumber_sequentially_in_time(df, mask_doublons)
 
-    print(f"\n\n== 5. Meme probleme que #2 et #3 mais exp 1, jour 4 petri 3 souris 2==")
-    mask_doublons = get_mask(df, {'dizaine': 0, 'dose': 60, 'exp': 1, 'fixation': 'fixe', 'index': 8, 'jour': 8, 'modalite': 'raman', 'petri': 4, 'sexe': 'm', 'souris': 5, 'traitement': False, 'zone': 2})
-    df = renumber_sequentially_in_time(df, mask_doublons)
+    try:
+        print(f"\n\n== 5. Meme probleme que #2 et #3 mais exp 1, jour 4 petri 3 souris 2==")
+        mask_doublons = get_mask(df, {'dizaine': 0, 'exp': 1, 'fixation': 'fixe', 'index': 8, 'jour': 8, 'modalite': 'raman', 'petri': 4, 'souris': 5, 'zone': 2})
+        df = renumber_sequentially_in_time(df, mask_doublons)
+    except:
+        pass
+
+    
+    # print(f"\n\n== 5. Meme probleme que #2 et #3 mais exp 1, jour 8 petri 3 souris 2==")
+    # mask_doublons = get_mask(df, {'dizaine': 0, 'exp': 1, 'fixation': 'fixe', 'index': 8, 'jour': 8, 'modalite': 'raman', 'petri': 4, 'souris': 5, 'zone': 2})
+    # df = renumber_sequentially_in_time(df, mask_doublons)
     
     print(f"\n\n== 5. Un fichier seul a effacer ==")
     df = df[ df['file'] != "/Volumes/Labdata/dcclab/surya/exp_1/jour8/frais/Raman/petri2/petri2_souris3_zone1/20260519_jour6_raman_petri2_souris3_45Gy_zone1_RamanShift__0__11-41-01-478.txt"]
+
+    df.to_excel(name+".xlsx", index=False)
+    df.to_pickle(name+".pkl")
 
     return df
 
@@ -523,70 +550,81 @@ if __name__ == "__main__":
     pd.set_option('display.max_colwidth', None) 
     pd.set_option('display.width', None) 
 
-    all_files = get_all_data_file_paths(root, use_cache=False)
+    all_files = get_all_data_file_paths(root, use_cache= True)
+
     all_files = [ file_path for file_path in all_files if file_path.endswith('txt') ]  # Keep only data files
     all_files = [ file_path for file_path in all_files if "old" not in file_path]      # exp_2_old is not useful, we remove it
     all_files = [ file_path for file_path in all_files if "archives" not in file_path] # archives is not useful, we remove it 
+    count_batch = sum(1 for file_path in all_files if "batch" in file_path.lower())
+    print(f"Nombre de fichiers contenant 'batch' : {count_batch}")
 
     # A panda dataframe is like an excel file with column titles, it is the best structure for data
     # Put into a Panda dataframe and save everything for review
-    df, summary = get_files_metadata(all_files, header = False, extended=False, use_cache = False)
+    df1, summary = get_files_metadata(all_files, header=False, extended=False, use_cache = False)
 
-    masque = df['index'].notna()
-    df.loc[masque, 'dizaine'] = df['index'] // 10
+    masque = (df1['exp'] == 2)
+    print(f"voici les fichiers avec batch dans l'exp2: {df1[masque]['batch']}" )
+    
+    masque = df1['index'].notna()
+    df1.loc[masque, 'dizaine'] = df1['index'] // 10
 
-    df = df[(df['test'].isna())]
-    df = df[(df['modalite'] == 'raman')]
-    df = df[(df['keyword'] != 'dark')]
-    df = df[(df['keyword'] != 'white')]
-    df = df[(df['keyword'] != 'adn')]
-    df = df[(df['keyword'] != 'black')]
-    df = df[(df['keyword'] != 'blanche')]
-    df = df[(df['keyword'] != 'anneau')]
+
+    df1 = df1[(df1['test'].isna())]
+    df1 = df1[(df1['modalite'] == 'raman')]
+    df1 = df1[(df1['keyword'] != 'dark')]
+    df1 = df1[(df1['keyword'] != 'white')]
+    df1 = df1[(df1['keyword'] != 'adn')]
+    df1 = df1[(df1['keyword'] != 'black')]
+    df1 = df1[(df1['keyword'] != 'blanche')]
+    df1 = df1[(df1['keyword'] != 'anneau')]
+    df1 = df1[(df1['keyword'] != 'plus_tard')]
 
 
     from config import CONFIG1, CONFIG2
-    complete_dataframe(CONFIG1, CONFIG2, df, summary) #add information manually    
+    df2 = complete_dataframe(CONFIG1, CONFIG2, df1, summary) #add information manually    
 
 
     # Chloe: regarde ici
-    df = correct_acquisition_errors(df)
+    df = correct_acquisition_errors(df2)
+    
+    masque = (df['exp'] == 1) & (df['petri'] == 1) & (df['souris'] == 1) & (df['jour'] == 2) & (df['modalite'] == 'raman') & (df['fixation'] == 'fixe') & (df['keyword'] == 'verre')
+    print(f'voici le dataframe raman exp1 jour2 petri1 souris1{df[masque]['index']}')
 
     print("\n\n== Verification de l'unicite des metadata ==\n")
     doublons = validate_unique_metadata(df, ignore=("time", "file","size_in_bytes"))
 
-    # How to manipulate a panda Dataframe:
+    # # How to manipulate a panda Dataframe:
 
-    print("\n\n== Example : list all columns ==\n")
-    print(df.columns)
+    # print("\n\n== Example : list all columns ==\n")
+    # print(df.columns)
 
-    print("\n\n== Example : list exp only ==\n")
-    print(df.exp)
-    print(df['exp'])
+    # print("\n\n== Example : list exp only ==\n")
+    # print(df.exp)
+    # print(df['exp'])
 
-    print("\n\n== Example :  exp_1 only ==\n")
-    print(df[df['exp'] == 1])
+    # print("\n\n== Example :  exp_1 only ==\n")
+    # print(df[df['exp'] == 1])
 
-    print("\n\n== Example :  exp_1 only, jour 8 ==\n")
-    print(df[ (df['exp'] == 1)  & (df['jour'] == 8) ])    
+    # print("\n\n== Example :  exp_1 only, jour 8 ==\n")
+    # print(df[ (df['exp'] == 1)  & (df['jour'] == 8) ])    
 
-    print("\n\n== Example :  exp_1 only, Raman ==\n")
-    print(df[ (df['exp'] == 1)  & (df['modalite'] == 'raman') ])        
+    # print("\n\n== Example :  exp_1 only, Raman ==\n")
+    # print(df[ (df['exp'] == 1)  & (df['modalite'] == 'raman') ])        
 
-    print("\n\n== Example :  exp_1 only, Raman with dose ==\n")
-    print(df[ (df['exp'] == 1)  & (df['modalite'] == 'raman') & (df['dose'].notna()) ])
+    # print("\n\n== Example :  exp_1 only, Raman with dose ==\n")
+    # print(df[ (df['exp'] == 1)  & (df['modalite'] == 'raman') & (df['dose'].notna()) ])
 
-    print("\n\n== Example :  exp_1 only, Raman with dose ==\n")
-    print(df[ (df['exp'] == 1)  & (df['modalite'] == 'raman') & (df['dose'].notna()) ])
+    # print("\n\n== Example :  exp_1 only, Raman with dose ==\n")
+    # print(df[ (df['exp'] == 1)  & (df['modalite'] == 'raman') & (df['dose'].notna()) ])
 
-    print("\n\n== Example :  Frais seulement ==\n")
-    print(df[ (df['fixation'] == 'frais') ])
+    # print("\n\n== Example :  Frais seulement ==\n")
+    # print(df[ (df['fixation'] == 'frais') ])
 
-    print("\n\n== Example : Extraire batch 1, petri 1  ==\n")
-    print(df[ (df['exp'] == 2) & (df['batch'] == 2 ) ]['sexe'])
+    # print("\n\n== Example : Extraire batch 1, petri 1  ==\n")
+    # print(df[ (df['exp'] == 2) & (df['batch'] == 2 ) ]['sexe'])
 
-    print("\n\n== List of all values per key ==\n")
-    for col in df.columns:
-        if col in ['time','file','size_in_bytes'] or col.startswith("Spectrum:"):
-            continue
-        print(f"{col:20s} ({df[col].nunique()} valeurs) : {sorted(df[col].dropna().unique().tolist(), key=str)}")
+    # print("\n\n== List of all values per key ==\n")
+    # for col in df.columns:
+    #     if col in ['time','file','size_in_bytes'] or col.startswith("Spectrum:"):
+    #         continue
+    #     print(f"{col:20s} ({df[col].nunique()} valeurs) : {sorted(df[col].dropna().unique().tolist(), key=str)}")
