@@ -385,7 +385,7 @@ def caracteriser_motif_fixe(intensite_ref_brute=None, fenetre_lissage=101, ordre
     return t_lambda, lisse
  
  
-def corriger_motif_fixe(wn_echantillon, intensite_echantillon, t_lambda, wn_ref=None):
+def corriger_motif_fixe( intensite_echantillon, t_lambda):
     """
     Applique la correction de motif fixe à un spectre échantillon.
     Interpole t_lambda sur la grille de l'échantillon si nécessaire.
@@ -448,38 +448,63 @@ def supprimer_fluorescence_als(intensite, lam=1e6, p=0.01, n_iter=15):
 
     return intensite_corrigee, baseline
 
-def supprimer_fluorescence_arpls(intensite, lam=1e6, ratio=1e-6, n_iter=50, pad=100):
-    intensite = np.asarray(intensite, dtype=float)
-    intensite_pad = np.concatenate([
-        intensite[pad:0:-1], intensite, intensite[-2:-pad-2:-1]
-    ])
-    n = len(intensite_pad)
 
-    D = sparse.diags([1, -2, 1], [0, 1, 2], shape=(n - 2, n), dtype=float)
-    DtD = lam * (D.transpose().dot(D))
+import numpy as np
+from scipy import sparse
+from scipy.sparse.linalg import spsolve
 
-    poids = np.ones(n)
-    baseline_pad = intensite_pad.copy()
 
-    for _ in range(n_iter):
-        W = sparse.diags(poids, 0)
-        Z = W + DtD
-        baseline_pad = spsolve(Z.tocsc(), poids * intensite_pad)
+def build_lambda_vector(x, lam_low=1e4, lam_high=1e7, transition_center=2300, transition_width=100):
+    """
+    Construit un vecteur lambda qui vaut ~lam_low avant transition_center
+    et transitionne graduellement vers lam_high apres, sur une largeur
+    transition_width (en unites de x, ex: cm^-1).
 
-        d = intensite_pad - baseline_pad
-        dn = d[d < 0]
-        if len(dn) == 0:
-            break
-        m, s = np.mean(dn), np.std(dn)
-        poids_new = 1.0 / (1 + np.exp(2 * (d - (2*s - m)) / s))
-        
-        if np.linalg.norm(poids_new - poids) / np.linalg.norm(poids) < ratio:
-            poids = poids_new
-            break
-        poids = poids_new
+    On travaille en log(lambda) parce que lam_low et lam_high sont sur
+    des ordres de grandeur tres differents (1e4 vs 1e7) : une transition
+    lineaire en lambda directement ferait un saut trop brusque au debut.
 
-    baseline = baseline_pad[pad:-pad]
-    return intensite - baseline, baseline
+    transition_center : x ou on est a mi-chemin entre lam_low et lam_high
+    transition_width   : plus petit = transition plus abrupte,
+                          plus grand = transition plus douce
+    """
+    # Sigmoide entre 0 et 1
+    s = 1 / (1 + np.exp(-(x - transition_center) / transition_width))
+
+    log_lam = np.log10(lam_low) + s * (np.log10(lam_high) - np.log10(lam_low))
+    lam_vector = 10 ** log_lam
+
+    return lam_vector
+
+
+def als_baseline_variable_lambda(y, lam_vector, p, niter=10):
+    """
+    lam_vector : array de meme longueur que y, la rigidite locale.
+    Grand lam -> baseline tres lisse/rigide (colle moins aux pics).
+    Petit lam -> baseline plus souple (suit plus les pics).
+    """
+    L = len(y)
+    D = sparse.diags([1, -2, 1], [0, -1, -2], shape=(L, L - 2))
+    Lam = sparse.diags(lam_vector[1:-1])
+    w = np.ones(L)
+    for i in range(niter):
+        W = sparse.diags(w)
+        Z = W + D @ Lam @ D.T
+        z = spsolve(Z.tocsc(), w * y)
+        w = p * (y > z) + (1 - p) * (y < z)
+    return z
+
+
+def baseline_with_lipid_protection(x, y, lam_low=1e4, lam_high=1e7,
+                                     transition_center=2300, transition_width=100,
+                                     p=0.01, niter=10):
+    """
+    Fonction pratique qui combine les deux etapes ci-dessus.
+    """
+    lam_vector = build_lambda_vector(x, lam_low, lam_high, transition_center, transition_width)
+    z = als_baseline_variable_lambda(y, lam_vector, p=p, niter=niter)
+    return z, lam_vector
+
 
 
 
@@ -718,23 +743,38 @@ if __name__ == "__main__":
     print("Debut caracteriser motif fixe")
     t_lambda, lisse = caracteriser_motif_fixe(intensite_ref_brute=i_ref)
     # print("Starting code")
+
+    print('debut trouver vector lam')
+    
     fichiers = extract_frais('batch#1', 'petri1', 'z1')
-    w1, i1, baseline1 = correction_data(fichiers, traiter_etalon=True, als=True, bubblewidth=None, p=0.09)
-    w2, i2, baseline2 = correction_data(fichiers, traiter_etalon=True, als=True, bubblewidth=None, lam=1e6, p=0.01)
-    w2, i2 = traiter_acquisitions(fichiers)
-    w2, i2 = traiter_acquisitions(fichiers)
-    i4, baseline3 = supprimer_fluorescence_arpls(i2, lam=1e7, ratio=1e-6, n_iter=50, pad=100)
-    i4, baseline4 = supprimer_fluorescence_arpls(i1, lam=1e7, ratio=1e-6, n_iter=50, pad=100)
+    print("Debut traitement acquistion")
+    w1, i1 = traiter_acquisitions(fichiers)
+    i1 = corriger_motif_fixe(i1, t_lambda)
 
 
-    plt.plot(w1, i1, label=1)
-    plt.plot(w1, baseline1, label=1)
-    plt.plot(w2, i2, label=2)
-    plt.plot(w2, baseline2, label=2)
 
-    #plt.plot(w1, i1, label='1')
+    i2, baseline1 = supprimer_fluorescence_als(i1, lam=1e6, p=0.01)
+    print('debut trouver vector lam')
+    z, lam_vector = baseline_with_lipid_protection(
+        w1, i2,
+        lam_low=1e4,
+        lam_high=1e7,
+        transition_center=2300,
+        transition_width=100,   # ajuste selon a quelle vitesse tu veux durcir
+        p=0.01,
+        niter=10,
+    )
+    i3 = i2 - z
 
-    plt.plot(w1, baseline4, label='4')
+    i4, baseline2 = supprimer_fluorescence_als(i2, lam=1e4, p=0.01)
+
+    print("Debut plotting")
+    plt.plot(w1, i1, label='spectre brut')
+    plt.plot(w1, baseline1, label='baseline 1ere suppression')
+    plt.plot(w1, i2, label='apres 1ere suppression')
+    plt.plot(w1, z, label='baseline 2e supression')
+    plt.plot(w1, i3, label='apres 2e suppression')
+
 
     plt.legend()
     plt.show()
