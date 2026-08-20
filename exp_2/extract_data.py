@@ -385,7 +385,7 @@ def caracteriser_motif_fixe(intensite_ref_brute=None, fenetre_lissage=101, ordre
     return t_lambda, lisse
  
  
-def corriger_motif_fixe( intensite_echantillon, t_lambda):
+def corriger_motif_fixe(intensite_echantillon, t_lambda):
     """
     Applique la correction de motif fixe à un spectre échantillon.
     Interpole t_lambda sur la grille de l'échantillon si nécessaire.
@@ -503,7 +503,8 @@ def baseline_with_lipid_protection(x, y, lam_low=1e4, lam_high=1e7,
     """
     lam_vector = build_lambda_vector(x, lam_low, lam_high, transition_center, transition_width)
     z = als_baseline_variable_lambda(y, lam_vector, p=p, niter=niter)
-    return z, lam_vector
+    i_corr = y - z
+    return i_corr
 
 
 
@@ -525,16 +526,20 @@ def correction_data(liste_fichiers, traiter_etalon=True, als=True, bubblewidth=N
 
     if traiter_etalon:
         #spectre sans rayon cosmiques et sans étalon
-        i_corr_F = corriger_motif_fixe(w, i, t_lambda)
+        i_corr_F = corriger_motif_fixe(i, t_lambda)
         if als==True:
             intensite, baseline = supprimer_fluorescence_als(i_corr_F, lam=lam, p=p)
+            intensite = baseline_with_lipid_protection(w, intensite)
         else:
             intensite = supprimer_fluorescence(i_corr_F, min_bubble_widths=bubblewidth)
+            intensite = baseline_with_lipid_protection(w, intensite)
     else:
         if als==True:
             intensite, baseline = supprimer_fluorescence_als(i, lam=lam, p=p)
+            intensite = baseline_with_lipid_protection(w, intensite)
         else:
             intensite = supprimer_fluorescence(i, min_bubble_widths=bubblewidth)
+            intensite = baseline_with_lipid_protection(w, intensite)
     
     return w, intensite, baseline
 
@@ -543,7 +548,7 @@ def correction_data(liste_fichiers, traiter_etalon=True, als=True, bubblewidth=N
 # REMOVE ROGUE SPECTRUM
 # ──────────────────────────────────────────────────────────────────────────────────────────
 
-def soustraire_spectre(wn_echantillon, intensite_echantillon, wn_nocif, intensite_nocif, ordre_baseline=1, fenetres_fit=None):
+def soustraire_spectre1(wn_echantillon, intensite_echantillon, wn_nocif, intensite_nocif, ordre_baseline=1, fenetres_fit=None):
     """
     Soustrait la contribution du verre (ou de la gellose) en trouvant 
     le meilleur coefficient, avec une baseline polynomiale optionnelle 
@@ -597,6 +602,48 @@ def soustraire_spectre(wn_echantillon, intensite_echantillon, wn_nocif, intensit
 
     return intensite_corrigee
 
+from scipy.optimize import least_squares
+
+def soustraire_spectre2(wn_echantillon, intensite_echantillon, wn_nocif, intensite_nocif,
+                        ordre_baseline=1, fenetres_fit=None, robuste=True):
+    wn_echantillon = np.asarray(wn_echantillon, dtype=float)
+    intensite_echantillon = np.asarray(intensite_echantillon, dtype=float)
+    nocif_interp = np.interp(wn_echantillon, wn_nocif, intensite_nocif)
+
+    if fenetres_fit is not None:
+        masque = np.zeros_like(wn_echantillon, dtype=bool)
+        for (lo, hi) in fenetres_fit:
+            masque |= (wn_echantillon >= lo) & (wn_echantillon <= hi)
+    else:
+        masque = np.ones_like(wn_echantillon, dtype=bool)
+
+    x_norm = (wn_echantillon - wn_echantillon.mean()) / wn_echantillon.std()
+    colonnes = [nocif_interp] + [x_norm**k for k in range(ordre_baseline + 1)]
+    A_full = np.column_stack(colonnes)
+    A_fit = A_full[masque]
+    y_fit = intensite_echantillon[masque]
+
+    n_baseline = ordre_baseline + 1
+    bornes_inf = [0.0] + [-np.inf] * n_baseline
+    bornes_sup = [np.inf] + [np.inf] * n_baseline
+
+    if robuste:
+        def residuals(coeffs):
+            return A_fit @ coeffs - y_fit
+        x0 = np.zeros(A_fit.shape[1])
+        resultat = least_squares(residuals, x0, bounds=(bornes_inf, bornes_sup),
+                                  loss='soft_l1', f_scale=np.std(y_fit))
+        coeffs = resultat.x
+    else:
+        resultat = lsq_linear(A_fit, y_fit, bounds=(bornes_inf, bornes_sup))
+        coeffs = resultat.x
+
+    alpha = coeffs[0]
+    modele_complet = A_full @ coeffs
+    intensite_corrigee = intensite_echantillon - modele_complet
+
+    return intensite_corrigee
+
 
 
 
@@ -615,6 +662,7 @@ def charger_nocif(config):
             if not fichiers:
                 continue
             w, i, baseline = correction_data(fichiers)
+  
             i_s.append(i)
             if not i_s:
                 raise ValueError("Aucun spectre de gélose (nocif) n'a pu être chargé.")
@@ -627,20 +675,28 @@ def adjust_spectrum(list_fich_echantillon, i_nocif=None, retirer_nocif=True, wn_
 
     if i_nocif is None:
         i_nocif = charger_nocif(CONFIG1)
-
+        i_nocif_centree = i_nocif - np.mean(i_nocif)
+        i_nocif = i_nocif_centree / np.max(np.abs(i_nocif_centree))
     w, i, baseline = correction_data(list_fich_echantillon)
     if retirer_nocif:
-        i_corr = soustraire_spectre(w, i, w, i_nocif)
+        intensite_centree = i - np.mean(i)
+        i_nrml = intensite_centree / np.max(np.abs(intensite_centree))
+        i_corr = soustraire_spectre1(w, i_nrml, w, i_nocif)
     else:
         i_corr = i
-
+    plt.plot(w, i, label='échantillon')
+    plt.plot(w, i_corr, label='i_corr')
+    plt.plot(w, i_nocif, label='nocif')
+    plt.legend()
+    plt.show()
     masque = (w >= wn_min) & (w <= wn_max)
     w_masque, i_masque = w[masque], i_corr[masque]
 
     intensite_centree = i_masque - np.mean(i_masque)
     i_nrml = intensite_centree / np.max(np.abs(intensite_centree))
 
-    return w_masque, i_nrml
+
+    return w_masque, i_nrml, i_masque, i[masque]
 
 
     
@@ -744,36 +800,17 @@ if __name__ == "__main__":
     t_lambda, lisse = caracteriser_motif_fixe(intensite_ref_brute=i_ref)
     # print("Starting code")
 
-    print('debut trouver vector lam')
-    
     fichiers = extract_frais('batch#1', 'petri1', 'z1')
     print("Debut traitement acquistion")
     w1, i1 = traiter_acquisitions(fichiers)
-    i1 = corriger_motif_fixe(i1, t_lambda)
 
-
-
-    i2, baseline1 = supprimer_fluorescence_als(i1, lam=1e6, p=0.01)
-    print('debut trouver vector lam')
-    z, lam_vector = baseline_with_lipid_protection(
-        w1, i2,
-        lam_low=1e4,
-        lam_high=1e7,
-        transition_center=2300,
-        transition_width=100,   # ajuste selon a quelle vitesse tu veux durcir
-        p=0.01,
-        niter=10,
-    )
-    i3 = i2 - z
-
-    i4, baseline2 = supprimer_fluorescence_als(i2, lam=1e4, p=0.01)
+    w, i_nrml, i, i_recu = adjust_spectrum(fichiers)
 
     print("Debut plotting")
-    plt.plot(w1, i1, label='spectre brut')
-    plt.plot(w1, baseline1, label='baseline 1ere suppression')
-    plt.plot(w1, i2, label='apres 1ere suppression')
-    plt.plot(w1, z, label='baseline 2e supression')
-    plt.plot(w1, i3, label='apres 2e suppression')
+    plt.plot(w, i_nrml, label='spectre normalisé et centré')
+    #plt.plot(w, i, label='spectre brut')
+    plt.plot(w, i, label='i apres suppression nocif (soustraire spectre 2)')
+
 
 
     plt.legend()
