@@ -219,22 +219,22 @@ def choisir_n_composantes(X, y, groupes, n_max=8, titre="Choix du nombre de comp
     validation croisée LeaveOneGroupOut, pour aider à choisir combien en
     garder avant le LDA final.
     Ce que fait la fonction
-Objectif : trouver combien de composantes PCA garder avant d'entraîner un LDA final, en testant plusieurs valeurs et en comparant leurs performances.
-Étape par étape :
+    Objectif : trouver combien de composantes PCA garder avant d'entraîner un LDA final, en testant plusieurs valeurs et en comparant leurs performances.
+    Étape par étape :
 
-valeurs_n = list(range(1, n_max + 1)) → elle va tester 1 composante, puis 2, puis 3... jusqu'à n_max (11 par défaut).
-Pour chaque valeur n de composantes :
+    valeurs_n = list(range(1, n_max + 1)) → elle va tester 1 composante, puis 2, puis 3... jusqu'à n_max (11 par défaut).
+    Pour chaque valeur n de composantes :
 
-elle construit un pipeline : d'abord une PCA qui réduit X à n dimensions, puis un LDA (Linear Discriminant Analysis) qui classe les données à partir de ces n dimensions.
-elle évalue ce pipeline avec cross_val_predict et une validation croisée LeaveOneGroupOut (LOGO) : à chaque tour, un groupe entier (par exemple un sujet, une session...) est mis de côté comme test, et le modèle est entraîné sur tous les autres groupes. Ça évite les fuites de données si plusieurs échantillons viennent de la même source.
-elle calcule le balanced accuracy score entre les vraies étiquettes y et les prédictions, et stocke ce score.
+    elle construit un pipeline : d'abord une PCA qui réduit X à n dimensions, puis un LDA (Linear Discriminant Analysis) qui classe les données à partir de ces n dimensions.
+    elle évalue ce pipeline avec cross_val_predict et une validation croisée LeaveOneGroupOut (LOGO) : à chaque tour, un groupe entier (par exemple un sujet, une session...) est mis de côté comme test, et le modèle est entraîné sur tous les autres groupes. Ça évite les fuites de données si plusieurs échantillons viennent de la même source.
+    elle calcule le balanced accuracy score entre les vraies étiquettes y et les prédictions, et stocke ce score.
 
 
-Elle trace un graphique : score en fonction du nombre de composantes, avec une ligne horizontale à 0.5 (niveau du hasard pour un problème à 2 classes).
-Elle retourne le n qui donne le meilleur score, et l'affiche.
+    Elle trace un graphique : score en fonction du nombre de composantes, avec une ligne horizontale à 0.5 (niveau du hasard pour un problème à 2 classes).
+    Elle retourne le n qui donne le meilleur score, et l'affiche.
 
-En résumé : c'est une recherche du nombre optimal de composantes PCA, en observant à partir de combien de composantes l'ajout de dimensions supplémentaires n'améliore plus (ou dégrade) la performance de classification.
-"""
+    En résumé : c'est une recherche du nombre optimal de composantes PCA, en observant à partir de combien de composantes l'ajout de dimensions supplémentaires n'améliore plus (ou dégrade) la performance de classification.
+    """
     #n_max = min(n_max, X.shape[0] - 1, X.shape[1])
     valeurs_n = list(range(1, n_max + 1))
     scores = []

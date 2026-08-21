@@ -38,9 +38,9 @@ racine3 = r"\\cafeine3.crulrg.ulaval.ca\Goliath\Goliath\labdata\dcclab\surya\exp
 # ─────────────────────────────────────────────
 def extract_jour0(petri, souris, zone, fichiers_par_zone=10):
 
-    dossier = os.path.join(racine1, 'jour0', 'fixe', 'raman', petri, souris)
+    dossier = os.path.join(racine1, 'jour0', 'fixe', 'raman', petri, souris, '*')
     tous_les_fichiers = sorted(glob.glob(dossier))
-    
+    #print(tous_les_fichiers)
     if not tous_les_fichiers:
         print(f"Aucun fichier trouvé avec le pattern : {dossier}")
         return []
@@ -55,13 +55,14 @@ def extract_jour0(petri, souris, zone, fichiers_par_zone=10):
     fichiers_zone = tous_les_fichiers_tries[debut:fin]
 
     #print(f"{zone} — {len(fichiers_zone)} fichiers trouvés")
-    return fichiers_zone    
+    return fichiers_zone
+
 
 
 
 def extract_jour2(petri, souris, zone, matiere='verre', fichiers_par_zone=10): #matiere = gelose ou verre
 
-    dossier = os.path.join(root_cafeine,'exp_1', 'jour2', "raman", 'fixe',  petri)
+    dossier = os.path.join(root_cafeine,'exp_1', 'jour2', "raman", 'fixe',  petri, '*')
     pattern = os.path.join(dossier, f"{souris}*{matiere}*")
 
     tous_les_fichiers = sorted(glob.glob(pattern))
@@ -185,7 +186,7 @@ def lecteur_données_moy_fixe(batch, petri, zone):
 # EXTRACT DATA FROM FILE
 # ──────────────────────────────────────────────────────────────────────────────────────────
 
-def formater_donnees(chemin_fichier, wn_min=500, wn_max=3200):
+def formater_donnees(chemin_fichier, wn_min=600, wn_max=3025):
     integration = None
     data = []
     dans_les_donnees = False
@@ -711,34 +712,35 @@ def charger_nocif(config):
 
 def adjust_spectrum(list_fich_echantillon, i_nocif=None, retirer_nocif=True, wn_min=600, wn_max=2800):
 
-    if i_nocif is None:
-        i_nocif = charger_nocif(CONFIG1)
     w, i = correction_data(list_fich_echantillon)
-    if retirer_nocif:
-        fenetres_gel = [
-            (590, 650),
-            (760, 820),
-            (980, 1040),
-            (1150, 1200),
-            (1420, 1460),
-            (1560, 1610),
-            # (1280, 1340) exclue : corr ≈ 0.025, ça n'est pas du gel
-        ]
 
-        i_corr, alpha = soustraire_spectre2(
-            w, i,
-            w, i_nocif,
-            ordre_baseline=1,
-            fenetres_fit=fenetres_gel,   # ← ne pas oublier !
-            robuste=True
-        )
-        print("alpha =", alpha)
-        print('Début ploting')
-        plt.plot(w, i, label='échantillon')
-        plt.plot(w, i_corr, label='i_corr')
-        plt.plot(w, i_nocif, label='nocif')
-        plt.legend()
-        plt.show()
+    if retirer_nocif:
+        if i_nocif is None:
+            i_nocif = charger_nocif(CONFIG1)
+            fenetres_gel = [
+                (590, 650),
+                (760, 820),
+                (980, 1040),
+                (1150, 1200),
+                (1420, 1460),
+                (1560, 1610),
+                # (1280, 1340) exclue : corr ≈ 0.025, ça n'est pas du gel
+            ]
+
+            i_corr, alpha = soustraire_spectre2(
+                w, i,
+                w, i_nocif,
+                ordre_baseline=1,
+                fenetres_fit=fenetres_gel,   # ← ne pas oublier !
+                robuste=True
+            )
+            print("alpha =", alpha)
+            print('Début ploting')
+            # plt.plot(w, i, label='échantillon')
+            # plt.plot(w, i_corr, label='i_corr')
+            # plt.plot(w, i_nocif, label='nocif')
+            # plt.legend()
+            # plt.show()
     else:
         i_corr = i
 
@@ -828,20 +830,25 @@ def tester_als_settings(wn, i_corr_F, combos, wn_min=800, wn_max=2200):
         axes[0].plot(wn[masque], baseline[masque], label=f"lam={lam:.0e}, p={p}")
         axes[1].plot(wn[masque], corrige[masque], label=f"lam={lam:.0e}, p={p}")
 
-    axes[0].set_title("Baselines ALS superposées sur le spectre brut")
-    axes[0].legend(fontsize=8)
-    axes[1].axhline(0, color='k', lw=0.5)
-    axes[1].set_title("Spectres corrigés résultants")
-    axes[1].set_xlabel("Nombre d'onde (cm⁻¹)")
-    axes[1].legend(fontsize=8)
+    # axes[0].set_title("Baselines ALS superposées sur le spectre brut")
+    # axes[0].legend(fontsize=8)
+    # axes[1].axhline(0, color='k', lw=0.5)
+    # axes[1].set_title("Spectres corrigés résultants")
+    # axes[1].set_xlabel("Nombre d'onde (cm⁻¹)")
+    # axes[1].legend(fontsize=8)
 
-    plt.tight_layout()
-    plt.show()
+    # plt.tight_layout()
+    # plt.show()
 
 
 
 
 if __name__ == "__main__":
+
+    
+    fichiers = extract_jour0('petri1', 'souris1', 'zone3')
+    w, i = correction_data(fichiers)
+
     print("Debut lecture donnees")
     racine = root_cafeine / Path(r"exp_1/spectre_lumière_blanche")
     print(racine)
@@ -856,8 +863,8 @@ if __name__ == "__main__":
     fichiers = extract_frais('batch#1', 'petri5', 'z1')
     fichiers2 = extract_frais('batch#3', 'petri22', 'z1')
     print("Debut traitement acquistion")
-    w1, i1 = correction_data(fichiers)
-    w9, i9 = correction_data(fichiers2)
+    w1, i1 = adjust_spectrum(fichiers, retirer_nocif=False)
+    w9, i9 = adjust_spectrum(fichiers2, retirer_nocif=False)
 
     #w, i_nrml, i, i_recu = adjust_spectrum(fichiers)
 

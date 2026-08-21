@@ -21,8 +21,8 @@ from sklearn.cross_decomposition import PLSRegression
 from sklearn.model_selection import LeaveOneGroupOut, cross_val_predict
 from scipy.stats import pearsonr
 
-from config import CONFIG2
-from extract_data import extract_jour0, extract_jour2, extract_jour4, extract_jour8_jour11, adjust_spectrum
+from config import CONFIG2, CONFIG1
+from extract_data import extract_jour0, extract_jour2, extract_jour4, extract_jour8_jour11, adjust_spectrum, charger_nocif
 
 extracteur = {
     'jour0':  extract_jour0,
@@ -50,7 +50,7 @@ def charger_exp1(config):
                     if not liste_fichiers:
                         continue
 
-                    w, i = adjust_spectrum(liste_fichiers, retirer_nocif=False)
+                    w, i = adjust_spectrum(liste_fichiers, i_nocif=charger_nocif(CONFIG1), retirer_nocif=False)
                     if w is None or i is None:
                         continue
                     if not np.isfinite(i).all():
