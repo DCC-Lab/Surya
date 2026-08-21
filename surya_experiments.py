@@ -16,84 +16,11 @@ from contextlib import contextmanager
 import unicodedata
 import shutil
 
-"""
-This code will read all the spectral files from a root directory and
-extract all the metadata about the spectra (mouse, petri, dose, etc...).
-
-It will store everything in a Panda Dataframe, which is similar to an Excel file.
-It will try to avoid recomputing everything every time and will keep a "cached" copy
-and use it whenever it is possible.
-
-At the bottom of the file, you will find example code that gets run when running this file.
-You will find many examples on how to filter a DataFrame.
-
-if __name__ == "__main__":
-    # Start here
-
-"""
-
 DEBUG = True
 
 def print_debug(*args, **kwargs):
     if DEBUG:
         print(*args, **kwargs)
-
-def cache_name(params, prefix="cache", ext=".pkl"):
-    params['node'] = uuid.getnode()
-    s = json.dumps(params, sort_keys=True, default=str)
-    h = hashlib.sha256(s.encode()).hexdigest()[:16]
-    return f"{prefix}_{h}{ext}"
-
-def get_all_data_file_paths(root, invisible_files=False, progress=True, use_cache=True, max_cache_age_hours=24):
-    """
-    Get the list of files at a given root directory
-
-    Since this is a lengthy operation on the network, we keep the result and
-    use it if use_cache is True
-
-    """
-
-    
-    if not Path(root).exists():
-        raise ValueError(f"The path {root} does not exist")
-
-    cache_filename = "cache_surya_files.txt"
-    cache = Path(root) / Path(cache_filename)
-
-    all_files = []
-    
-    if use_cache and cache.exists():
-        with open(cache, "r", encoding="utf-8") as file_path:
-            all_files = file_path.read().splitlines()
-
-    if not all_files:
-        print("No cache for files list, reading from disk")
-        next_progress_print = time.time() + 2
-        for dirpath, dirs, files in os.walk(root):
-            for name in files:
-                path = os.path.join(dirpath, name)
-                if "/." in path and not invisible_files:
-                    continue
-
-                if progress and time.time() > next_progress_print:
-                    print(".", end = "", flush=True)
-                    next_progress_print = time.time() + 2
-
-                if not Path(path).exists():
-                    print(f"Warning: {path} is not recognized (probably accented characters)")
-
-                file_relative_path = str(Path(path).relative_to(root))
-                all_files.append(file_relative_path)
-
-        print(".")
-
-        if use_cache:
-            with open(cache, "w", encoding="utf-8") as file_path:
-                for line in all_files:
-                    file_path.write(line + "\n")
-                print(f"Cache saved to {cache}. Delete the file if you organize the data differently")
-
-    return all_files
 
 def extract_properties_from_path(root, file_relative_path):
     """
@@ -290,60 +217,6 @@ def extract_header_from_path(file_path):
 
     return properties
 
-def get_files_metadata(root, all_files, header = True, extended = True, use_cache = True):
-    all_properties = []
-
-    cache_filename = "cache_surya_files_metadata.pkl"
-    cache_path = Path(root) / Path(cache_filename)
-
-    df = pd.DataFrame()
-    df_file_set = {}
-    if use_cache and cache_path.exists():
-        df = pd.read_pickle(cache_path)
-        df = df.reset_index(drop=True) 
-        df_file_set = { str(file) for file in df['file']}
-
-    # We show progress every 2 seconds
-    next_progress_print = time.time() + 2
-
-    for i, file_relative_path in enumerate(all_files):
-        if file_relative_path in df_file_set:
-            continue
-
-        if time.time() > next_progress_print:
-            print(f"Processing file {i} of {len(all_files)}")
-            next_progress_print += 2
-
-
-        properties = extract_properties_from_path(root, file_relative_path)
-
-        # This is slow: they must open and read the file_path
-        if header:
-            file_path = Path(root) / file_relative_path
-            header_properties = extract_header_from_path(file_path)
-            properties.update(header_properties)
-
-        if extended:
-            extended_properties = extract_extended_properties_from_path(file_path)
-            properties.update(extended_properties)
-        
-        single_row = pd.DataFrame([properties])
-        df = pd.concat([df, single_row], ignore_index=True)
-
-    # We can force the type of certain columns to be clean
-    convert_to_int = {"exp","petri","jour", "souris", "indice1", "indice2", "dose", "test", "zone", "subzone","batch"}
-    df = df.astype({c: "Int64" for c in convert_to_int if c in df.columns})
-
-
-    summary = "surya-dataset-description"    
-    df.to_excel(summary+".xlsx", index=False)
-    print_debug(f"Summary written to {summary}")
-
-    df.to_pickle(cache_path)
-    print_debug(f"Cache updated and written to {cache_path}")
-
-    return df, summary
-
 def get_mask(df, mask_as_dict):
     mask = pd.Series(True, index=df.index)
     for key, value in mask_as_dict.items():
@@ -352,55 +225,6 @@ def get_mask(df, mask_as_dict):
         mask &= (df[key].notna() & (df[key] == value))
 
     return mask
-
-def validate_unique_metadata(df, ignore=("time", "indice1", "file", "size_in_bytes"), verbose=True):
-    """
-    Verifie que les metadata de chaque fichier sont uniques.
-
-    Pour chaque ligne, on rassemble les metadata dans un dictionnaire, on
-    enleve les colonnes qui sont toujours differentes (time, indice1, file) puis
-    on verifie que la signature qui reste n'apparait qu'une seule fois.
-
-    Retourne un dictionnaire {signature: [liste des fichiers]} pour les
-    signatures qui apparaissent plus d'une fois (donc les doublons).
-    """
-    colonnes = [c for c in df.columns if c not in ignore and not c.startswith("Spectrum:")]
-
-    signatures = {}
-    for i, row in df[colonnes].iterrows():
-        # Les metadata de cette ligne, sans les valeurs manquantes
-        metadata = {k: v for k, v in row.items() if pd.notna(v)}
-        # Un dict n'est pas hashable: on en fait un tuple trie pour la clef
-        signature = tuple(sorted(metadata.items(), key=lambda kv: str(kv[0])))
-        signatures.setdefault(signature, []).append(i)
-
-    doublons = {sig: idx for sig, idx in signatures.items() if len(idx) > 1}
-
-    if verbose:
-        n_doublons = sum(len(idx) for idx in doublons.values())
-        if not doublons:
-            print_debug(f"Toutes les metadata sont uniques ({len(df)} fichiers, colonnes: {colonnes})")
-        else:
-            print(f"{len(doublons)} signatures non-uniques touchant {n_doublons} fichiers:")
-            for signature, indices in doublons.items():
-                if len(indices) % 5 != 0:
-                    print(f"\n #{len(indices)} {dict(signature)}")
-                    for i in indices:
-                        print(f"    {df.loc[i, 'file']}")
-
-    # On retourne les fichiers plutot que les indice1, plus utile pour le diagnostic
-    return {sig: df.loc[idx, "file"].tolist() for sig, idx in doublons.items()}
-
-def helper_find_root_directory():
-    options = [ 
-                "/Volumes/Labdata/dcclab/surya",
-                r"\\cafeine3.crulrg.ulaval.ca\Goliath\Goliath\labdata\dcclab\surya",
-                "/home/dccadmin/labdata/dcclab/surya",
-                "."]
-    for path in options:
-        if Path(path).exists() and ("surya" in str(Path(path).resolve()).lower()):
-            return path
-
 
 def add_additional_experimental_info(dataframe, name="surya-dataset-description" ):
     from config import CONFIG1 as config1, CONFIG2 as config2
@@ -508,7 +332,6 @@ def fix_acquisition_errors(df, name="surya-dataset-description"):
 
     return df
 
-
 def delete_test_data(df):
     assert not df.empty
     df = df[(df['test'] == False)]
@@ -522,120 +345,3 @@ def delete_test_data(df):
     df = df[(df['keyword'] != 'plus_tard')]
     assert not df.empty
     return df
-
-def get_surya_dataframe(root=None):
-    if root is None:
-        root =  helper_find_root_directory()
-
-    print(f"Root path is: {root}")
-  
-    all_files = get_all_data_file_paths(root, use_cache= True)
-    all_files = [ file_path for file_path in all_files if file_path.endswith('txt') ]  # Keep only data files
-    all_files = [ file_path for file_path in all_files if "old" not in file_path]      # exp_2_old is not useful, we remove it
-    all_files = [ file_path for file_path in all_files if "archives" not in file_path] # archives is not useful, we remove it 
-
-    # Get metadata about the data (from path name, from spectrum header and from actual file info)
-    df, summary = get_files_metadata(root, all_files, header = True, extended=True, use_cache = True)
-
-    df = delete_test_data(df)
-
-    df = add_additional_experimental_info(df, summary) #add information manually    
-
-    df = fix_acquisition_errors(df)
-
-    df = assign_file_id(df)
-
-    print_debug("\n\n== Verification de l'unicite des metadata ==\n")
-    doublons = validate_unique_metadata(df, ignore=("time", "file","size_in_bytes"))
-    if doublons:
-        print(doublons)
-
-    return df
-
-def assign_file_id(df):
-    # uid_fields = {"exp", "souris", "cote", "zone"}
-    # mask, remaining = build_mask(df, uid_fields)
-
-    mask = (df['exp'] == 2) & df['souris'].notna()
-    for i, row in df[mask].iterrows():
-        df.loc[i, "file_id"] = f"E{row['exp']}-S{row['souris']}-{row['cote']}-Z{row['zone']}-I{row['indice1']}"
-
-    if not df.loc[mask, "file_id"].is_unique:
-        sub = df.loc[mask, ["file_id",'file']]
-        print(sub[sub['file_id'].duplicated(keep=False)].sort_values('file_id'))
-        raise ValueError("The file_id is not unique")
-
-    return df
-
-def build_mask(df, criteria):
-    uid_fields = {"exp", "souris", "cote", "zone"}
-
-    mask = None
-    for key, value in criteria.items():
-        if mask is None:
-            mask = (df[key] == value)
-        else:
-            mask &= (df[key] == value)        
-
-    remaining_fields = uid_fields.difference(set(criteria.keys()))
-    
-    return mask, df[mask][list(remaining_fields)]
-
-
-
-
-
-class SuryaDataset:
-    def __init__(self, root = None):
-
-        if root is None:
-            self.root = helper_find_root_directory()
-
-        # my_cache = 'surya_dataset_local_copy.pkl'
-        # if Path(my_cache).exists():
-        #     meta_df = pd.read_pickle(my_cache)
-        # else:
-        # meta_df.to_pickle(my_cache)
-        meta_df = get_surya_dataframe(self.root)
-
-        self.meta_df = meta_df
-
-    def load_datafile(self, root, file):
-        acquisitionInfo = []
-
-        file_path = root / file
-
-        with open(file_path, "r") as text_file:
-            lines = text_file.read().splitlines()
-
-            wavelengths = []
-            intensities = []
-            for line in lines:
-                # FIXME? On some computers with French settings, a comma is used. We substitute blindly.
-                line = re.sub(",", ".", line)
-
-                match = re.match(r"^\s*(\d+[.,]?\d+)\s+(-?\d*[.,]?\d*)", line)
-                if match is not None:
-                    intensity = match.group(2)
-                    wavelength = match.group(1)
-                    wavelengths.append(float(wavelength))
-                    intensities.append(float(intensity))
-                else:
-                    acquisitionInfo.append(line)
-
-        return pd.DataFrame({"file":str(file), "wavelength": wavelengths, "intensity": intensities})
-
-    def spectra(self, criteria):
-        mask, remaining = build_mask(self.meta_df, criteria)
-        for i, row in self.meta_df[mask].iterrows():
-            spectrum_df = self.load_datafile(Path(self.root), Path(row['file']))
-
-        return self.meta_df[mask]
-
-if __name__ == "__main__":
-    # unittest.main()
-
-    surya = SuryaDataset()
-
-    df = surya.spectra(criteria={'exp':2,"souris":27})
-
