@@ -36,14 +36,13 @@ racine3 = r"\\cafeine3.crulrg.ulaval.ca\Goliath\Goliath\labdata\dcclab\surya\exp
 # ─────────────────────────────────────────────
 # EXP#1 - EXTRACT FILE LIST
 # ─────────────────────────────────────────────
-def extract_jour0(petri, souris, echantillon, zone, fichiers_par_zone=10):
+def extract_jour0(petri, souris, zone, fichiers_par_zone=10):
 
-    dossier = os.path.join(racine1, 'jour0', 'raman', petri, souris)
-    pattern = os.path.join(dossier, f"{echantillon}*.txt")
-    tous_les_fichiers = sorted(glob.glob(pattern))
+    dossier = os.path.join(racine1, 'jour0', 'fixe', 'raman', petri, souris)
+    tous_les_fichiers = sorted(glob.glob(dossier))
     
     if not tous_les_fichiers:
-        print(f"Aucun fichier trouvé avec le pattern : {pattern}")
+        print(f"Aucun fichier trouvé avec le pattern : {dossier}")
         return []
     
     # Trie par date de modification (le plus ancien en premier)
@@ -59,28 +58,10 @@ def extract_jour0(petri, souris, echantillon, zone, fichiers_par_zone=10):
     return fichiers_zone    
 
 
-def extract_jour2_cafeine(petri, souris, zone):
 
-    dossier = os.path.join(racine3, 'jour2', "raman", petri)
+def extract_jour2(petri, souris, zone, matiere='verre', fichiers_par_zone=10): #matiere = gelose ou verre
 
-    if petri == 'petri1' and souris == 'souris1':
-        pattern = os.path.join(dossier, f"{souris}*")
-    else:
-        pattern = os.path.join(dossier, f"{souris}*{zone}*")
-
-    dossiers_trouves = sorted(glob.glob(pattern))
-    
-    if not dossiers_trouves:
-        #print(f"Pour le {jour} la {zone} de la {souris} du {petri} n'existe pas")
-        return []
-
-    fichiers_zone = sorted(glob.glob(os.path.join(dossiers_trouves[0], "*.txt")))
-    #print(f'Fichiers de la {zone} du {petri} du {jour} : {fichiers_zone}')
-    return fichiers_zone
-
-def extract_jour2(matiere, petri, souris, zone, fichiers_par_zone=10):
-
-    dossier = os.path.join(racine1, 'jour2', "raman", petri)
+    dossier = os.path.join(root_cafeine,'exp_1', 'jour2', "raman", 'fixe',  petri)
     pattern = os.path.join(dossier, f"{souris}*{matiere}*")
 
     tous_les_fichiers = sorted(glob.glob(pattern))
@@ -88,6 +69,7 @@ def extract_jour2(matiere, petri, souris, zone, fichiers_par_zone=10):
     if not tous_les_fichiers:
         #print(f"Aucun fichier trouvé avec le pattern : {pattern}")
         return []
+
     
     # Trie par date de modification (le plus ancien en premier)
     tous_les_fichiers_tries = sorted(tous_les_fichiers, key=lambda f: os.path.getmtime(f))
@@ -97,9 +79,11 @@ def extract_jour2(matiere, petri, souris, zone, fichiers_par_zone=10):
     debut = (indice - 1) * fichiers_par_zone
     fin = debut + fichiers_par_zone
     fichiers_zone = tous_les_fichiers_tries[debut:fin]
-    #print(f"{zone} — {len(fichiers_zone)} fichiers trouvés: {fichiers_zone}")
+    print(f"{zone} — {len(fichiers_zone)} fichiers trouvés: {fichiers_zone}")
     
     return fichiers_zone
+
+#fichiers = extract_jour2('gelose', 'petri1', 'souris1', 'zone1')
 
 
 def extract_jour4(petri, souris, zone, fichiers_par_zone=10):
@@ -109,7 +93,7 @@ def extract_jour4(petri, souris, zone, fichiers_par_zone=10):
     
     zone : int (1, 2, 3...)
     """
-    dossier = os.path.join(racine1, 'jour4', "Raman", petri)
+    dossier = os.path.join(racine1, 'jour4', 'fixe', "raman", petri)
 
     pattern = os.path.join(dossier, f"{souris}*.txt")
 
@@ -133,7 +117,7 @@ def extract_jour4(petri, souris, zone, fichiers_par_zone=10):
     return fichiers_zone
 
 def extract_jour8_jour11(jour, petri, souris, zone):
-    dossier = os.path.join(racine1, jour, "Raman", petri, souris, zone)
+    dossier = os.path.join(racine1, jour, 'fixe',  "Raman", petri, souris, zone)
             # Si le dossier n'existe pas, on le saute sans buguer
     if not os.path.exists(dossier):
         return []
@@ -512,8 +496,14 @@ def baseline_with_lipid_protection(x, y, lam_low=1e4, lam_high=1e7,
 # ──────────────────────────────────────────────────────────────────────────────────────────
 # AVERAGE DATA FROM FILE LIST + REMOVE STANDARDIZATION EFFECT + REMOVE FLUORESCENCE
 # ──────────────────────────────────────────────────────────────────────────────────────────
-
-
+print("Debut lecture donnees")
+racine = root_cafeine / Path(r"exp_1/spectre_lumière_blanche")
+print(racine)
+fichiers = sorted(glob.glob(os.path.join(racine, '*.txt')))
+print("Debut traitement acquisitions")
+w_ref, i_ref = traiter_acquisitions(fichiers)
+print("Debut caracteriser motif fixe")
+t_lambda, lisse = caracteriser_motif_fixe(intensite_ref_brute=i_ref)
 def correction_data(liste_fichiers, traiter_etalon=True, als=True, bubblewidth=None, lam=1e6, p=0.01):
     """
     Traite une liste de fichiers .txt 20 ou 30 acquisitions (10 acquisitions par zones).
@@ -541,13 +531,13 @@ def correction_data(liste_fichiers, traiter_etalon=True, als=True, bubblewidth=N
             intensite = supprimer_fluorescence(i, min_bubble_widths=bubblewidth)
             intensite = baseline_with_lipid_protection(w, intensite)
     
-    return w, intensite, baseline
+    return w, intensite
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────────
 # REMOVE ROGUE SPECTRUM
 # ──────────────────────────────────────────────────────────────────────────────────────────
-
+# mettre à 0 tous mes spectres 
 def soustraire_spectre1(wn_echantillon, intensite_echantillon, wn_nocif, intensite_nocif, ordre_baseline=1, fenetres_fit=None):
     """
     Soustrait la contribution du verre (ou de la gellose) en trouvant 
@@ -610,6 +600,10 @@ def soustraire_spectre2(wn_echantillon, intensite_echantillon, wn_nocif, intensi
     intensite_echantillon = np.asarray(intensite_echantillon, dtype=float)
     nocif_interp = np.interp(wn_echantillon, wn_nocif, intensite_nocif)
 
+    # ── Normalisation de la colonne du gel pour le conditionnement numérique ──
+    echelle_nocif = np.std(nocif_interp)
+    nocif_norm = nocif_interp / echelle_nocif
+
     if fenetres_fit is not None:
         masque = np.zeros_like(wn_echantillon, dtype=bool)
         for (lo, hi) in fenetres_fit:
@@ -618,7 +612,7 @@ def soustraire_spectre2(wn_echantillon, intensite_echantillon, wn_nocif, intensi
         masque = np.ones_like(wn_echantillon, dtype=bool)
 
     x_norm = (wn_echantillon - wn_echantillon.mean()) / wn_echantillon.std()
-    colonnes = [nocif_interp] + [x_norm**k for k in range(ordre_baseline + 1)]
+    colonnes = [nocif_norm] + [x_norm**k for k in range(ordre_baseline + 1)]
     A_full = np.column_stack(colonnes)
     A_fit = A_full[masque]
     y_fit = intensite_echantillon[masque]
@@ -626,7 +620,9 @@ def soustraire_spectre2(wn_echantillon, intensite_echantillon, wn_nocif, intensi
     n_baseline = ordre_baseline + 1
     bornes_inf = [0.0] + [-np.inf] * n_baseline
     bornes_sup = [np.inf] + [np.inf] * n_baseline
-
+    print("nb points dans le masque:", masque.sum())
+    print("nocif_norm dans fenêtres:", nocif_norm[masque][:5])
+    print("y_fit:", y_fit[:5])
     if robuste:
         def residuals(coeffs):
             return A_fit @ coeffs - y_fit
@@ -638,13 +634,53 @@ def soustraire_spectre2(wn_echantillon, intensite_echantillon, wn_nocif, intensi
         resultat = lsq_linear(A_fit, y_fit, bounds=(bornes_inf, bornes_sup))
         coeffs = resultat.x
 
-    alpha = coeffs[0]
+    alpha_norm = coeffs[0]
+    alpha = alpha_norm / echelle_nocif   # ← alpha "réel", à appliquer sur nocif_interp brut
+
     modele_complet = A_full @ coeffs
     intensite_corrigee = intensite_echantillon - modele_complet
 
-    return intensite_corrigee
+    return intensite_corrigee, alpha
+
+def interpoler_zones_nocif(wn, intensite, zones_a_retirer):
+    intensite = np.asarray(intensite, dtype=float).copy()
+    wn = np.asarray(wn, dtype=float)
+
+    for (lo, hi) in zones_a_retirer:
+        masque = (wn >= lo) & (wn <= hi)
+        if not masque.any():
+            continue
+        i_debut = np.where(masque)[0][0] - 1
+        i_fin = np.where(masque)[0][-1] + 1
+        if i_debut < 0 or i_fin >= len(wn):
+            continue
+        intensite[masque] = np.interp(wn[masque],
+                                        [wn[i_debut], wn[i_fin]],
+                                        [intensite[i_debut], intensite[i_fin]])
+    return intensite
 
 
+from scipy.optimize import minimize_scalar
+
+def soustraire_reference_gel(spectre, gel_ref, bornes_alpha=(0, 2)):
+    """
+    Soustrait spectre_gel_ref * alpha du spectre échantillon,
+    en optimisant alpha pour minimiser les résidus négatifs
+    (signe qu'on a trop soustrait) tout en réduisant les pics du gel.
+    """
+    def cout(alpha):
+        residu = spectre - alpha * gel_ref
+        # pénalise fortement le sur-soustraction (résidus négatifs)
+        penalite_neg = np.sum(np.clip(-residu, 0, None) ** 2)
+        return penalite_neg
+
+    res = minimize_scalar(cout, bounds=bornes_alpha, method='bounded')
+    alpha_opt = res.x
+
+    spectre_corrige = spectre - alpha_opt * gel_ref
+    spectre_corrige = np.clip(spectre_corrige, 0, None)  # évite les négatifs résiduels
+
+    return spectre_corrige, alpha_opt
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -661,34 +697,51 @@ def charger_nocif(config):
             fichiers = extract_gelose(batch, petri)
             if not fichiers:
                 continue
-            w, i, baseline = correction_data(fichiers)
+            w, i= correction_data(fichiers)
   
             i_s.append(i)
             if not i_s:
                 raise ValueError("Aucun spectre de gélose (nocif) n'a pu être chargé.")
             i_arr = np.array(i_s)
+    #plt.plot(w, np.mean(i_arr, axis=0))
+    #plt.show()
     return np.mean(i_arr, axis=0)
 
 # i_arr_nocif = charger_nocif(CONFIG)
 
-def adjust_spectrum(list_fich_echantillon, i_nocif=None, retirer_nocif=True, wn_min=600, wn_max=3000):
+def adjust_spectrum(list_fich_echantillon, i_nocif=None, retirer_nocif=True, wn_min=600, wn_max=2800):
 
     if i_nocif is None:
         i_nocif = charger_nocif(CONFIG1)
-        i_nocif_centree = i_nocif - np.mean(i_nocif)
-        i_nocif = i_nocif_centree / np.max(np.abs(i_nocif_centree))
-    w, i, baseline = correction_data(list_fich_echantillon)
+    w, i = correction_data(list_fich_echantillon)
     if retirer_nocif:
-        intensite_centree = i - np.mean(i)
-        i_nrml = intensite_centree / np.max(np.abs(intensite_centree))
-        i_corr = soustraire_spectre1(w, i_nrml, w, i_nocif)
+        fenetres_gel = [
+            (590, 650),
+            (760, 820),
+            (980, 1040),
+            (1150, 1200),
+            (1420, 1460),
+            (1560, 1610),
+            # (1280, 1340) exclue : corr ≈ 0.025, ça n'est pas du gel
+        ]
+
+        i_corr, alpha = soustraire_spectre2(
+            w, i,
+            w, i_nocif,
+            ordre_baseline=1,
+            fenetres_fit=fenetres_gel,   # ← ne pas oublier !
+            robuste=True
+        )
+        print("alpha =", alpha)
+        print('Début ploting')
+        plt.plot(w, i, label='échantillon')
+        plt.plot(w, i_corr, label='i_corr')
+        plt.plot(w, i_nocif, label='nocif')
+        plt.legend()
+        plt.show()
     else:
         i_corr = i
-    plt.plot(w, i, label='échantillon')
-    plt.plot(w, i_corr, label='i_corr')
-    plt.plot(w, i_nocif, label='nocif')
-    plt.legend()
-    plt.show()
+
     masque = (w >= wn_min) & (w <= wn_max)
     w_masque, i_masque = w[masque], i_corr[masque]
 
@@ -696,7 +749,7 @@ def adjust_spectrum(list_fich_echantillon, i_nocif=None, retirer_nocif=True, wn_
     i_nrml = intensite_centree / np.max(np.abs(intensite_centree))
 
 
-    return w_masque, i_nrml, i_masque, i[masque]
+    return w_masque, i_nrml
 
 
     
@@ -800,16 +853,19 @@ if __name__ == "__main__":
     t_lambda, lisse = caracteriser_motif_fixe(intensite_ref_brute=i_ref)
     # print("Starting code")
 
-    fichiers = extract_frais('batch#1', 'petri1', 'z1')
+    fichiers = extract_frais('batch#1', 'petri5', 'z1')
+    fichiers2 = extract_frais('batch#3', 'petri22', 'z1')
     print("Debut traitement acquistion")
-    w1, i1 = traiter_acquisitions(fichiers)
+    w1, i1 = correction_data(fichiers)
+    w9, i9 = correction_data(fichiers2)
 
-    w, i_nrml, i, i_recu = adjust_spectrum(fichiers)
+    #w, i_nrml, i, i_recu = adjust_spectrum(fichiers)
 
     print("Debut plotting")
-    plt.plot(w, i_nrml, label='spectre normalisé et centré')
+    plt.plot(w1, i1, label='femelle irradié')
+    plt.plot(w9, i9, label='male irradié')
     #plt.plot(w, i, label='spectre brut')
-    plt.plot(w, i, label='i apres suppression nocif (soustraire spectre 2)')
+    #plt.plot(w, i, label='i apres suppression nocif (soustraire spectre 2)')
 
 
 

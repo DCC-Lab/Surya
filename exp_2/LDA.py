@@ -40,7 +40,7 @@ lecteurs = {
 # ────────────────────────────────────────────────────────────────────────────
 # CONFIGURATION
 # ────────────────────────────────────────────────────────────────────────────
-from config import CONFIG
+from config import CONFIG1
 
 
 N_MAX_COMPOSANTES = 11  # borne supérieure explorée par le test de sélection
@@ -53,6 +53,7 @@ N_MAX_COMPOSANTES = 11  # borne supérieure explorée par le test de sélection
 def charger_spectres(config, etat):
     """Charge tous les spectres et les étiquettes
     """
+    print('charge spectres')
     spectres, etiquettes = [], []
     w = None
 
@@ -67,7 +68,7 @@ def charger_spectres(config, etat):
                 if not liste_fichiers:
                     continue
 
-                w_local, i = adjust_spectrum(liste_fichiers, retirer_nocif=True)
+                w_local, i = adjust_spectrum(liste_fichiers, retirer_nocif=False)
                 if w_local is None or i is None:
                     continue
                 if not np.isfinite(i).all():
@@ -87,6 +88,7 @@ def parser_etiquettes(etiquettes):
     """Extrait échantillon, dose, sexe, traitement, id souris, état (frais/fixe), zone."""
     echantillons, doses, sexes, traitements, souris_id, etats, zones = [], [], [], [], [], [], []
 
+    print('parse étiquettes')
     for e in etiquettes:
         parts = e.split('_')
         echantillon = parts[0]
@@ -136,6 +138,7 @@ Elle retourne le n qui donne le meilleur score, et l'affiche.
 
 En résumé : c'est une recherche du nombre optimal de composantes PCA, en observant à partir de combien de composantes l'ajout de dimensions supplémentaires n'améliore plus (ou dégrade) la performance de classification.
 """
+    print('choisi nb composantes')
     #n_max = min(n_max, X.shape[0] - 1, X.shape[1])
     valeurs_n = list(range(1, n_max + 1))
     scores = []
@@ -282,9 +285,9 @@ def etiquette_courte(id_souris, zone):
 
 
 # ── Chargement des deux états ──────────────────────────────────────────────
-X_frais, etiquettes_frais, w_frais = charger_spectres(CONFIG, 'frais')
+X_frais, etiquettes_frais, w_frais = charger_spectres(CONFIG1, 'frais')
 print(etiquettes_frais)
-X_fixe, etiquettes_fixe, w_fixe = charger_spectres(CONFIG, 'fixe')
+X_fixe, etiquettes_fixe, w_fixe = charger_spectres(CONFIG1, 'fixe')
 
 
 

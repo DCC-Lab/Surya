@@ -12,13 +12,13 @@ lecteurs = {
     'moyenfixe': lecteur_données_moy_fixe
 }
 
-w1, i1 = adjust_spectrum(lecteurs['frais']('batch#1', 'petri1', 'z1'), retirer_nocif=True)
-w2, i2 = adjust_spectrum(lecteurs['frais']('batch#1', 'petri1', 'z1'), retirer_nocif=False)
+# w1, i1 = adjust_spectrum(lecteurs['frais']('batch#1', 'petri1', 'z1'), retirer_nocif=True)
+# w2, i2 = adjust_spectrum(lecteurs['frais']('batch#1', 'petri1', 'z1'), retirer_nocif=False)
 
-plt.plot(w1, i1, label='corrigé')
-plt.plot(w2, i2, label='non corrigé')
-plt.legend()
-plt.show()
+# plt.plot(w1, i1, label='corrigé')
+# plt.plot(w2, i2, label='non corrigé')
+# plt.legend()
+# plt.show()
 
 
 
