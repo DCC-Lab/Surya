@@ -16,7 +16,7 @@ from contextlib import contextmanager
 import unicodedata
 import shutil
 
-DEBUG = True
+DEBUG = False
 
 def print_debug(*args, **kwargs):
     if DEBUG:
@@ -334,6 +334,7 @@ def fix_acquisition_errors(df, name="surya-dataset-description"):
 
 def delete_test_data(df):
     assert not df.empty
+    df = df[~df['file'].astype(str).str.startswith(('exp_2_old', 'archives'))]
     df = df[(df['test'] == False)]
     df = df[(df['modalite'] == 'raman')]
     df = df[(df['keyword'] != 'dark')]
