@@ -58,6 +58,7 @@ def charger_spectres(config, etat):
     w = None
 
     for batch, petris in config.items():
+        print(batch)
         for petri, (echantillon, dose, type_) in petris.items():
             if 'moyenne' in etat:
                 a_lire = [(None, lecteurs[etat](batch, petri))]
@@ -68,7 +69,7 @@ def charger_spectres(config, etat):
                 if not liste_fichiers:
                     continue
 
-                w_local, i = adjust_spectrum(liste_fichiers, retirer_nocif=False)
+                w_local, i = adjust_spectrum(liste_fichiers)
                 if w_local is None or i is None:
                     continue
                 if not np.isfinite(i).all():
@@ -285,83 +286,83 @@ def etiquette_courte(id_souris, zone):
 
 
 # ── Chargement des deux états ──────────────────────────────────────────────
-X_frais, etiquettes_frais, w_frais = charger_spectres(CONFIG1, 'frais')
-print(etiquettes_frais)
-X_fixe, etiquettes_fixe, w_fixe = charger_spectres(CONFIG1, 'fixe')
+# X_frais, etiquettes_frais, w_frais = charger_spectres(CONFIG1, 'frais')
+# print(etiquettes_frais)
+# X_fixe, etiquettes_fixe, w_fixe = charger_spectres(CONFIG1, 'fixe')
 
 
 
-X = np.concatenate([X_frais, X_fixe], axis=0)
-etiquettes = etiquettes_frais + etiquettes_fixe   # ce sont des listes Python, "+" les concatène
-w = w_frais   # en supposant que w_frais == w_fixe (mêmes wavenumbers pour les deux états)
+# X = np.concatenate([X_frais, X_fixe], axis=0)
+# etiquettes = etiquettes_frais + etiquettes_fixe   # ce sont des listes Python, "+" les concatène
+# w = w_frais   # en supposant que w_frais == w_fixe (mêmes wavenumbers pour les deux états)
 
-echantillons, doses, sexes, traitements, souris_id, etats, zones = parser_etiquettes(etiquettes)
+# echantillons, doses, sexes, traitements, souris_id, etats, zones = parser_etiquettes(etiquettes)
 
-y_dose = np.array([f"{d}gy" for d in doses])
+# y_dose = np.array([f"{d}gy" for d in doses])
 
-# À définir une seule fois, en dehors de la fonction (au niveau du module)
-_fig_ld1, _ax_ld1 = None, None
-
-
-def matrice_confusion(masque, discriminant, titre):
-    global _fig_ld1, _ax_ld1
-
-    if discriminant == 'dose':
-        y_labels = y_dose
-        ordre_classes = ["0gy", "45gy"]
-        display_labels = ["Non-irradiated", "Irradiated"]
-    else:
-        y_labels = traitements
-        ordre_classes = ["+P", "NT"]
-        display_labels = ["Pansement", "Non traité"]
-
-    y, y_pred, ba, n_pca, ld1, pca, lda = entrainer_lda(X, y_labels, souris_id, masque, titre)
-
-    fig1, ax1 = plt.subplots(figsize=(6, 5))
-    ConfusionMatrixDisplay.from_predictions(
-        y, y_pred, ax=ax1,
-        labels=ordre_classes,
-        colorbar=True,
-        normalize='true',
-        im_kw={'vmin': 0, 'vmax': 1},
-        cmap='RdPu',
-        display_labels=display_labels
-    )
-    ax1.set_title(f" {titre} - Effet {discriminant} - ({n_pca} comp., BA={ba:.1%})")
-    plt.tight_layout()
-    plt.show()
+# # À définir une seule fois, en dehors de la fonction (au niveau du module)
+# _fig_ld1, _ax_ld1 = None, None
 
 
+# def matrice_confusion(masque, discriminant, titre):
+#     global _fig_ld1, _ax_ld1
 
-    return (y, y_pred, ba, n_pca, ld1, pca, lda, f'Effet {discriminant}')
+#     if discriminant == 'dose':
+#         y_labels = y_dose
+#         ordre_classes = ["0gy", "45gy"]
+#         display_labels = ["Non-irradiated", "Irradiated"]
+#     else:
+#         y_labels = traitements
+#         ordre_classes = ["+P", "NT"]
+#         display_labels = ["Pansement", "Non traité"]
+
+#     y, y_pred, ba, n_pca, ld1, pca, lda = entrainer_lda(X, y_labels, souris_id, masque, titre)
+
+#     fig1, ax1 = plt.subplots(figsize=(6, 5))
+#     ConfusionMatrixDisplay.from_predictions(
+#         y, y_pred, ax=ax1,
+#         labels=ordre_classes,
+#         colorbar=True,
+#         normalize='true',
+#         im_kw={'vmin': 0, 'vmax': 1},
+#         cmap='RdPu',
+#         display_labels=display_labels
+#     )
+#     ax1.set_title(f" {titre} - Effet {discriminant} - ({n_pca} comp., BA={ba:.1%})")
+#     plt.tight_layout()
+#     plt.show()
 
 
 
-def afficher_ld1(info1, titre, info2=None):
-    y1, y_pred1, ba1, n_pca1, ld1_1, pca1, lda1, titre1 = info1
-    disc1 = pca1.components_.T @ lda1.scalings_[:, 0]
-    disc1 = disc1 / np.linalg.norm(disc1)
+#     return (y, y_pred, ba, n_pca, ld1, pca, lda, f'Effet {discriminant}')
 
-    fig, ax = plt.subplots(figsize=(11, 6))
 
-    ax.plot(w, disc1, label=titre1, color='xkcd:scarlet', lw=1.2)
 
-    if info2 != None:
-        y2, y_pred2, ba2, n_pca2, ld1_2, pca2, lda2, titre2 = info2
-        disc2 = pca2.components_.T @ lda2.scalings_[:, 0]
-        disc2 = disc2 / np.linalg.norm(disc2)
+# def afficher_ld1(info1, titre, info2=None):
+#     y1, y_pred1, ba1, n_pca1, ld1_1, pca1, lda1, titre1 = info1
+#     disc1 = pca1.components_.T @ lda1.scalings_[:, 0]
+#     disc1 = disc1 / np.linalg.norm(disc1)
 
-        ax.plot(w, disc2, label=titre2, color='xkcd:blue', lw=1.2)
+#     fig, ax = plt.subplots(figsize=(11, 6))
 
-    ax.axhline(0, color='grey', lw=0.5)
-    ax.set_title(titre)
-    #annoter_pics(ax, w, disc_NTFi, n_pics=50, couleur='black')
-    #annoter_pics(ax, w, disc_NTFr, n_pics=50, couleur='black')
-    ax.legend()
-    ax.set_xlabel("Raman shift(cm⁻¹)")
-    ax.set_ylabel("LD1 wheight")
-    plt.tight_layout()
-    plt.show()
+#     ax.plot(w, disc1, label=titre1, color='xkcd:scarlet', lw=1.2)
+
+#     if info2 != None:
+#         y2, y_pred2, ba2, n_pca2, ld1_2, pca2, lda2, titre2 = info2
+#         disc2 = pca2.components_.T @ lda2.scalings_[:, 0]
+#         disc2 = disc2 / np.linalg.norm(disc2)
+
+#         ax.plot(w, disc2, label=titre2, color='xkcd:blue', lw=1.2)
+
+#     ax.axhline(0, color='grey', lw=0.5)
+#     ax.set_title(titre)
+#     #annoter_pics(ax, w, disc_NTFi, n_pics=50, couleur='black')
+#     #annoter_pics(ax, w, disc_NTFr, n_pics=50, couleur='black')
+#     ax.legend()
+#     ax.set_xlabel("Raman shift(cm⁻¹)")
+#     ax.set_ylabel("LD1 wheight")
+#     plt.tight_layout()
+#     plt.show()
 
 
 

@@ -29,9 +29,9 @@ echantillons, doses, sexes, traitements, souris_id, etats, zones = parser_etique
 masque1 = (etats == 'frais') & (traitements == 'NT') & (sexes == 'F')
 info1 = matrice_confusion(masque1, 'dose', 'Effet de la dose, femelles non traités')
 
-masque2 = (etats == 'frais') & (doses == 45) & (sexes == 'F')
-info2 = matrice_confusion(masque2, 'traitement', 'Effet du traitement, femelles irradiées')
+#masque2 = (etats == 'frais') & (doses == 45) & (sexes == 'F')
+#info2 = matrice_confusion(masque2, 'traitement', 'Effet du traitement, femelles irradiées')
 
 
 
-afficher_ld1(info1,'Effet traitement et effet dose', info2)
+#afficher_ld1(info1,'Effet traitement et effet dose', info2)

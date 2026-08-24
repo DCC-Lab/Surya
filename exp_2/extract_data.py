@@ -62,9 +62,9 @@ def extract_jour0(petri, souris, zone, fichiers_par_zone=10):
 
 def extract_jour2(petri, souris, zone, matiere='verre', fichiers_par_zone=10): #matiere = gelose ou verre
 
-    dossier = os.path.join(root_cafeine,'exp_1', 'jour2', "raman", 'fixe',  petri, '*')
+    dossier = os.path.join(root_cafeine,'exp_1', 'jour2', "raman", 'fixe',  petri)
     pattern = os.path.join(dossier, f"{souris}*{matiere}*")
-
+    #print(pattern)
     tous_les_fichiers = sorted(glob.glob(pattern))
     
     if not tous_les_fichiers:
@@ -72,7 +72,7 @@ def extract_jour2(petri, souris, zone, matiere='verre', fichiers_par_zone=10): #
         return []
 
     
-    # Trie par date de modification (le plus ancien en premier)
+    # Trie par dateff de modification (le plus ancien en premier)
     tous_les_fichiers_tries = sorted(tous_les_fichiers, key=lambda f: os.path.getmtime(f))
     
     # Découpe en tranches de 10
@@ -80,11 +80,9 @@ def extract_jour2(petri, souris, zone, matiere='verre', fichiers_par_zone=10): #
     debut = (indice - 1) * fichiers_par_zone
     fin = debut + fichiers_par_zone
     fichiers_zone = tous_les_fichiers_tries[debut:fin]
-    print(f"{zone} — {len(fichiers_zone)} fichiers trouvés: {fichiers_zone}")
+    #print(f"{zone} — {len(fichiers_zone)} fichiers trouvés: {fichiers_zone}")
     
     return fichiers_zone
-
-#fichiers = extract_jour2('gelose', 'petri1', 'souris1', 'zone1')
 
 
 def extract_jour4(petri, souris, zone, fichiers_par_zone=10):
@@ -117,8 +115,8 @@ def extract_jour4(petri, souris, zone, fichiers_par_zone=10):
     #print(f"{zone} — {len(fichiers_zone)} fichiers trouvés")
     return fichiers_zone
 
-def extract_jour8_jour11(jour, petri, souris, zone):
-    dossier = os.path.join(racine1, jour, 'fixe',  "Raman", petri, souris, zone)
+def extract_jour8_jour11(petri, souris, zone):
+    dossier = os.path.join(racine1, 'jour8', 'fixe',  "Raman", petri, souris, zone)
             # Si le dossier n'existe pas, on le saute sans buguer
     if not os.path.exists(dossier):
         return []
@@ -469,7 +467,7 @@ def als_baseline_variable_lambda(y, lam_vector, p, niter=10):
     Petit lam -> baseline plus souple (suit plus les pics).
     """
     L = len(y)
-    D = sparse.diags([1, -2, 1], [0, -1, -2], shape=(L, L - 2))
+    D = sparse.diags([1, -2, 1], [0, -1, -2], shape=(L, L - 2), dtype=float)
     Lam = sparse.diags(lam_vector[1:-1])
     w = np.ones(L)
     for i in range(niter):
@@ -497,13 +495,13 @@ def baseline_with_lipid_protection(x, y, lam_low=1e4, lam_high=1e7,
 # ──────────────────────────────────────────────────────────────────────────────────────────
 # AVERAGE DATA FROM FILE LIST + REMOVE STANDARDIZATION EFFECT + REMOVE FLUORESCENCE
 # ──────────────────────────────────────────────────────────────────────────────────────────
-print("Debut lecture donnees")
+# print("Debut lecture donnees")
 racine = root_cafeine / Path(r"exp_1/spectre_lumière_blanche")
-print(racine)
+# print(racine)
 fichiers = sorted(glob.glob(os.path.join(racine, '*.txt')))
-print("Debut traitement acquisitions")
+# print("Debut traitement acquisitions")
 w_ref, i_ref = traiter_acquisitions(fichiers)
-print("Debut caracteriser motif fixe")
+# print("Debut caracteriser motif fixe")
 t_lambda, lisse = caracteriser_motif_fixe(intensite_ref_brute=i_ref)
 def correction_data(liste_fichiers, traiter_etalon=True, als=True, bubblewidth=None, lam=1e6, p=0.01):
     """
@@ -709,33 +707,30 @@ def charger_nocif(config):
     return np.mean(i_arr, axis=0)
 
 # i_arr_nocif = charger_nocif(CONFIG)
+inocif = charger_nocif(CONFIG1)
 
-def adjust_spectrum(list_fich_echantillon, i_nocif=None, retirer_nocif=True, wn_min=600, wn_max=2800):
+def adjust_spectrum(list_fich_echantillon, i_nocif=None, retirer_nocif=False, wn_min=600, wn_max=3000):
 
     w, i = correction_data(list_fich_echantillon)
 
     if retirer_nocif:
         if i_nocif is None:
-            i_nocif = charger_nocif(CONFIG1)
-            fenetres_gel = [
-                (590, 650),
-                (760, 820),
-                (980, 1040),
-                (1150, 1200),
-                (1420, 1460),
-                (1560, 1610),
-                # (1280, 1340) exclue : corr ≈ 0.025, ça n'est pas du gel
-            ]
+            i_nocif = inocif
+            fenetres_gel = None
+            # [
+            #     (590, 650),
+            #     (760, 820),
+            #     (980, 1040),
+            #     (1150, 1200),
+            #     (1420, 1460),
+            #     (1560, 1610),
+            #     # (1280, 1340) exclue : corr ≈ 0.025, ça n'est pas du gel
+            # ]
 
-            i_corr, alpha = soustraire_spectre2(
+            i_corr = soustraire_spectre1(
                 w, i,
                 w, i_nocif,
-                ordre_baseline=1,
-                fenetres_fit=fenetres_gel,   # ← ne pas oublier !
-                robuste=True
             )
-            print("alpha =", alpha)
-            print('Début ploting')
             # plt.plot(w, i, label='échantillon')
             # plt.plot(w, i_corr, label='i_corr')
             # plt.plot(w, i_nocif, label='nocif')
@@ -843,38 +838,38 @@ def tester_als_settings(wn, i_corr_F, combos, wn_min=800, wn_max=2200):
 
 
 
-if __name__ == "__main__":
+#if __name__ == "__main__":
 
     
-    fichiers = extract_jour0('petri1', 'souris1', 'zone3')
-    w, i = correction_data(fichiers)
+    # fichiers = extract_jour0('petri1', 'souris1', 'zone3')
+    # w, i = correction_data(fichiers)
 
-    print("Debut lecture donnees")
-    racine = root_cafeine / Path(r"exp_1/spectre_lumière_blanche")
-    print(racine)
-    fichiers = sorted(glob.glob(os.path.join(racine, '*.txt')))
-    print("Debut traitement acquisitions")
-    w_ref, i_ref = traiter_acquisitions(fichiers)
+    # print("Debut lecture donnees")
+    # racine = root_cafeine / Path(r"exp_1/spectre_lumière_blanche")
+    # print(racine)
+    # fichiers = sorted(glob.glob(os.path.join(racine, '*.txt')))
+    # print("Debut traitement acquisitions")
+    # w_ref, i_ref = traiter_acquisitions(fichiers)
 
-    print("Debut caracteriser motif fixe")
-    t_lambda, lisse = caracteriser_motif_fixe(intensite_ref_brute=i_ref)
-    # print("Starting code")
+    # print("Debut caracteriser motif fixe")
+    # t_lambda, lisse = caracteriser_motif_fixe(intensite_ref_brute=i_ref)
+    # # print("Starting code")
 
-    fichiers = extract_frais('batch#1', 'petri5', 'z1')
-    fichiers2 = extract_frais('batch#3', 'petri22', 'z1')
-    print("Debut traitement acquistion")
-    w1, i1 = adjust_spectrum(fichiers, retirer_nocif=False)
-    w9, i9 = adjust_spectrum(fichiers2, retirer_nocif=False)
+    # fichiers = extract_frais('batch#1', 'petri5', 'z1')
+    # fichiers2 = extract_frais('batch#3', 'petri22', 'z1')
+    # print("Debut traitement acquistion")
+    # w1, i1 = adjust_spectrum(fichiers, retirer_nocif=False)
+    # w9, i9 = adjust_spectrum(fichiers2, retirer_nocif=False)
 
-    #w, i_nrml, i, i_recu = adjust_spectrum(fichiers)
+    # #w, i_nrml, i, i_recu = adjust_spectrum(fichiers)
 
-    print("Debut plotting")
-    plt.plot(w1, i1, label='femelle irradié')
-    plt.plot(w9, i9, label='male irradié')
-    #plt.plot(w, i, label='spectre brut')
-    #plt.plot(w, i, label='i apres suppression nocif (soustraire spectre 2)')
+    # print("Debut plotting")
+    # plt.plot(w1, i1, label='femelle irradié')
+    # plt.plot(w9, i9, label='male irradié')
+    # #plt.plot(w, i, label='spectre brut')
+    # #plt.plot(w, i, label='i apres suppression nocif (soustraire spectre 2)')
 
 
 
-    plt.legend()
-    plt.show()
+    # plt.legend()
+    # plt.show()

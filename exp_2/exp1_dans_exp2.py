@@ -51,8 +51,8 @@ config = {
         'petri1': ('0gy',      {'souris1': ['zone1'], 'souris2': ['zone1','zone2'], 'souris3': ['zone1','zone2','zone3']}),
         'petri2': ('45gy',     {'souris1': ['zone1','zone2'], 'souris2': ['zone1','zone2','zone3']}),
         #'petri3': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
-        #'petri4': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
-        #'petri5': ('80gy',     {'souris4': ['zone1','zone2','zone3']}),
+        'petri4': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
+        'petri5': ('80gy',     {'souris4': ['zone1','zone2','zone3']}),
     },
     #'jour4': {
         #'petri1': ('60gy',     {'souris4': ['zone1','zone2','zone3'], 'souris5': ['zone1','zone2','zone3']}),
@@ -92,7 +92,7 @@ for jour, petris in config.items():
         for souris, zones in souris_data.items():
                 for zone in zones:
                     liste_fichiers = extracteur[jour](petri, souris, zone, matiere='gelose')
-                    print(f"{jour}/{petri}/{souris}/{zone} → {len(liste_fichiers)} fichier(s)")  # ← debug
+                    #print(f"{jour}/{petri}/{souris}/{zone} → {len(liste_fichiers)} fichier(s)")  # ← debug
                     if not liste_fichiers:
                         continue
                     ...
@@ -309,6 +309,25 @@ def entrainer_lda(X, y_labels, souris_id, masque, titre_suffixe, n_max=N_MAX_COM
 
     return y_sub, y_pred, ba, n_pca, X_lda[:, 0], pca, lda
 
+def analyser_dose(X, doses, souris_id, masque, titre_suffixe, n_max=N_MAX_COMPOSANTES):
+    X_sub = X[masque]
+    y_sub = np.array([f"{d}gy" for d in doses[masque]])
+    groupes_sub = souris_id[masque]
+
+    n_pca = choisir_n_composantes(X_sub, y_sub, groupes_sub, n_max,
+                                   f"Choix N_PCA — {titre_suffixe}")
+
+    y_pred, ba = evaluer_lda(X_sub, y_sub, groupes_sub, n_pca, f"DOSE — {titre_suffixe}")
+
+    # La PCA/LDA "finales" (fit sur tout X_sub) servent uniquement à reconstruire
+    # le spectre discriminant LD1 — pas à évaluer la performance (ba vient de la CV ci-dessus)
+    pca = PCA(n_components=n_pca)
+    X_pca = pca.fit_transform(X_sub)
+    lda = LinearDiscriminantAnalysis()
+    X_lda = lda.fit_transform(X_pca, y_sub)   # (n_échantillons, 1) — 2 classes
+
+    return y_sub, y_pred, ba, n_pca, X_lda[:, 0], pca, lda
+
 
 
 from scipy.signal import find_peaks
@@ -373,23 +392,24 @@ def marquer_positions(ax, w, spectre, positions, couleur='red',
 
 
 # ── Chargement des deux états ──────────────────────────────────────────────
-
+print('charger frais')
 X_frais, etiquettes_frais, w_frais = charger_spectres(CONFIG1, 'frais')
-X_fixe, etiquettes_fixe, w_fixe = charger_spectres(CONFIG1, 'fixe')
+# print()
+# X_fixe, etiquettes_fixe, w_fixe = charger_spectres(CONFIG1, 'fixe')
 
-X2 = np.concatenate([X_frais, X_fixe], axis=0)
-etiquettes2 = etiquettes_frais + etiquettes_fixe   # ce sont des listes Python, "+" les concatène
-w = w_frais   # en supposant que w_frais == w_fixe (mêmes wavenumbers pour les deux états)
+# X2 = np.concatenate([X_frais, X_fixe], axis=0)
+# etiquettes2 = etiquettes_frais + etiquettes_fixe   # ce sont des listes Python, "+" les concatène
+# w = w_frais   # en supposant que w_frais == w_fixe (mêmes wavenumbers pour les deux états)
 
-echantillons2, doses2, sexes2, traitements2, souris_id2, etats2, zones = parser_etiquettes(etiquettes2)
+echantillons2, doses2, sexes2, traitements2, souris_id2, etats2, zones = parser_etiquettes(etiquettes_frais)
 
 
 
 y_labels = np.array([f"{d}gy" for d in doses2])
 
 
-masque1 = (etats2 == 'frais') & (traitements2 == 'NT') & (sexes2 == 'F')
-y, y_pred, ba, n_pca, ld1, pca, lda = entrainer_lda(X2, y_labels, souris_id2, masque1, 'Effet de la dose, femelles non traités')
+masque1 = (traitements2 == 'NT') & (sexes2 == 'F')
+y, y_pred, ba, n_pca, ld1, pca, lda = analyser_dose(X_frais, y_labels, souris_id2, masque1, 'Effet de la dose, femelles non traités')
 
 
 def score_ld1(spectres, pca, lda):

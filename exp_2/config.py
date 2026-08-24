@@ -37,14 +37,14 @@ CONFIG1 = {
          'petri31': ('S27-G', 45, 'M+P'),
          'petri32': ('S27-D', 0,  'M+P'),
      },
-    'batch#4': {
-         'petri33': ('S29-G', 0,  'MNT'),
-         'petri34': ('S29-D', 0,  'MNT'),
-         'petri35': ('S31-G', 45, 'MNT'),
-         'petri36': ('S31-D', 0,  'MNT'),
-         'petri37': ('S34-G', 45, 'M+P'),
-         'petri38': ('S34-D', 0,  'M+P'),
-     },
+    # 'batch#4': {
+    #      'petri33': ('S29-G', 0,  'MNT'),
+    #      'petri34': ('S29-D', 0,  'MNT'),
+    #      'petri35': ('S31-G', 45, 'MNT'),
+    #      'petri36': ('S31-D', 0,  'MNT'),
+    #      'petri37': ('S34-G', 45, 'M+P'),
+    #      'petri38': ('S34-D', 0,  'M+P'),
+    #  },
 }
 
 CONFIG2 = {
@@ -78,7 +78,7 @@ CONFIG2 = {
         #'petri4': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
         'petri5': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3']}),
     },
-    'jour_8': {
+    'jour8': {
         'petri1': ('0gy',      {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
         'petri2': ('45gy',     {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3'], 'souris3': ['zone1','zone2','zone3']}),
         #'petri3': ('45gy + P', {'souris1': ['zone1','zone2','zone3'], 'souris2': ['zone1','zone2','zone3']}),
