@@ -15,12 +15,126 @@ from threading import Thread
 from contextlib import contextmanager
 import unicodedata
 import shutil
+import numpy as np
 
 DEBUG = False
 
 def print_debug(*args, **kwargs):
     if DEBUG:
         print(*args, **kwargs)
+
+# Every piece of metadata that can be read from the name of a file, written as
+# one regular expression per piece. The name between <> is the name of the
+# column it will end up in, so adding a new piece of metadata means adding one
+# line here and nothing else.
+#
+# The order matters: a later pattern overwrites what an earlier one found for
+# the same name, which is how 'echantillon2' takes precedence over the optional
+# subzone of 'souris1.2'.
+#
+# Values that look like whole numbers become whole numbers, everything else is
+# lowercased. Three names get further treatment in the function below, because
+# a regular expression alone cannot express them: the four parts of a time are
+# assembled into one clock time, 'test' becomes true or false depending on
+# whether the word appears at all, and the various spellings of a keyword are
+# brought back to one.
+
+METADATA_PATH_PATTERNS = [
+    r"exp_?(?P<exp>\d)",
+    r"petri(?P<petri>\d+)",
+    r"jour(?P<jour>\d+)",
+    # \W does not match '_', hence [\W_], so that 'souris2_0Gy_zone1' is caught
+    r"[\W_\d]S(?:ouris?)?(?P<souris>\d+)\.?(?P<subzone>\d)?",
+    r"echantillon(?P<subzone>\d)",
+    r"(?P<modalite>raman|drs|speckles)",
+    r"(?P<dose>\d+)Gy",
+    r"batch#(?P<batch>\d+)",
+    # the optional separator catches 'zone_1' and 'zone 2' as well as 'zone1'
+    r"[\W_\d][Zz]o?n?e?_? ?(?P<zone>\d+)",
+    r"__(?P<indice1>\d+)__(?P<heure>\d+)-(?P<minutes>\d+)-(?P<s>\d+)-(?P<ms>\d+)",
+    r"__(?P<indice1>\d+)__(?P<indice2>\d{5})",
+    r"\WHauteur(?P<hauteur>\d+)",
+    r"(?P<fixation>frais|fixe)",
+    r"-(?P<cote>[DG])-",
+    r"(?P<test>tests?)",
+    r"(?P<keyword>white|blanche|dark|black|verre|gel+ose|anneau|adn|petri_|methanol|pink|\d+\s*min\s*plus\s*tards?)",
+]
+
+
+# def extract_properties_from_patterns(root, file_relative_path, patterns=PATH_PATTERNS):
+#     """
+#     Reads the metadata out of a file name using a list of regular expressions.
+
+#     This does the same work as extract_properties_from_path() below, but the
+#     knowledge of what to look for lives in PATH_PATTERNS rather than in the body
+#     of a function. Teaching it about a new piece of metadata means adding one
+#     regular expression, not another twenty lines of copied code.
+
+#     Each pattern is searched for in the whole path, ignoring case. Whatever its
+#     named groups capture becomes an entry of the returned dictionary, converted
+#     to a whole number when it looks like one and lowercased otherwise.
+
+#     patterns : the list to use, PATH_PATTERNS by default.
+#     """
+#     file_path = str(Path(root) / Path(file_relative_path))
+
+#     properties = {}
+#     for pattern in patterns:
+#         match = re.search(pattern, file_path, re.IGNORECASE)
+#         if match is not None:
+#             properties.update(_to_int_values(match.groupdict()))
+
+#     # A counter written '00147' is still the number 147. Those names are forced,
+#     # because the general rule above leaves anything with a leading zero as text
+#     # so that identifiers like '007' keep their shape.
+#     for name in ('indice1', 'indice2', 'heure', 'minutes', 's', 'ms'):
+#         if properties.get(name) is not None:
+#             properties[name] = int(properties[name])
+
+#     # A time is spread over four groups that only mean something together.
+#     if properties.get('heure') is not None:
+#         properties['time'] = datetime.time(hour=properties['heure'],
+#                                            minute=properties['minutes'],
+#                                            second=properties['s'],
+#                                            microsecond=properties['ms'] * 1000)
+#     for part in ('heure', 'minutes', 's', 'ms'):
+#         properties.pop(part, None)
+
+#     # 'test' is not a value to read but a word to notice, so it is always set.
+#     properties['test'] = properties.get('test') is not None
+
+#     # The same thing has been written in several ways over the years.
+#     keyword = properties.get('keyword')
+#     if keyword == 'gellose':
+#         properties['keyword'] = 'gelose'
+#     elif keyword == 'petri_':
+#         properties['keyword'] = 'petri'
+#     elif keyword is not None and re.match(r"\d+\s*min\s*plus\s*tards?", keyword, re.IGNORECASE):
+#         properties['keyword'] = 'plus_tard'
+
+#     properties['file'] = str(file_relative_path)
+
+#     return properties
+
+
+# def _to_int_values(properties):
+#     """
+#     Turns the captured text into whole numbers where that makes sense.
+
+#     A group that captured nothing is left alone: it means the optional part of
+#     the pattern was not there, which is not the same as a value of zero.
+#     """
+#     for key, value in properties.items():
+#         try:
+#             if value is None:
+#                 continue
+#             if str(int(value)) == value:
+#                 properties[key] = int(value)
+#         except:
+#             properties[key] = value.lower()
+
+#     return properties
+
 
 def extract_properties_from_path(root, file_relative_path):
     """
@@ -234,7 +348,11 @@ def add_additional_experimental_info(dataframe, name="surya-dataset-description"
         for petri, (echantillon, dose, type_) in petris.items():
             num_batch = int(re.search(r'\d+', batch).group())
             num_petri = int(re.search(r'\d+', petri).group())
-            masque = (dataframe['exp'] == 2) & (dataframe['batch'] == num_batch) & (dataframe['petri'] == num_petri)
+            # exp 2 and exp 3 are the same experiment: fix_acquisition_errors()
+            # renames the 'fixe' half of exp 2 into exp 3. Accepting both means
+            # the doses are assigned whether that renaming has already happened
+            # or not, so the order of the finalize() methods no longer matters.
+            masque = (dataframe['exp'].isin([2, 3])) & (dataframe['batch'] == num_batch) & (dataframe['petri'] == num_petri)
             dataframe.loc[masque, 'dose'] = dose
             dataframe.loc[masque, 'sexe'] = type_[0].lower()
 
@@ -257,7 +375,8 @@ def add_additional_experimental_info(dataframe, name="surya-dataset-description"
                 sexe = 'f' if num_souris in (1, 2, 3) else 'm'
                 dataframe.loc[masque2, 'sexe'] = sexe
 
-    dataframe.to_excel(name+".xlsx", index=False)
+    # index=True: the index holds the file names, they must appear in the export
+    dataframe.to_excel(name+".xlsx", index=True)
     dataframe.to_pickle(name+".pkl")
 
     return dataframe
@@ -321,20 +440,21 @@ def fix_acquisition_errors(df, name="surya-dataset-description"):
         df = renumber_sequentially_in_time(df, mask_doublons)
         
     print_debug(f"\n\n== 6. Un fichier seul a effacer ==")
-    df = df[ df['file'] != "exp_1/jour8/frais/Raman/petri2/petri2_souris3_zone1/20260519_jour6_raman_petri2_souris3_45Gy_zone1_RamanShift__0__11-41-01-478.txt"]
+    df = df.drop(index="exp_1/jour8/frais/Raman/petri2/petri2_souris3_zone1/20260519_jour6_raman_petri2_souris3_45Gy_zone1_RamanShift__0__11-41-01-478.txt", errors="ignore")
 
     print_debug(f"\n\n== 7. Renomme exp_2 fixe en exp_3 ==")
     mask_exp2_fixe = get_mask(df, {'exp': 2, 'fixation': 'fixe'})
     df.loc[mask_exp2_fixe, 'exp'] = 3 
 
-    df.to_excel(name+".xlsx", index=False)
+    # index=True: the index holds the file names, they must appear in the export
+    df.to_excel(name+".xlsx", index=True)
     df.to_pickle(name+".pkl")
 
     return df
 
 def delete_test_data(df):
     assert not df.empty
-    df = df[~df['file'].astype(str).str.startswith(('exp_2_old', 'archives'))]
+    df = df[~df.index.str.startswith(('exp_2_old', 'archives'))]
     df = df[(df['test'] == False)]
     df = df[(df['modalite'] == 'raman')]
     df = df[(df['keyword'] != 'dark')]
@@ -346,3 +466,25 @@ def delete_test_data(df):
     df = df[(df['keyword'] != 'plus_tard')]
     assert not df.empty
     return df
+
+def read_spectrum_file(absolute_path):
+    absolute_path = unicodedata.normalize('NFC', str(absolute_path))
+
+    with open(absolute_path, "r", encoding="latin-1") as text_file:
+        lines = text_file.read().splitlines()
+
+        wavelengths = []
+        intensities = []
+        for line in lines:
+            # FIXME? On some computers with French settings, a comma is used. We substitute blindly.
+            line = re.sub(",", ".", line)
+
+            match = re.match(r"^\s*(\d+[.,]?\d+)\s+(-?\d*[.,]?\d*)", line)
+            if match is not None:
+                intensity = match.group(2)
+                wavelength = match.group(1)
+                wavelengths.append(float(wavelength))
+                intensities.append(float(intensity))
+
+    return pd.DataFrame({"wavelength": wavelengths, "intensity": intensities})
+
