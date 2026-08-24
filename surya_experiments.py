@@ -33,11 +33,10 @@ def print_debug(*args, **kwargs):
 # subzone of 'souris1.2'.
 #
 # Values that look like whole numbers become whole numbers, everything else is
-# lowercased. Three names get further treatment in the function below, because
-# a regular expression alone cannot express them: the four parts of a time are
-# assembled into one clock time, 'test' becomes true or false depending on
-# whether the word appears at all, and the various spellings of a keyword are
-# brought back to one.
+# lowercased. A group named 'is_something' is a word that either appears or
+# does not, and becomes true or false rather than text. The only thing a
+# regular expression cannot express on its own is the acquisition time, whose
+# four parts are assembled into one clock time afterwards.
 
 METADATA_PATH_PATTERNS = [
     r"exp_?(?P<exp>\d)",
@@ -56,8 +55,25 @@ METADATA_PATH_PATTERNS = [
     r"\WHauteur(?P<hauteur>\d+)",
     r"(?P<fixation>frais|fixe)",
     r"-(?P<cote>[DG])-",
-    r"(?P<test>tests?)",
-    r"(?P<keyword>white|blanche|dark|black|verre|gel+ose|anneau|adn|petri_|methanol|pink|\d+\s*min\s*plus\s*tards?)",
+    # A group named 'is_something' records whether the word is there at all,
+    # as true or false. It replaces a single 'keyword' column that could only
+    # ever hold one word: a file whose name says both 'verre' and 'dark' used
+    # to keep whichever came first, and the other was lost. One column each
+    # also means a filter reads plainly -- df[~df['is_dark']] -- instead of
+    # comparing to a string and hoping the spelling matches.
+    r"(?P<is_test>tests?)",
+    r"(?P<is_white>white)",
+    r"(?P<is_blanche>blanche)",
+    r"(?P<is_dark>dark)",
+    r"(?P<is_black>black)",
+    r"(?P<is_verre>verre)",
+    r"(?P<is_gelose>gel+ose)",          # written with one l or two over the years
+    r"(?P<is_anneau>anneau)",
+    r"(?P<is_adn>adn)",
+    r"(?P<is_petri_seul>petri_)",       # 'petri_' alone, not 'petri3'
+    r"(?P<is_methanol>methanol)",
+    r"(?P<is_pink>pink)",
+    r"(?P<is_plus_tard>\d+\s*min\s*plus\s*tards?)",
 ]
 
 
@@ -423,7 +439,7 @@ def fix_acquisition_errors(df, name="surya-dataset-description"):
     print_debug(f"  Avant/apres : {count_before}/{count_after}, {count_before-count_after} effaces")
 
     print_debug(f"\n\n== 2. Exp1, jour 2, petri 1, souris 1: l'indice d'acquisition commence a 1, et recommence ensuite a 0. On renomme sequentillement ==")
-    mask_doublons = get_mask(df, { 'exp': 1, 'fixation': 'fixe', 'jour': 2, 'keyword': 'verre', 'modalite': 'raman', 'petri': 1, 'souris': 1})
+    mask_doublons = get_mask(df, { 'exp': 1, 'fixation': 'fixe', 'jour': 2, 'is_verre': True, 'modalite': 'raman', 'petri': 1, 'souris': 1})
     df = renumber_sequentially_in_time(df, mask_doublons)
 
     print_debug(f"\n\n== 3. Meme probleme que #2 mais exp 1, jour 4 petri 3 souris 1 ==")
@@ -455,15 +471,15 @@ def fix_acquisition_errors(df, name="surya-dataset-description"):
 def delete_test_data(df):
     assert not df.empty
     df = df[~df.index.str.startswith(('exp_2_old', 'archives'))]
-    df = df[(df['test'] == False)]
     df = df[(df['modalite'] == 'raman')]
-    df = df[(df['keyword'] != 'dark')]
-    df = df[(df['keyword'] != 'white')]
-    df = df[(df['keyword'] != 'adn')]
-    df = df[(df['keyword'] != 'black')]
-    df = df[(df['keyword'] != 'blanche')]
-    df = df[(df['keyword'] != 'anneau')]
-    df = df[(df['keyword'] != 'plus_tard')]
+
+    # Everything that is not a measurement on a mouse: trial runs, reference
+    # spectra of the empty holder, and the ones taken some minutes later. Each
+    # is its own true-or-false column, so a file marked by two of these words
+    # is caught by either one.
+    for word in ('is_test', 'is_dark', 'is_white', 'is_adn',
+                 'is_black', 'is_blanche', 'is_anneau', 'is_plus_tard'):
+        df = df[~df[word]]
     assert not df.empty
     return df
 

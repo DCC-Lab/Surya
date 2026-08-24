@@ -64,9 +64,8 @@ class DataFiles:
     cache_root = user_cache_path("datafiles")
     valid_marker = Path("local-copy-valid")
     progress_delay = 3
-    ignored_files = {"cache_surya_files.txt", ".DS_Store"}
 
-    def __init__(self, root = None, extensions = ['.txt'], methods = None):
+    def __init__(self, root = None, extensions = ['.txt'], methods = None, metadata_patterns = None):
         """
         Sets up the object without reading anything from disk yet.
 
@@ -80,8 +79,9 @@ class DataFiles:
         """
         self.root = Path(root)
         self.extensions = extensions
-        
+
         self.metadata_methods = methods if methods is not None else []
+        self.metadata_patterns = metadata_patterns if metadata_patterns is not None else []
 
         self.data_files_paths = Queue()
         self._data_files_lock = Lock()
@@ -298,6 +298,8 @@ class DataFiles:
             for method in methods:
                 self.register_metadata_extraction_method(method)
 
+        self.register_metadata_extraction_method(self.extract_properties_from_patterns)
+
 
         threads = []
         queue = deque()
@@ -339,6 +341,7 @@ class DataFiles:
         self.dataframe = self.dataframe.astype(
             {c: "Int64" for c in integer_columns if c in self.dataframe.columns})
 
+        return self
 
 
     def finalize(self, methods):
@@ -405,7 +408,7 @@ class DataFiles:
 
         self.mark_local_copy_as_valid()
 
-    def extract_properties_from_patterns(self, root, file_relative_path, patterns):
+    def extract_properties_from_patterns(self, root, file_relative_path):
         """
         Reads the metadata out of a file name using a list of regular expressions.
 
@@ -413,7 +416,15 @@ class DataFiles:
         named groups capture becomes an entry of the returned dictionary, converted
         to a whole number when it looks like one and lowercased otherwise.
 
-        patterns : the list to use
+        A group whose name begins with 'is_' is treated differently: what it
+        captured is thrown away and only its presence is kept, as true or false.
+        It is the way to write down a word that either appears in the path or
+        does not -- 'test', 'verre', 'dark' -- where the word itself carries no
+        information beyond being there. Those entries are always set, even when
+        the word is absent, because a column that is sometimes false and
+        sometimes missing cannot be filtered on: a hole is neither true nor
+        false, so a row holding one is dropped by a test for false just as
+        surely as a row holding true.
         """
 
         def _to_normalized_values(properties):
@@ -428,6 +439,10 @@ class DataFiles:
             INT_REGEX = r"[-+]?0*\d+"
 
             for key, value in properties.items():
+                if key.startswith("is_"):
+                    properties[key] = value is not None
+                    continue
+
                 if value is None:
                     continue
 
@@ -450,8 +465,16 @@ class DataFiles:
 
         file_path = str(Path(root) / Path(file_relative_path))
 
-        properties = {}
-        for pattern in patterns:
+        # Every 'is_' group of every pattern starts out false, so that a word
+        # which is simply not there gives false rather than nothing at all. The
+        # names are read from the patterns themselves, which is what keeps this
+        # method from having to know which words anyone is looking for.
+        properties = {name: False
+                      for pattern in self.metadata_patterns
+                      for name in re.compile(pattern).groupindex
+                      if name.startswith("is_")}
+
+        for pattern in self.metadata_patterns:
             match = re.search(pattern, file_path, re.IGNORECASE)
             if match is not None:
                 properties.update(_to_normalized_values(match.groupdict()))
@@ -462,14 +485,6 @@ class DataFiles:
                                                minute=properties['minutes'],
                                                second=properties['s'],
                                                microsecond=properties['ms'] * 1000)
-
-        # 'test' is not a value to read but a word to notice: what matters is
-        # whether it appears in the path at all, not what it captured. It is
-        # always set, even when the word is absent, so that the column holds
-        # true or false and never a hole. Filtering later on depends on it:
-        # a hole is neither true nor false, so a row holding one is dropped by
-        # a test for false just as surely as a row holding true.
-        properties['test'] = properties.get('test') is not None
 
         properties['file'] = str(file_relative_path)
 
@@ -576,7 +591,7 @@ class DataFiles:
                 # our own path cache, and the metadata companions that macOS
                 # scatters over network drives. They are not spectra, and
                 # they would show up as a row of missing values.
-                if name.startswith("._") or name in self.ignored_files:
+                if name.startswith("._") :
                     continue
 
                 if progress and time.time() > next_progress_print:
@@ -722,7 +737,10 @@ class TestDataFiles(unittest.TestCase):
         This is the test that reproduces the real use of the class from start
         to finish.
         """
-        files = DataFiles(self.root, methods = [extract_properties_from_path, extract_header_from_relative_path])
+        files = DataFiles(self.root, 
+                          methods = [extract_header_from_relative_path],
+                          metadata_patterns=METADATA_PATH_PATTERNS)
+
         files.initialize()
 
     def test_003_finalize(self):
@@ -732,7 +750,9 @@ class TestDataFiles(unittest.TestCase):
         This is the test that reproduces the real use of the class from start
         to finish.
         """
-        files = DataFiles(self.root, methods = [extract_properties_from_path, extract_header_from_relative_path])
+        files = DataFiles(self.root, 
+                          methods = [extract_header_from_relative_path],
+                          metadata_patterns=METADATA_PATH_PATTERNS)
         files.initialize()
         files.finalize([fix_acquisition_errors, add_additional_experimental_info, delete_test_data])
 
@@ -743,19 +763,21 @@ class TestDataFiles(unittest.TestCase):
         This is the test that reproduces the real use of the class from start
         to finish.
         """
-        files = DataFiles(self.root, methods = [extract_properties_from_path, extract_header_from_relative_path])
+        files = DataFiles(self.root, 
+                          methods = [extract_header_from_relative_path],
+                          metadata_patterns=METADATA_PATH_PATTERNS)
         files.initialize()
         files.finalize([fix_acquisition_errors, add_additional_experimental_info, delete_test_data])
         files.validate_unique_metadata()
         mask = files.get_mask({})
         files_content = files.read_data_files(reader_method=read_spectrum_file, mask=mask)
         
-        # The spectra are kept beside the dataframe, not inside it. The keys of
-        # files_content are the index labels of files.dataframe, so we can go
-        # back and forth between the metadata of a file and its content.
-        for index, spectrum in files_content.items():
-            metadata = files.dataframe.loc[index]
-            print(f"{index}: {len(spectrum)} points, souris {metadata['souris']}")
+        # # The spectra are kept beside the dataframe, not inside it. The keys of
+        # # files_content are the index labels of files.dataframe, so we can go
+        # # back and forth between the metadata of a file and its content.
+        # for index, spectrum in files_content.items():
+        #     metadata = files.dataframe.loc[index]
+        #     print(f"{index}: {len(spectrum)} points, souris {metadata['souris']}")
 
 
     def test_initialize_no_meta(self):
@@ -764,8 +786,7 @@ class TestDataFiles(unittest.TestCase):
 
         The table then holds only the 'file' column.
         """
-        files = DataFiles(self.root)
-        files.initialize()
+        files = DataFiles(self.root).initialize()
 
     
 if __name__ == "__main__":

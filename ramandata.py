@@ -642,21 +642,15 @@ class TestRamanData(unittest.TestCase):
         with self.assertRaises(ValueError):
             RamanData(self.datafiles).save(Path(self.temporary.name) / "nothing")
 
-    def test_050_my_test(self):
-        self.root = "/Volumes/Labdata/dcclab/surya" #helper_find_root_directory()
-        if not Path(self.root).exists():
-            self.root = "."
-
-        datafiles = DataFiles(self.root, methods=[extract_properties_from_path])
-        datafiles.initialize()
-        # print(datafiles.dataframe.columns)
-        # print(len(datafiles.dataframe))
-        
-        rd = RamanData(datafiles).initialize()
-        self.assertIsNotNone(rd)
-        print(rd.report())
 
 if __name__ == "__main__":
-    unittest.main()
+    # unittest.main()
 
+    root = "/Volumes/Labdata/dcclab/surya"
+
+    datafiles = DataFiles(root, methods=[extract_properties_from_path])
+    datafiles.initialize()
+    
+    rd = RamanData(datafiles).initialize()
+    print(rd.report())
 
