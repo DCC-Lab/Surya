@@ -4,13 +4,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from datafiles import DataFiles
-from surya_experiments import extract_properties_from_path
 import unittest
 import tempfile
 
 
 class RamanData:
-    """
+    r"""
     Raman spectra recorded with the Ocean Optics QEPro, ready for analysis.
 
     This class is the half of the work that knows what a spectrum is. The other
@@ -22,11 +21,11 @@ class RamanData:
     So the two are used together rather than merged: RamanData supplies the
     knowledge of the QEPro file format, DataFiles supplies the reading itself.
 
-        files = DataFiles(root, methods=[extract_properties_from_path])
+        files = DataFiles(root, metadata_patterns=[r"sample(?P<sample>\d+)",
+                                                   r"dose(?P<dose>\d+)"])
         files.initialize()
-        files.finalize([...])
 
-        raman = RamanData(files).initialize(mask=files.get_mask({'exp': 1}))
+        raman = RamanData(files).initialize(mask=files.get_mask({'dose': 0}))
         X, y = raman.training_set('dose')
 
     What initialize() produces is exactly the shape that PCA, LDA and PLS expect --
@@ -226,15 +225,19 @@ class RamanData:
         known = labels.notna().to_numpy()
         return self.X[known], labels[known].astype("float64").to_numpy()
 
-    def groups(self, column="souris"):
+    def groups(self, column):
         """
         Returns the group of every spectrum, for a grouped cross-validation.
 
-        Ten spectra of the same mouse are not ten independent measurements. If
+        Ten spectra of the same subject are not ten independent measurements. If
         they are split at random between the training set and the test set, the
-        model recognizes the mouse rather than the effect being studied, and the
-        score comes out far too good. Passing these groups to GroupKFold keeps
-        all the spectra of one mouse on the same side of the split.
+        model recognizes the subject rather than the effect being studied, and
+        the score comes out far too good. Passing these groups to GroupKFold
+        keeps all the spectra of one subject on the same side of the split.
+
+        column : the metadata column that says which subject a spectrum belongs
+                 to -- one mouse, one patient, one sample, depending on the
+                 study.
         """
         if self.meta is None:
             raise ValueError("Nothing has been read yet: call initialize() first")
@@ -335,21 +338,30 @@ class TestRamanData(unittest.TestCase):
 
     POINTS = 8
 
+    # The metadata of the made-up files below. Deliberately not the metadata of
+    # any real study: RamanData must work for whatever the file names happen to
+    # say, so the tests describe a sample, a dose and a zone and nothing more.
+    PATTERNS = [
+        r"sample(?P<sample>\d+)",
+        r"dose(?P<dose>\d+)",
+        r"zone(?P<zone>\d+)",
+    ]
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name) / "data"
 
-        # Two mice, two zones each, five spectra per zone: enough to exercise
-        # masks and groups without making the tests slow.
+        # Two samples, two zones each, five spectra per zone: enough to
+        # exercise masks and groups without making the tests slow.
         self.expected_spectra = 0
-        for souris in (1, 2):
-            dose = 0 if souris == 1 else 45
+        for sample in (1, 2):
+            dose = 0 if sample == 1 else 45
             for zone in (1, 2):
-                folder = self.root / "exp_1" / "jour2" / "fixe" / "raman" / "petri1" / f"souris{souris}" / f"zone{zone}"
-                for indice in range(5):
-                    name = f"S{souris}_{dose}Gy_zone{zone}_RamanShift__{indice}__10-00-0{indice}-000.txt"
+                folder = self.root / f"sample{sample}" / f"zone{zone}"
+                for number in range(5):
+                    name = f"sample{sample}_dose{dose}_zone{zone}_{number}.txt"
                     write_spectrum_file(folder / name, points=self.POINTS,
-                                        intensity=lambda i, s=souris: 1000.0 + 100 * s + i)
+                                        intensity=lambda i, s=sample: 1000.0 + 100 * s + i)
                     self.expected_spectra += 1
 
         # DataFiles keeps its local copies under one folder shared by every
@@ -358,7 +370,7 @@ class TestRamanData(unittest.TestCase):
         self.saved_cache_root = DataFiles.cache_root
         DataFiles.cache_root = Path(self.temporary.name) / "cache"
 
-        self.datafiles = DataFiles(self.root, methods=[extract_properties_from_path])
+        self.datafiles = DataFiles(self.root, metadata_patterns=self.PATTERNS)
         self.assertIsNotNone(self.datafiles)
 
     def tearDown(self):
@@ -415,7 +427,7 @@ class TestRamanData(unittest.TestCase):
 
     def test_013_file_without_any_data(self):
         """A laboratory note saved as .txt gives an empty spectrum, not an error."""
-        note = self.root / "souris1 est en fait souris2 (pas fait Apply).txt"
+        note = self.root / "note left by the operator, not a measurement.txt"
         note.parent.mkdir(parents=True, exist_ok=True)
         note.write_text("rien a voir avec un spectre\n", encoding="latin-1")
 
@@ -464,7 +476,7 @@ class TestRamanData(unittest.TestCase):
 
         self.assertEqual(raman.X.shape[0], len(raman.meta))
         for row, (index, metadata) in enumerate(raman.meta.iterrows()):
-            expected = 1000.0 + 100 * int(metadata['souris'])
+            expected = 1000.0 + 100 * int(metadata['sample'])
             self.assertAlmostEqual(raman.X[row, 0], expected,
                                    msg=f"row {row} does not hold the spectrum of {index}")
 
@@ -479,16 +491,15 @@ class TestRamanData(unittest.TestCase):
 
     def test_024_load_only_a_part(self):
         self.datafiles.initialize()
-        mask = self.datafiles.get_mask({'souris': 1})
+        mask = self.datafiles.get_mask({'sample': 1})
         raman = RamanData(self.datafiles).initialize(mask=mask, verbose=False)
 
         self.assertEqual(len(raman), 10)
-        self.assertTrue((raman.meta['souris'] == 1).all())
+        self.assertTrue((raman.meta['sample'] == 1).all())
 
     def test_025_a_spectrum_of_another_length_is_left_out(self):
         """A measurement made with another instrument cannot be a row here."""
-        write_spectrum_file(self.root / "exp_1" / "jour2" / "fixe" / "raman" / "petri1"
-                            / "souris1" / "zone1" / "S1_0Gy_zone1_DRS__9__10-00-09-000.txt",
+        write_spectrum_file(self.root / "sample1" / "zone1" / "sample1_dose0_zone1_other_instrument.txt",
                             points=self.POINTS * 2)
         raman = self.initialized()
 
@@ -496,8 +507,7 @@ class TestRamanData(unittest.TestCase):
         self.assertEqual(raman.X.shape[1], self.POINTS)
 
     def test_026_an_empty_file_is_left_out(self):
-        note = (self.root / "exp_1" / "jour2" / "fixe" / "raman" / "petri1"
-                / "souris1" / "zone1" / "note S1 zone1.txt")
+        note = (self.root / "sample1" / "zone1" / "note about sample1.txt")
         note.write_text("pas un spectre\n", encoding="latin-1")
 
         self.assertEqual(len(self.initialized()), self.expected_spectra)
@@ -507,8 +517,7 @@ class TestRamanData(unittest.TestCase):
         Same number of points, different wavelengths: stacking them would put
         one wavelength on top of another and every result would be wrong.
         """
-        write_spectrum_file(self.root / "exp_1" / "jour2" / "fixe" / "raman" / "petri1"
-                            / "souris1" / "zone1" / "S1_0Gy_zone1_other__9__10-00-09-000.txt",
+        write_spectrum_file(self.root / "sample1" / "zone1" / "sample1_dose0_zone1_other_axis.txt",
                             points=self.POINTS, first=999.0)
         self.datafiles.initialize()
 
@@ -528,11 +537,10 @@ class TestRamanData(unittest.TestCase):
 
     def test_029_report_names_what_was_left_out(self):
         """The whole point: the missing files can be named, not merely counted."""
-        folder = (self.root / "exp_1" / "jour2" / "fixe" / "raman" / "petri1"
-                  / "souris1" / "zone1")
-        empty = folder / "note S1 zone1.txt"
+        folder = self.root / "sample1" / "zone1"
+        empty = folder / "note about sample1.txt"
         empty.write_text("pas un spectre\n", encoding="latin-1")
-        write_spectrum_file(folder / "S1_0Gy_zone1_DRS__9__10-00-09-000.txt",
+        write_spectrum_file(folder / "sample1_dose0_zone1_other_instrument.txt",
                             points=self.POINTS * 2)
 
         raman = self.initialized()
@@ -546,7 +554,7 @@ class TestRamanData(unittest.TestCase):
         # 0 points means a file that holds no measurement at all
         self.assertEqual(counts['lengths'], {0: 1, self.POINTS * 2: 1})
         self.assertEqual(sorted(Path(name).name for name in raman.rejected),
-                         ["S1_0Gy_zone1_DRS__9__10-00-09-000.txt", "note S1 zone1.txt"])
+                         ["note about sample1.txt", "sample1_dose0_zone1_other_instrument.txt"])
 
     def test_02a_report_before_initializing(self):
         """Asking before reading says nothing rather than raising."""
@@ -557,9 +565,8 @@ class TestRamanData(unittest.TestCase):
 
     def test_02b_report_survives_being_written_out(self):
         """What was left out matters more later, not less: it has to be kept."""
-        folder = (self.root / "exp_1" / "jour2" / "fixe" / "raman" / "petri1"
-                  / "souris1" / "zone1")
-        (folder / "note S1 zone1.txt").write_text("pas un spectre\n", encoding="latin-1")
+        folder = self.root / "sample1" / "zone1"
+        (folder / "note about sample1.txt").write_text("pas un spectre\n", encoding="latin-1")
 
         raman = self.initialized()
         path = Path(self.temporary.name) / "with-report"
@@ -600,14 +607,14 @@ class TestRamanData(unittest.TestCase):
 
     def test_034_groups(self):
         raman = self.initialized()
-        groups = raman.groups('souris')
+        groups = raman.groups('sample')
 
         self.assertEqual(len(groups), len(raman))
         self.assertEqual(sorted(set(groups)), [1, 2])
 
     def test_035_groups_before_initializing(self):
         with self.assertRaises(ValueError):
-            RamanData(self.datafiles).groups()
+            RamanData(self.datafiles).groups('sample')
 
     # ---- writing and reading back ---------------------------------------
 
@@ -644,13 +651,4 @@ class TestRamanData(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    # unittest.main()
-
-    root = "/Volumes/Labdata/dcclab/surya"
-
-    datafiles = DataFiles(root, methods=[extract_properties_from_path])
-    datafiles.initialize()
-    
-    rd = RamanData(datafiles).initialize()
-    print(rd.report())
-
+    unittest.main()

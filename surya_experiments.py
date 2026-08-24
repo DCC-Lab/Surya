@@ -152,152 +152,152 @@ METADATA_PATH_PATTERNS = [
 #     return properties
 
 
-def extract_properties_from_path(root, file_relative_path):
-    """
-    We match the text of the path with various patterns to extract the metadata,
-    which we return in a dictionary
+# def extract_properties_from_path(root, file_relative_path):
+#     """
+#     We match the text of the path with various patterns to extract the metadata,
+#     which we return in a dictionary
 
-    """
-    properties = {}
+#     """
+#     properties = {}
 
-    file_path = str(Path(root) / Path(file_relative_path) )
+#     file_path = str(Path(root) / Path(file_relative_path) )
 
-    def to_int_values(properties):
-        for key, value in properties.items():
-            try:
-                if value is None:
-                    continue
-                if str(int(value)) == value:
-                    properties[key] = int(value)
-            except:
-                properties[key] = value.lower()
+#     def to_int_values(properties):
+#         for key, value in properties.items():
+#             try:
+#                 if value is None:
+#                     continue
+#                 if str(int(value)) == value:
+#                     properties[key] = int(value)
+#             except:
+#                 properties[key] = value.lower()
 
-        return properties
+#         return properties
 
 
-    # Extraction de exp
-    pattern = r"exp_?(?P<exp>\d)"
-    match = re.search(pattern, file_path,  re.IGNORECASE)
-    if match is not None:
-        properties.update(to_int_values(match.groupdict()))
+#     # Extraction de exp
+#     pattern = r"exp_?(?P<exp>\d)"
+#     match = re.search(pattern, file_path,  re.IGNORECASE)
+#     if match is not None:
+#         properties.update(to_int_values(match.groupdict()))
 
-    # Extraction de petri
-    pattern = r"petri(?P<petri>\d+)"
-    match = re.search(pattern, file_path,  re.IGNORECASE)
-    if match is not None:
-        properties.update(to_int_values(match.groupdict()))
+#     # Extraction de petri
+#     pattern = r"petri(?P<petri>\d+)"
+#     match = re.search(pattern, file_path,  re.IGNORECASE)
+#     if match is not None:
+#         properties.update(to_int_values(match.groupdict()))
 
-    # Extraction du jour
-    pattern = r"jour(?P<jour>\d+)"
-    match = re.search(pattern, file_path,  re.IGNORECASE)
-    if match is not None:
-        properties.update(to_int_values(match.groupdict()))
+#     # Extraction du jour
+#     pattern = r"jour(?P<jour>\d+)"
+#     match = re.search(pattern, file_path,  re.IGNORECASE)
+#     if match is not None:
+#         properties.update(to_int_values(match.groupdict()))
 
-    # Extraction de la souris
-    pattern = r"[\W_\d]S(?:ouris?)?(?P<souris>\d+)\.?(?P<subzone>\d)?"
-    match = re.search(pattern, file_path,  re.IGNORECASE)
-    if match is not None:
-        properties.update(to_int_values(match.groupdict()))
+#     # Extraction de la souris
+#     pattern = r"[\W_\d]S(?:ouris?)?(?P<souris>\d+)\.?(?P<subzone>\d)?"
+#     match = re.search(pattern, file_path,  re.IGNORECASE)
+#     if match is not None:
+#         properties.update(to_int_values(match.groupdict()))
 
-    # Extraction de la "subzone" si dans le mot echantillon
-    pattern = r"echantillon(?P<subzone>\d)"
-    match = re.search(pattern, file_path,  re.IGNORECASE)
-    if match is not None:
-        properties.update(to_int_values(match.groupdict()))
+#     # Extraction de la "subzone" si dans le mot echantillon
+#     pattern = r"echantillon(?P<subzone>\d)"
+#     match = re.search(pattern, file_path,  re.IGNORECASE)
+#     if match is not None:
+#         properties.update(to_int_values(match.groupdict()))
 
-    # Extraction de la modalite
-    pattern = r"(?P<modalite>raman|drs|speckles)"
-    match = re.search(pattern, file_path,  re.IGNORECASE)
-    if match is not None:
-        properties.update(to_int_values(match.groupdict()))
+#     # Extraction de la modalite
+#     pattern = r"(?P<modalite>raman|drs|speckles)"
+#     match = re.search(pattern, file_path,  re.IGNORECASE)
+#     if match is not None:
+#         properties.update(to_int_values(match.groupdict()))
 
-    # Extraction de la dose
-    pattern = r"(?P<dose>\d+)Gy"
-    match = re.search(pattern, file_path,  re.IGNORECASE)
-    if match is not None:
-        properties.update(to_int_values(match.groupdict()))
+#     # Extraction de la dose
+#     pattern = r"(?P<dose>\d+)Gy"
+#     match = re.search(pattern, file_path,  re.IGNORECASE)
+#     if match is not None:
+#         properties.update(to_int_values(match.groupdict()))
 
-    # Extraction de la batch
-    pattern = r"batch#(?P<batch>\d+)"
-    match = re.search(pattern, file_path,  re.IGNORECASE)
-    if match is not None:
-        properties.update(to_int_values(match.groupdict()))
+#     # Extraction de la batch
+#     pattern = r"batch#(?P<batch>\d+)"
+#     match = re.search(pattern, file_path,  re.IGNORECASE)
+#     if match is not None:
+#         properties.update(to_int_values(match.groupdict()))
 
-    # Extraction de la zone
-    # Le \W ne match pas le "_", il faut donc [\W_] pour attraper "souris2_0Gy_zone1"
-    # et le separateur optionnel pour "zone_1" et "zone 2"
-    pattern = r"[\W_\d][Zz]o?n?e?_? ?(?P<zone>\d+)"
-    match = re.search(pattern, file_path,  re.IGNORECASE)
-    if match is not None:
-        properties.update(to_int_values(match.groupdict()))
+#     # Extraction de la zone
+#     # Le \W ne match pas le "_", il faut donc [\W_] pour attraper "souris2_0Gy_zone1"
+#     # et le separateur optionnel pour "zone_1" et "zone 2"
+#     pattern = r"[\W_\d][Zz]o?n?e?_? ?(?P<zone>\d+)"
+#     match = re.search(pattern, file_path,  re.IGNORECASE)
+#     if match is not None:
+#         properties.update(to_int_values(match.groupdict()))
 
-    # Extraction de l'heure d'acquisition et de l'indice1
-    pattern = r"__(?P<indice1>\d+)__(?P<heure>\d+)-(?P<minutes>\d+)-(?P<s>\d+)-(?P<ms>\d+)"
-    match = re.search(pattern, file_path,  re.IGNORECASE)
-    if match is not None:
-        groups = match.groupdict()
+#     # Extraction de l'heure d'acquisition et de l'indice1
+#     pattern = r"__(?P<indice1>\d+)__(?P<heure>\d+)-(?P<minutes>\d+)-(?P<s>\d+)-(?P<ms>\d+)"
+#     match = re.search(pattern, file_path,  re.IGNORECASE)
+#     if match is not None:
+#         groups = match.groupdict()
 
-        my_time = datetime.time( hour=int(groups['heure']),
-                        minute=int(groups['minutes']), 
-                        second=int(groups['s']),
-                        microsecond=int(groups['ms'])*1000)
+#         my_time = datetime.time( hour=int(groups['heure']),
+#                         minute=int(groups['minutes']), 
+#                         second=int(groups['s']),
+#                         microsecond=int(groups['ms'])*1000)
 
-        properties['time'] = my_time
-        properties['indice1'] = int(groups['indice1'])
+#         properties['time'] = my_time
+#         properties['indice1'] = int(groups['indice1'])
 
-    # Extraction de l'indice1 en l'absence de heure d'acquisition
-    pattern = r"__(?P<indice1>\d+)__(?P<indice2>\d{5})"
-    match = re.search(pattern, file_path,  re.IGNORECASE)
-    if match is not None:
-        groups = match.groupdict()
+#     # Extraction de l'indice1 en l'absence de heure d'acquisition
+#     pattern = r"__(?P<indice1>\d+)__(?P<indice2>\d{5})"
+#     match = re.search(pattern, file_path,  re.IGNORECASE)
+#     if match is not None:
+#         groups = match.groupdict()
 
-        properties['indice1'] = int(groups['indice1'])
-        properties['indice2'] = int(groups['indice2'])
+#         properties['indice1'] = int(groups['indice1'])
+#         properties['indice2'] = int(groups['indice2'])
     
-    # Extraction de la hauteur, si presente
-    pattern = r"\WHauteur(?P<hauteur>\d+)"
-    match = re.search(pattern, file_path,  re.IGNORECASE)
-    if match is not None:
-        properties.update(to_int_values(match.groupdict()))
+#     # Extraction de la hauteur, si presente
+#     pattern = r"\WHauteur(?P<hauteur>\d+)"
+#     match = re.search(pattern, file_path,  re.IGNORECASE)
+#     if match is not None:
+#         properties.update(to_int_values(match.groupdict()))
 
 
-    # Extraction de la fixation
-    pattern = r"(?P<fixation>frais|fixe)"
-    match = re.search(pattern, file_path,  re.IGNORECASE)
-    if match is not None:
-        properties.update(to_int_values(match.groupdict()))
+#     # Extraction de la fixation
+#     pattern = r"(?P<fixation>frais|fixe)"
+#     match = re.search(pattern, file_path,  re.IGNORECASE)
+#     if match is not None:
+#         properties.update(to_int_values(match.groupdict()))
 
-    # Extraction du cote
-    pattern = r"-(?P<cote>[DG])-"
-    match = re.search(pattern, file_path,  re.IGNORECASE)
-    if match is not None:
-        properties.update(to_int_values(match.groupdict()))
+#     # Extraction du cote
+#     pattern = r"-(?P<cote>[DG])-"
+#     match = re.search(pattern, file_path,  re.IGNORECASE)
+#     if match is not None:
+#         properties.update(to_int_values(match.groupdict()))
 
-    # Extraction du mot test, si present
-    pattern = r"tests?"
-    match = re.search(pattern, file_path,  re.IGNORECASE)
-    if match is not None:
-        properties['test'] = True
-    else:
-        properties['test'] = False
+#     # Extraction du mot test, si present
+#     pattern = r"tests?"
+#     match = re.search(pattern, file_path,  re.IGNORECASE)
+#     if match is not None:
+#         properties['test'] = True
+#     else:
+#         properties['test'] = False
 
-    # Extraction de certains keywords, si present
-    pattern = r"(?P<keyword>white|blanche|dark|black|verre|gel+ose|anneau|adn|petri_|methanol|pink|\d+\s*min\s*plus\s*tards?)"
-    match = re.search(pattern, file_path, re.IGNORECASE)
-    if match is not None:
-        groups = match.groupdict()
-        if "gellose" in groups.values():
-            groups['keyword'] = "gelose"
-        if 'petri_' in groups.values():
-            groups['keyword'] = 'petri'
-        if groups['keyword'] is not None and re.match(r"\d+\s*min\s*plus\s*tards?", groups['keyword'], re.IGNORECASE):
-            groups['keyword'] = 'plus_tard'
+#     # Extraction de certains keywords, si present
+#     pattern = r"(?P<keyword>white|blanche|dark|black|verre|gel+ose|anneau|adn|petri_|methanol|pink|\d+\s*min\s*plus\s*tards?)"
+#     match = re.search(pattern, file_path, re.IGNORECASE)
+#     if match is not None:
+#         groups = match.groupdict()
+#         if "gellose" in groups.values():
+#             groups['keyword'] = "gelose"
+#         if 'petri_' in groups.values():
+#             groups['keyword'] = 'petri'
+#         if groups['keyword'] is not None and re.match(r"\d+\s*min\s*plus\s*tards?", groups['keyword'], re.IGNORECASE):
+#             groups['keyword'] = 'plus_tard'
 
-        properties.update(to_int_values(groups))
+#         properties.update(to_int_values(groups))
 
-    properties['file'] = str(file_relative_path)
+#     properties['file'] = str(file_relative_path)
 
-    return properties
+#     return properties
 
 def extract_extended_properties_from_path(file_path):
     """
@@ -503,4 +503,103 @@ def read_spectrum_file(absolute_path):
                 intensities.append(float(intensity))
 
     return pd.DataFrame({"wavelength": wavelengths, "intensity": intensities})
+
+def helper_find_root_directory():
+    """
+    Finds the surya data, wherever this particular machine keeps it.
+
+    The same measurements are reached differently depending on who is looking
+    and how they mounted the share. Returns None when none of them answers,
+    which usually means the network drive is simply not mounted right now.
+    """
+    options = ["/Volumes/labdata/dcclab/surya",
+               r"\\cafeine3.crulrg.ulaval.ca\Goliath\Goliath\labdata\dcclab\surya",
+               "/home/dccadmin/labdata/dcclab/surya"]
+
+    for path in options:
+        if Path(path).exists():
+            return path
+
+    return None
+
+
+class TestSuryaDataset(unittest.TestCase):
+    """
+    Tests that need the real surya measurements.
+
+    Everything here is about this study in particular: the way its folders are
+    named, the doses that were given, the corrections its acquisitions need.
+    The tests of DataFiles and of RamanData live with those classes and use
+    made-up files, because neither class knows anything about mice.
+
+    These are skipped, not failed, when the network drive is not mounted. A
+    skipped test says plainly that nothing was checked; falling back on some
+    other folder would instead check the wrong thing and say nothing.
+    """
+
+    def setUp(self):
+        self.root = helper_find_root_directory()
+        if self.root is None:
+            self.skipTest("the surya data is not reachable from this machine")
+
+        from datafiles import DataFiles
+        self.files = DataFiles(self.root, metadata_patterns=METADATA_PATH_PATTERNS)
+
+    def test_001_metadata_is_read_from_the_file_names(self):
+        """Every measurement must at least say which experiment it belongs to."""
+        self.files.initialize()
+        df = self.files.dataframe
+
+        self.assertGreater(len(df), 0)
+        self.assertTrue(df.index.is_unique)
+        self.assertIn('exp', df.columns)
+        self.assertLess(df['exp'].isna().sum(), 10)
+
+    def test_002_the_corrections_leave_a_usable_table(self):
+        """The whole cleaning pipeline, as it is really used."""
+        self.files.initialize()
+        self.files.finalize([add_additional_experimental_info,
+                             fix_acquisition_errors,
+                             delete_test_data])
+        df = self.files.dataframe
+
+        # Nothing that was meant to be thrown away is still there
+        for word in ('is_test', 'is_dark', 'is_white', 'is_adn',
+                     'is_black', 'is_blanche', 'is_anneau', 'is_plus_tard'):
+            self.assertEqual(int(df[word].sum()), 0, f"{word} should have been removed")
+
+        self.assertTrue((df['modalite'] == 'raman').all())
+
+        # Only the reference spectra, which belong to no mouse, may be left
+        # without a dose. Anything more means the configuration has a hole.
+        self.assertLess(df['dose'].isna().sum(), 50)
+
+    def test_003_the_spectra_stack_into_one_matrix(self):
+        """The measurements share one wavelength axis, so a matrix exists."""
+        from ramandata import RamanData
+
+        self.files.initialize()
+        self.files.finalize([add_additional_experimental_info,
+                             fix_acquisition_errors,
+                             delete_test_data])
+
+        raman = RamanData(self.files).initialize(verbose=False)
+        counts = raman.report(verbose=False)
+
+        self.assertEqual(counts['offered'], counts['kept'] + counts['rejected'])
+        self.assertGreater(counts['kept'], 0)
+
+        # A handful of laboratory notes saved as .txt, and the odd measurement
+        # made with the other instrument, are expected. A lot more than that
+        # would mean something changed in how the files are written.
+        self.assertLess(counts['rejected'], 20)
+
+        X, y = raman.training_set('dose')
+        self.assertEqual(X.shape[0], y.shape[0])
+        self.assertEqual(y.dtype, np.float64)
+
+
+if __name__ == "__main__":
+    unittest.main()
+
 

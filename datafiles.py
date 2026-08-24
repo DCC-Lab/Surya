@@ -1,4 +1,6 @@
 import os
+import re
+import datetime
 from pathlib import Path
 import pandas as pd
 import numpy as np
@@ -14,7 +16,7 @@ import warnings
 from platformdirs import user_cache_path
 
 class DataFiles:
-    """
+    r"""
     Collects the metadata of every data file in a directory into one table.
 
     You give it a starting directory (`root`) and a few functions that know how
@@ -31,8 +33,8 @@ class DataFiles:
 
     Typical use:
 
-        files = DataFiles("/Volumes/labdata/dcclab/surya",
-                          methods=[extract_properties_from_path])
+        files = DataFiles("/Volumes/share/measurements",
+                          metadata_patterns=[r"sample(?P<sample>\d+)"])
         files.initialize()
         files.finalize([some_methods, ...])
         print(files.dataframe)
@@ -88,6 +90,7 @@ class DataFiles:
         self._properties = []
         self.dataframe = None
         self.cache_warning_issued = False
+        self.errors = []            # what the tasks ran into, see run_safely()
 
     @property
     def has_valid_local_copy(self):
@@ -149,9 +152,9 @@ class DataFiles:
         with. The same measurements are reached by different paths depending on
         who is looking and how they mounted the share:
 
-            /Volumes/labdata/dcclab/surya          on one machine
-            /mnt/labdata/dcclab/surya              on another
-            \\\\cafeine3.crulrg.ulaval.ca\\...\\surya  on Windows
+            /Volumes/share/measurements        on one machine
+            /mnt/share/measurements            on another
+            \\\\server.example.com\\...\\measurements  on Windows
 
         All three are the same dataset, and all three must share one local copy.
         Telling them apart by their full path would give each person a copy of
@@ -173,8 +176,8 @@ class DataFiles:
         """
         The folder holding the local copy of this dataset.
 
-            root   /Volumes/labdata/dcclab/surya
-            folder ~/Library/Caches/datafiles/surya
+            root   /Volumes/share/measurements
+            folder ~/Library/Caches/datafiles/measurements
 
         Two datasets whose last folder is called the same thing do share this
         folder, and the witness file inside says which one is actually there.
@@ -269,7 +272,7 @@ class DataFiles:
         Adds one metadata extraction function to the list.
 
         The function receives (root, relative_path) and must return a
-        dictionary, for example {'souris': 3, 'jour': 8}. You may register
+        dictionary, for example {'sample': 3, 'day': 8}. You may register
         several of them: their results are merged together for each file. The
         same function is never added twice.
         """
@@ -308,9 +311,11 @@ class DataFiles:
         if self.has_valid_local_copy:
             print(f"Delete {self.local_root / self.valid_marker} to avoid cache")
 
-        threads.append(Thread(target=self.get_data_file_paths, args=( (queue, copy_queue), ) ))
-        threads.append(Thread(target=self.get_files_metadata, args=(queue, True)))
-        threads.append(Thread(target=self.get_files_metadata, args=(queue, False)))
+        threads.append(Thread(target=self.run_safely,
+                              args=(self.get_data_file_paths, (queue, copy_queue)),
+                              kwargs={'sentinels': (queue, copy_queue)}))
+        threads.append(Thread(target=self.run_safely, args=(self.get_files_metadata, queue, True)))
+        threads.append(Thread(target=self.run_safely, args=(self.get_files_metadata, queue, False)))
 
         start_time = time.time()
         for t in threads:
@@ -318,7 +323,14 @@ class DataFiles:
 
         for t in threads:
             t.join()
-        
+
+        # A task that died took its error down with it: join() comes back as if
+        # all were well, and the failure would only show up much later as a
+        # missing column or an empty table. Raising it here says what actually
+        # went wrong, where it went wrong.
+        if self.errors:
+            raise self.errors[0]
+
         if time.time() - start_time > 10 and not self.has_valid_local_copy:
             copy_thread = Thread(target=self.copy_files_locally, args=(copy_queue, ))
             copy_thread.start() # Attempt to copy in the background
@@ -333,16 +345,51 @@ class DataFiles:
         self.dataframe = self.dataframe.set_index('file')
 
         # A column of whole numbers that holds a single missing value is turned
-        # into decimals by pandas: mouse 39 is then shown as 39.0, which is
+        # into decimals by pandas: sample 39 is then shown as 39.0, which is
         # confusing and exports badly. 'Int64', with a capital I, is the whole
         # number type that accepts missing values, so 39 stays 39.
-        integer_columns = {"exp", "petri", "jour", "souris", "indice1", "indice2",
-                           "dose", "zone", "subzone", "batch"}
-        self.dataframe = self.dataframe.astype(
-            {c: "Int64" for c in integer_columns if c in self.dataframe.columns})
+        #
+        # Which columns those are is decided by looking at what they hold, not
+        # by a list of names: this class has no idea what anyone is measuring.
+        # A column holding a real decimal anywhere is left alone, because
+        # turning 2.5 into a whole number would either fail or lose the half.
+        for column in self.dataframe.columns:
+            values = self.dataframe[column].dropna()
+
+            # True and False count as numbers to pandas, and 'is_something'
+            # columns must stay true or false rather than become 1 and 0.
+            if pd.api.types.is_bool_dtype(values):
+                continue
+            if values.empty or not pd.api.types.is_numeric_dtype(values):
+                continue
+            if (values == values.round()).all():
+                self.dataframe[column] = self.dataframe[column].astype("Int64")
 
         return self
 
+
+    def run_safely(self, target, *args, sentinels=()):
+        """
+        Runs one task, and makes sure a failure cannot leave the others waiting.
+
+        A task that raises simply stops. Nobody sees the error, because it
+        happened in another line of execution, and worse: the task that walks
+        the folders is the one that announces the end of the work by dropping a
+        None into each waiting line. If it dies before doing so, the tasks
+        reading from those lines wait for a signal that will never come, and
+        the program hangs where it should have complained.
+
+        So the error is put aside for initialize() to raise once every task has
+        stopped, and the end-of-work signal is sent anyway.
+
+        sentinels : the waiting lines that must be closed whatever happens.
+        """
+        try:
+            target(*args)
+        except Exception as error:
+            self.errors.append(error)
+            for queue in sentinels:
+                queue.append(None)
 
     def finalize(self, methods):
         """
@@ -606,15 +653,22 @@ class DataFiles:
         for queue in queues:            
             queue.append(None)
 
-    def validate_unique_metadata(self, ignore=(), ignore_prefixes=("Spectrum:",), verbose=True):
+    def validate_unique_metadata(self, ignore=("absolute_path",),
+                                 ignore_prefixes=("Spectrum:",), verbose=True):
         """
         Checks that the metadata of each file is unique.
 
         For every row, we gather the metadata into a dictionary, remove the
-        columns that are always different (time, indice1, file), then check
-        that the signature left over appears only once.
+        columns that are always different, then check that the signature left
+        over appears only once. Two files carrying exactly the same metadata
+        cannot be told apart afterwards, which usually means one acquisition
+        was named after another by mistake.
 
         ignore          : column names to leave out of the signature.
+                          'absolute_path' is left out by default: it is not
+                          metadata, it is where the file happens to sit on this
+                          machine, and it differs for every row, so leaving it
+                          in would hide every duplicate there is.
         ignore_prefixes : whole families of columns to leave out. Instruments
                           add one column per setting they record, all sharing a
                           prefix, and those describe the measurement rather than
@@ -705,94 +759,364 @@ class DataFiles:
 
 
 
-from surya_experiments import *
+
+
+def write_data_file(path, lines=("1.0 10.0", "2.0 20.0")):
+    """
+    Writes a small file for the tests to find.
+
+    The content does not matter to DataFiles, which never looks inside a file:
+    it walks folders, reads names, and hands the files over to whoever knows
+    what they hold. Two lines of numbers are enough to make the file real.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
 
 class TestDataFiles(unittest.TestCase):
     """
-    Automated tests for the DataFiles class.
+    Tests for DataFiles, run against files written by the tests themselves.
 
-    You run them by executing this file directly. unittest calls setUp() before
-    each test, then every method whose name starts with "test".
+    Nothing here belongs to any particular study. DataFiles walks folders,
+    reads what the names say and keeps a local copy; it does not know whether
+    the files hold spectra, images or anything else. So the tests describe
+    made-up measurements, with made-up metadata, in a temporary folder.
+
+    That also makes them fast and repeatable, and lets them arrange on purpose
+    the awkward situations that are rare in real life: a folder that cannot be
+    read, a copy interrupted halfway, two files that say exactly the same thing.
+
+    The cache is redirected into that same temporary folder. Without this, a
+    copy left over from real use would be read instead of the files written
+    here, and the tests would quietly check the wrong data.
     """
 
-    def setUp(self):
-        """
-        Picks the data directory before each test.
+    # Made-up metadata: a sample number, a dose, a zone, and two words that are
+    # either there or not. Enough to exercise every kind of group.
+    PATTERNS = [
+        r"sample(?P<sample>\d+)",
+        r"dose(?P<dose>[\d.,]+)",
+        r"zone(?P<zone>\d+)",
+        # The number that tells apart the repeated measurements of one zone.
+        # Without it every repeat would carry exactly the same metadata, and
+        # validate_unique_metadata() would rightly call them all duplicates.
+        r"_(?P<number>\d+)\.txt",
+        r"(?P<mode>alpha|beta)",
+        r"(?P<is_test>tests?)",
+        r"(?P<is_reference>reference)",
+    ]
 
-        If the network drive is not mounted, we fall back to the current
-        directory so that the tests can still run.
-        """
-        self.root = "/Volumes/Labdata/dcclab/surya" #helper_find_root_directory()
-        if not Path(self.root).exists():
-            self.root = "."
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name) / "data"
+
+        # Two samples, two zones each, three files per zone.
+        self.expected_files = 0
+        for sample in (1, 2):
+            for zone in (1, 2):
+                folder = self.root / "alpha" / f"sample{sample}" / f"zone{zone}"
+                for number in range(3):
+                    write_data_file(folder / f"sample{sample}_dose45_zone{zone}_{number}.txt")
+                    self.expected_files += 1
+
+        # The cache is shared by every instance, so it is moved aside for the
+        # duration of the test.
+        self.saved_cache_root = DataFiles.cache_root
+        DataFiles.cache_root = Path(self.temporary.name) / "cache"
+
+    def tearDown(self):
+        DataFiles.cache_root = self.saved_cache_root
+        self.temporary.cleanup()
+
+    def made(self, **kwargs):
+        """A DataFiles pointing at the files written by setUp()."""
+        kwargs.setdefault("metadata_patterns", self.PATTERNS)
+        return DataFiles(self.root, **kwargs)
+
+    # ---- creating -------------------------------------------------------
 
     def test_001_init(self):
-        """Checks that a DataFiles object can simply be created."""
-        self.assertIsNotNone(DataFiles(self.root))
+        self.assertIsNotNone(self.made())
 
-    def test_002_initialize(self):
+    def test_002_nothing_is_read_before_initialize(self):
+        self.assertIsNone(self.made().dataframe)
+
+    # ---- walking the folders --------------------------------------------
+
+    def test_010_every_file_is_found(self):
+        files = self.made().initialize()
+        self.assertEqual(len(files.dataframe), self.expected_files)
+
+    def test_011_the_file_name_is_the_row_label(self):
         """
-        Full run: metadata reading, corrections, then validation.
+        The rows are labelled by the file, not by a number.
 
-        This is the test that reproduces the real use of the class from start
-        to finish.
+        Several tasks fill the table at once, so the order changes from one run
+        to the next: a row number would designate a different file every time.
         """
-        files = DataFiles(self.root, 
-                          methods = [extract_header_from_relative_path],
-                          metadata_patterns=METADATA_PATH_PATTERNS)
+        files = self.made().initialize()
 
-        files.initialize()
+        self.assertEqual(files.dataframe.index.name, 'file')
+        self.assertTrue(files.dataframe.index.is_unique)
+        self.assertIn('sample1/zone1/sample1_dose45_zone1_0.txt',
+                      {str(Path(i).relative_to('alpha')) for i in files.dataframe.index})
 
-    def test_003_finalize(self):
+    def test_012_only_the_wanted_extensions(self):
+        write_data_file(self.root / "alpha" / "notes.md")
+        write_data_file(self.root / "alpha" / "table.csv")
+
+        files = self.made().initialize()
+        self.assertEqual(len(files.dataframe), self.expected_files)
+
+    def test_013_several_extensions_at_once(self):
+        write_data_file(self.root / "alpha" / "table.csv")
+
+        files = self.made(extensions=['.txt', '.csv']).initialize()
+        self.assertEqual(len(files.dataframe), self.expected_files + 1)
+
+    def test_014_hidden_files_and_folders_are_left_out(self):
+        write_data_file(self.root / "alpha" / ".hidden.txt")
+        write_data_file(self.root / ".hidden_folder" / "inside.txt")
+
+        files = self.made().initialize()
+        self.assertEqual(len(files.dataframe), self.expected_files)
+
+    def test_015_a_root_that_does_not_exist(self):
+        missing = DataFiles(Path(self.temporary.name) / "nowhere")
+        with self.assertRaises(Exception):
+            missing.initialize()
+
+    # ---- reading the names -----------------------------------------------
+
+    def test_020_patterns_fill_the_columns(self):
+        files = self.made().initialize()
+        row = files.dataframe.iloc[0]
+
+        self.assertIn(row['sample'], (1, 2))
+        self.assertEqual(row['dose'], 45)
+        self.assertEqual(row['mode'], 'alpha')
+
+    def test_021_a_whole_number_stays_a_whole_number(self):
+        """45 must not become 45.0: it exports badly and reads worse."""
+        files = self.made().initialize()
+        self.assertIsInstance(files.dataframe.iloc[0]['sample'], (int, np.integer))
+
+    def test_022_leading_zeros_are_still_numbers(self):
+        write_data_file(self.root / "alpha" / "sample007_dose45_zone1_0.txt")
+
+        files = self.made().initialize()
+        samples = set(files.dataframe['sample'].dropna())
+        self.assertIn(7, samples)
+
+    def test_023_a_decimal_written_the_french_way(self):
+        """Computers set to French write 2,5 where others write 2.5."""
+        write_data_file(self.root / "alpha" / "sample3_dose2,5_zone1_0.txt")
+
+        files = self.made().initialize()
+        doses = set(files.dataframe['dose'].dropna())
+        self.assertIn(2.5, doses)
+
+    def test_024_words_are_lowercased(self):
+        """The same word is spelled two ways across folders, never three."""
+        write_data_file(self.root / "BETA" / "sample9_dose45_zone1_0.txt")
+
+        files = self.made().initialize()
+        self.assertEqual(set(files.dataframe['mode'].dropna()), {'alpha', 'beta'})
+
+    def test_025_presence_groups_are_true_or_false(self):
+        write_data_file(self.root / "alpha" / "test" / "sample8_dose45_zone1_0.txt")
+
+        files = self.made().initialize()
+        df = files.dataframe
+
+        self.assertEqual(df['is_test'].dtype, bool)
+        self.assertEqual(int(df['is_test'].sum()), 1)
+
+    def test_026_a_presence_group_is_never_missing(self):
         """
-        Full run: metadata reading, corrections, then validation.
-
-        This is the test that reproduces the real use of the class from start
-        to finish.
+        A column that is sometimes false and sometimes missing cannot be
+        filtered on: a hole is neither true nor false, so a row holding one is
+        dropped by a test for false just as surely as a row holding true.
         """
-        files = DataFiles(self.root, 
-                          methods = [extract_header_from_relative_path],
-                          metadata_patterns=METADATA_PATH_PATTERNS)
-        files.initialize()
-        files.finalize([fix_acquisition_errors, add_additional_experimental_info, delete_test_data])
+        files = self.made().initialize()
+        df = files.dataframe
 
-    def test_004_validate(self):
-        """
-        Full run: metadata reading, corrections, then validation.
+        self.assertEqual(int(df['is_reference'].isna().sum()), 0)
+        self.assertEqual(int(df['is_reference'].sum()), 0)
 
-        This is the test that reproduces the real use of the class from start
-        to finish.
-        """
-        files = DataFiles(self.root, 
-                          methods = [extract_header_from_relative_path],
-                          metadata_patterns=METADATA_PATH_PATTERNS)
-        files.initialize()
-        files.finalize([fix_acquisition_errors, add_additional_experimental_info, delete_test_data])
-        files.validate_unique_metadata()
-        mask = files.get_mask({})
-        files_content = files.read_data_files(reader_method=read_spectrum_file, mask=mask)
-        
-        # # The spectra are kept beside the dataframe, not inside it. The keys of
-        # # files_content are the index labels of files.dataframe, so we can go
-        # # back and forth between the metadata of a file and its content.
-        # for index, spectrum in files_content.items():
-        #     metadata = files.dataframe.loc[index]
-        #     print(f"{index}: {len(spectrum)} points, souris {metadata['souris']}")
+    def test_027_extraction_methods_are_merged_in(self):
+        def extra(root, relative_path):
+            return {'extra': 'yes'}
 
+        files = self.made(methods=[extra]).initialize()
+        self.assertTrue((files.dataframe['extra'] == 'yes').all())
 
-    def test_initialize_no_meta(self):
-        """
-        Checks that everything still works with no extraction function at all.
+    def test_028_a_method_is_never_registered_twice(self):
+        def extra(root, relative_path):
+            return {}
 
-        The table then holds only the 'file' column.
-        """
+        files = self.made(methods=[extra])
+        files.register_metadata_extraction_method(extra)
+        self.assertEqual(len(files.metadata_methods), 1)
+
+    def test_029_no_metadata_at_all(self):
+        """With nothing to look for, the table still lists the files."""
         files = DataFiles(self.root).initialize()
+        self.assertEqual(len(files.dataframe), self.expected_files)
 
-    
+    # ---- filtering and checking -------------------------------------------
+
+    def test_030_get_mask(self):
+        files = self.made().initialize()
+        mask = files.get_mask({'sample': 1})
+
+        self.assertEqual(int(mask.sum()), 6)
+        self.assertTrue((files.dataframe[mask]['sample'] == 1).all())
+
+    def test_031_get_mask_ignores_unknown_columns(self):
+        files = self.made().initialize()
+        self.assertEqual(int(files.get_mask({'nonexistent': 3}).sum()),
+                         self.expected_files)
+
+    def test_032_validate_finds_nothing_when_names_differ(self):
+        files = self.made().initialize()
+        self.assertEqual(files.validate_unique_metadata(verbose=False), {})
+
+    def test_033_validate_finds_two_files_that_say_the_same(self):
+        """Two names that carry the same metadata are an acquisition mistake."""
+        write_data_file(self.root / "alpha" / "elsewhere" / "sample1_dose45_zone1_0.txt")
+
+        files = self.made().initialize()
+        duplicates = files.validate_unique_metadata(verbose=False)
+
+        self.assertEqual(len(duplicates), 1)
+        self.assertEqual(len(next(iter(duplicates.values()))), 2)
+
+    def test_034_finalize_applies_the_corrections(self):
+        def keep_first_sample(df):
+            return df[df['sample'] == 1]
+
+        files = self.made().initialize()
+        files.finalize([keep_first_sample])
+        self.assertEqual(len(files.dataframe), 6)
+
+    def test_035_finalize_refuses_a_method_that_returns_nothing(self):
+        def forgets_to_return(df):
+            df['new'] = 1
+
+        files = self.made().initialize()
+        with self.assertRaises(ValueError):
+            files.finalize([forgets_to_return])
+
+    # ---- reading the contents ---------------------------------------------
+
+    def test_040_read_data_files(self):
+        files = self.made().initialize()
+        contents = files.read_data_files(reader_method=lambda path: Path(path).read_text())
+
+        self.assertEqual(len(contents), self.expected_files)
+        self.assertEqual(set(contents), set(files.dataframe.index))
+
+    def test_041_read_only_a_part(self):
+        files = self.made().initialize()
+        mask = files.get_mask({'sample': 2})
+        contents = files.read_data_files(reader_method=lambda path: None, mask=mask)
+
+        self.assertEqual(len(contents), 6)
+
+    # ---- the local copy ----------------------------------------------------
+
+    def test_050_no_copy_to_start_with(self):
+        self.assertFalse(self.made().has_valid_local_copy)
+
+    def test_051_the_dataset_is_named_after_the_last_folder(self):
+        self.assertEqual(self.made().dataset_name, 'data')
+        self.assertEqual(self.made().local_root.name, 'data')
+
+    def test_052_the_same_data_reached_two_ways_shares_one_copy(self):
+        """
+        Two people mount the same share differently. It is still one dataset,
+        and must not be copied twice.
+        """
+        elsewhere = Path(self.temporary.name) / "another_mount"
+        elsewhere.symlink_to(self.root.parent)
+
+        one = DataFiles(self.root)
+        other = DataFiles(elsewhere / "data")
+        self.assertEqual(one.local_root, other.local_root)
+
+    def test_053_a_marker_is_needed_not_just_a_folder(self):
+        """A copy that was interrupted leaves a folder that looks perfectly fine."""
+        files = self.made()
+        files.local_root.mkdir(parents=True)
+        write_data_file(files.local_root / "half_copied.txt")
+
+        self.assertFalse(files.has_valid_local_copy)
+
+    def test_054_marking_and_unmarking(self):
+        files = self.made()
+        files.mark_local_copy_as_valid()
+        self.assertTrue(files.has_valid_local_copy)
+
+        files.invalidate_local_copy()
+        self.assertFalse(files.has_valid_local_copy)
+
+    def test_055_invalidating_twice_is_harmless(self):
+        files = self.made()
+        files.invalidate_local_copy()
+        files.invalidate_local_copy()
+
+    def test_056_a_marker_from_another_dataset_is_refused(self):
+        """
+        Two datasets whose last folder is called the same thing share a folder,
+        and reading the wrong one would return the measurements of another
+        experiment without anything saying so.
+        """
+        files = self.made()
+        files.local_root.mkdir(parents=True)
+        (files.local_root / files.valid_marker).write_text("something_else\n/elsewhere\n")
+
+        self.assertFalse(files.has_valid_local_copy)
+
+    def test_057_the_marker_says_where_the_copy_came_from(self):
+        files = self.made()
+        files.mark_local_copy_as_valid()
+
+        name, path = DataFiles.read_marker(files.local_root / files.valid_marker)
+        self.assertEqual(name, 'data')
+        self.assertEqual(path, files.root_signature)
+
+    def test_058_copying_and_reading_the_copy(self):
+        files = self.made()
+        files.initialize()
+
+        queue = deque()
+        files.get_data_file_paths((queue,))
+        files.copy_files_locally(queue)
+
+        self.assertTrue(files.has_valid_local_copy)
+        copied = list(files.local_root.rglob("*.txt"))
+        self.assertEqual(len(copied), self.expected_files)
+
+    def test_059_listing_and_deleting_the_copies(self):
+        files = self.made()
+        files.mark_local_copy_as_valid()
+
+        copies = DataFiles.local_copies()
+        self.assertEqual(len(copies), 1)
+        folder, root, complete = copies[0]
+        self.assertEqual(folder.name, 'data')
+        self.assertEqual(root, files.root_signature)
+        self.assertTrue(complete)
+
+        files.delete_local_copy()
+        self.assertEqual(DataFiles.local_copies(), [])
+        self.assertFalse(files.local_root.exists())
+
+    def test_05a_listing_when_nothing_was_ever_copied(self):
+        self.assertEqual(DataFiles.local_copies(), [])
+
+
 if __name__ == "__main__":
     unittest.main()
-
-
-
-
-
