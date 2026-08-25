@@ -275,6 +275,171 @@ class RamanData:
 
         return self.meta[column].to_numpy()
 
+    def averaged(self, ignore=(), on=None, verbose=True):
+        r"""
+        Averages together the spectra that describe the same measurement.
+
+        Ten acquisitions of one spot on one sample are not ten independent
+        measurements: they differ only by their repetition number, and averaging
+        them is what removes the noise without pretending to have taken more
+        data than was actually taken.
+
+        What counts as "the same measurement" is decided by a fingerprint: the
+        values of a set of metadata columns. Two spectra whose fingerprints are
+        equal are averaged together. The fingerprint is normally described by
+        what it leaves OUT, that is, by the columns that change from one
+        repetition to the next:
+
+            mean = raman.averaged(ignore=['indice1', 'heure', 'minutes', 's',
+                                          'ms', 'size_in_bytes'])
+
+        Everything else -- souris, petri, jour, dose, zone, ... -- stays in the
+        fingerprint, so nothing is ever merged that differs in a way which was
+        not explicitly declared uninteresting. The other way round is there for
+        when it is shorter to say what matters than what does not:
+
+            mean = raman.averaged(on=['souris', 'zone', 'dose'])
+
+        Nothing is decided for you about which columns to ignore, because this
+        class cannot know what anyone is measuring. A column that happens to
+        hold a different value for every file -- the size of the file, the
+        second at which it was recorded -- leaves every spectrum alone in a
+        group of its own, and the method then does nothing at all. The printed
+        summary says how many rows came out alone and names the columns
+        responsible, so that they can be added to `ignore`.
+
+        The result is a new RamanData; this one is left untouched.
+
+          X    : one row per group, the average of the spectra of that group
+          axis : the same wavelengths, which averaging does not change
+          meta : one row per group. The fingerprint columns hold the values the
+                 group shares. A column left out of the fingerprint keeps its
+                 value when the whole group agrees on it, and is left empty when
+                 the group does not: there is no single acquisition time for ten
+                 acquisitions. One column is added, `n_averaged`, saying how
+                 many spectra went into the row.
+
+        The rows are labelled by their fingerprint rather than by a file name,
+        since a row no longer comes from one file.
+
+        Averaging an already averaged dataset averages averages, which stops
+        being the same as averaging everything at once as soon as the groups do
+        not all hold the same number of spectra. `n_averaged` is written down
+        but deliberately not used as a weight: do the grouping you want in a
+        single call.
+
+        ignore  : the columns to leave out of the fingerprint.
+        on      : the columns that make up the fingerprint, given directly.
+                  Cannot be given together with `ignore`.
+        verbose : whether to print how many spectra became how many rows.
+        """
+        if self.X is None:
+            raise ValueError("Nothing has been read yet: call initialize() first")
+
+        if on is not None and len(ignore) > 0:
+            raise ValueError("Give either `on` or `ignore`, not both: each is the other's "
+                             "opposite, so giving both can only say the same thing twice "
+                             "or contradict it")
+
+        # The path of a file is the file itself, not a property of what was
+        # measured. It differs for every spectrum by construction, so keeping it
+        # in the fingerprint could only ever leave every group alone.
+        columns = [column for column in self.meta.columns if column != 'absolute_path']
+
+        if on is not None:
+            asked, fingerprint = list(on), list(on)
+        else:
+            asked = list(ignore)
+            fingerprint = [column for column in columns if column not in set(ignore)]
+
+        unknown = [column for column in asked if column not in columns]
+        if unknown:
+            raise ValueError(f"No such column: {unknown}. A misspelled name would quietly "
+                             f"change the fingerprint instead of failing, so it is refused "
+                             f"here. The columns available are: {columns}")
+
+        meta = self.meta[columns]
+
+        # An empty fingerprint says that every spectrum describes the same
+        # measurement. A constant column says so without needing a special case.
+        everything = "_everything"
+        if not fingerprint:
+            meta = meta.assign(**{everything: 0})
+            grouping = [everything]
+        else:
+            grouping = fingerprint
+
+        # dropna=False is not a detail. With the default, a single missing value
+        # anywhere in the fingerprint makes the spectrum disappear from the
+        # result without a word, and half the columns are empty for a
+        # calibration file. sort=False keeps the groups in the order they first
+        # appear, which is what makes ngroup() below agree, row for row, with
+        # the table built from first().
+        grouped = meta.groupby(grouping, dropna=False, sort=False)
+
+        codes = grouped.ngroup().to_numpy()
+        n_groups = int(codes.max()) + 1
+
+        # first() gives the value the group shares; where the group does not
+        # agree, mask() empties the cell rather than keeping the value of one
+        # row and presenting it as if it described all of them.
+        summary = grouped.first().mask(grouped.nunique(dropna=False) > 1).reset_index()
+        if everything in summary.columns:
+            summary = summary.drop(columns=[everything])
+
+        assert len(summary) == n_groups, "there must be exactly one row per group"
+
+        X = np.vstack([self.X[codes == group].mean(axis=0) for group in range(n_groups)])
+        summary['n_averaged'] = np.bincount(codes, minlength=n_groups)
+
+        labels = [" ".join(f"{column}={row[column]}" for column in fingerprint) or "all"
+                  for _, row in summary.iterrows()]
+        summary.index = pd.Index(labels, name='fingerprint')
+
+        if not summary.index.is_unique:
+            raise ValueError("Two different groups end up with the same fingerprint once it is "
+                             "written out. That happens when a column holds values that look "
+                             "alike as text; leave that column out of the fingerprint.")
+
+        result = RamanData()
+        result.X = X
+        result.axis = self.axis
+        result.meta = summary
+        result.expected_length = self.expected_length
+        result.files_offered = len(self)
+
+        assert result.X.shape[0] == len(result.meta), "X and meta must describe the same rows"
+
+        if verbose:
+            alone = int((summary['n_averaged'] == 1).sum())
+            largest = int(summary['n_averaged'].max())
+            print(f"{len(self)} spectra averaged into {n_groups} rows "
+                  f"({alone} alone, largest group {largest})")
+
+            # A fingerprint that leaves most rows alone is nearly always a
+            # forgotten column rather than a real result. Rather than leaving
+            # that to be hunted down by hand, each column is taken out of the
+            # fingerprint in turn to see whether that alone would merge rows.
+            # The ones that would are named: they are what is keeping the
+            # spectra apart. This costs one grouping per column, which is why
+            # it is only done when the result looks wrong.
+            if alone > n_groups / 2:
+                culprits = []
+                for column in fingerprint:
+                    rest = [other for other in grouping if other != column]
+                    if not rest:
+                        continue
+                    without = int(meta.groupby(rest, dropna=False, sort=False).ngroup().max()) + 1
+                    if without < n_groups:
+                        culprits.append(column)
+
+                if culprits:
+                    print(f"    most rows came out alone. Leaving out any of {culprits} "
+                          f"would merge some of them: those columns change between "
+                          f"repetitions and most likely belong in `ignore`")
+
+        return result
+
     def save(self, path):
         """
         Writes the matrix and its metadata so that they cannot drift apart.
@@ -646,6 +811,130 @@ class TestRamanData(unittest.TestCase):
     def test_035_groups_before_initializing(self):
         with self.assertRaises(ValueError):
             RamanData(self.datafiles).groups('sample')
+
+    # ---- averaging the repetitions --------------------------------------
+
+    def test_036_the_repetitions_are_averaged_together(self):
+        """
+        The five files of one zone say exactly the same thing about themselves,
+        so the default fingerprint already puts them together.
+        """
+        raman = self.initialized()
+        mean = raman.averaged(verbose=False)
+
+        self.assertEqual(len(mean), 4)                       # 2 samples x 2 zones
+        self.assertEqual(mean.shape, (4, self.POINTS))
+        self.assertTrue((mean.meta['n_averaged'] == 5).all())
+
+    def test_037_not_one_spectrum_is_lost(self):
+        """
+        Every spectrum must end up in exactly one group.
+
+        A missing value in a fingerprint column is the way to lose spectra
+        without being told: pandas leaves those rows out of a grouping unless it
+        is asked not to. The extra file below has no zone in its name, so its
+        'zone' is empty, and the total is what proves it survived.
+        """
+        write_spectrum_file(self.root / "sample1_dose0_elsewhere.txt", points=self.POINTS)
+        raman = self.initialized()
+        mean = raman.averaged(verbose=False)
+
+        self.assertEqual(len(raman), self.expected_spectra + 1)
+        self.assertEqual(int(mean.meta['n_averaged'].sum()), len(raman))
+        self.assertTrue(mean.meta['zone'].isna().any())
+
+    def test_038_the_average_is_the_average_of_the_right_rows(self):
+        """
+        The same check as test_021, on the averaged table: each spectrum was
+        given an intensity that depends on its sample, so a row of X paired with
+        the wrong row of meta shows up as a wrong number.
+        """
+        raman = self.initialized()
+        mean = raman.averaged(verbose=False)
+
+        for row, (label, metadata) in enumerate(mean.meta.iterrows()):
+            expected = 1000.0 + 100 * int(metadata['sample'])
+            self.assertAlmostEqual(mean.X[row, 0], expected,
+                                   msg=f"row {row} does not hold the average of {label}")
+
+    def test_039_ignoring_a_column_merges_more(self):
+        """Leaving 'zone' out joins the two zones of a sample into one row."""
+        raman = self.initialized()
+        mean = raman.averaged(ignore=['zone'], verbose=False)
+
+        self.assertEqual(len(mean), 2)
+        self.assertTrue((mean.meta['n_averaged'] == 10).all())
+
+    def test_03a_on_gives_the_fingerprint_directly(self):
+        raman = self.initialized()
+        mean = raman.averaged(on=['sample'], verbose=False)
+
+        self.assertEqual(len(mean), 2)
+        self.assertEqual(sorted(mean.meta['sample']), [1, 2])
+        self.assertTrue((mean.meta['n_averaged'] == 10).all())
+
+    def test_03b_a_column_the_group_disagrees_on_is_left_empty(self):
+        """
+        Grouping by sample alone puts both zones in the same row. There is no
+        single zone for that row, so the cell is emptied rather than holding
+        whichever zone happened to come first. 'dose' does not move within a
+        sample, so it is kept.
+        """
+        raman = self.initialized()
+        mean = raman.averaged(on=['sample'], verbose=False)
+
+        self.assertTrue(mean.meta['zone'].isna().all())
+        self.assertEqual(sorted(mean.meta['dose']), [0, 45])
+
+    def test_03c_the_rows_are_labelled_by_their_fingerprint(self):
+        raman = self.initialized()
+        mean = raman.averaged(on=['sample', 'zone'], verbose=False)
+
+        self.assertTrue(mean.meta.index.is_unique)
+        self.assertIn("sample=1 zone=1", list(mean.meta.index))
+
+    def test_03d_an_empty_fingerprint_averages_everything(self):
+        raman = self.initialized()
+        mean = raman.averaged(on=[], verbose=False)
+
+        self.assertEqual(len(mean), 1)
+        self.assertEqual(int(mean.meta['n_averaged'].iloc[0]), len(raman))
+        self.assertAlmostEqual(mean.X[0, 0], raman.X[:, 0].mean())
+
+    def test_03e_a_misspelled_column_is_refused(self):
+        """A typo must fail rather than quietly change what is averaged."""
+        raman = self.initialized()
+        with self.assertRaises(ValueError):
+            raman.averaged(ignore=['zonne'], verbose=False)
+        with self.assertRaises(ValueError):
+            raman.averaged(on=['sample', 'zonne'], verbose=False)
+
+    def test_03f_ignore_and_on_cannot_both_be_given(self):
+        raman = self.initialized()
+        with self.assertRaises(ValueError):
+            raman.averaged(ignore=['zone'], on=['sample'], verbose=False)
+
+    def test_03g_averaging_before_initializing(self):
+        with self.assertRaises(ValueError):
+            RamanData(self.datafiles).averaged()
+
+    def test_03h_the_original_is_left_untouched(self):
+        raman = self.initialized()
+        before = raman.X.copy()
+        raman.averaged(on=['sample'], verbose=False)
+
+        self.assertEqual(len(raman), self.expected_spectra)
+        self.assertTrue(np.array_equal(raman.X, before))
+
+    def test_03i_an_average_can_be_saved_and_read_back(self):
+        raman = self.initialized()
+        mean = raman.averaged(on=['sample'], verbose=False)
+        path = mean.save(Path(self.temporary.name) / "mean")
+
+        again = RamanData.read(path)
+        self.assertTrue(np.array_equal(again.X, mean.X))
+        self.assertEqual(list(again.meta.index), list(mean.meta.index))
+        self.assertEqual(list(again.meta['n_averaged']), list(mean.meta['n_averaged']))
 
     # ---- writing and reading back ---------------------------------------
 
