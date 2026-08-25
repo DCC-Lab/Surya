@@ -73,6 +73,37 @@ class RamanData:
         return None if self.X is None else self.X.shape
 
     @staticmethod
+    def extract_header_from_file(root, relative_path):
+        """
+        Since we use Ocean Optics Raman QEPro, we read the header of the 
+        file_path a extract the metadata from the header, which we return in a
+        dictionary
+
+        """
+
+        file_path = Path(root) / Path(relative_path)
+
+        properties = {}
+        try:
+            with open(file_path,"r", encoding="utf-8", errors="ignore") as file:
+                first_line = file.readline()
+                if first_line.startswith("Data from"):
+                    # It is a Raman spectral file
+                    for line in file:
+                        line = line.strip()
+                        if len(line) > 0:
+                            entry = line.split(":", 1)
+                            if len(entry) == 2 :
+                                properties[f"Spectrum:{entry[0]}"] = entry[1]
+                        if ">>>>>Begin Spectral Data<<<<<" in line:
+                            break
+
+        except Exception as e:
+            print(f"Warning: {file_path} is not recognized (probably accented characters)")
+
+        return properties
+
+    @staticmethod
     def read_spectrum(absolute_path):
         """
         Reads one QEPro file straight into two numpy arrays.

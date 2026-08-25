@@ -63,6 +63,7 @@ class DataFiles:
     # The name is the name of this class, not the name of any one study: what
     # is being cached is data files, whatever they happen to hold. Which study
     # a copy belongs to is decided by the root, further down.
+
     cache_root = user_cache_path("datafiles")
     valid_marker = Path("local-copy-valid")
     progress_delay = 3
@@ -76,6 +77,9 @@ class DataFiles:
                      Every other kind is ignored.
         methods    : the functions that know how to extract metadata. Each one
                      receives (root, relative_path) and returns a dictionary.
+                     Two methods are already always included: 
+                        - extract_properties_from_patterns, using named regex (see the function)
+                        - extract_extended_properties_from_path, file size, etc..
 
         The real work only starts when you call initialize().
         """
@@ -90,7 +94,10 @@ class DataFiles:
         self._properties = []
         self.dataframe = None
         self.cache_warning_issued = False
-        self.errors = []            # what the tasks ran into, see run_safely()
+        # What the background tasks ran into. Each of them catches its own
+        # errors, because an error raised in one task is seen by nobody, and
+        # puts them here for initialize() to raise once they have all stopped.
+        self.errors = []
 
     @property
     def has_valid_local_copy(self):
@@ -103,31 +110,32 @@ class DataFiles:
         presence that proves the copy actually finished.
         """
 
-        marker_path = self.local_root / self.valid_marker
-        if not marker_path.exists():
-            return False
+        with self._data_files_lock:
+            marker_path = self.local_root / self.valid_marker
+            if not marker_path.exists():
+                return False
 
-        name_found, path_found = self.read_marker(marker_path)
+            name_found, path_found = self.read_marker(marker_path)
 
-        # The name is what is checked, not the path: the same dataset reached
-        # through another mount is still the same dataset, and must reuse the
-        # copy rather than make a second one. A name that does not match means
-        # the folder was renamed by hand, or that two different datasets are
-        # called the same thing. Either way, reading it would quietly return
-        # the measurements of another experiment.
-        if name_found != self.dataset_name:
-            if not self.cache_warning_issued:
-                print(f"Warning: {self.local_root} holds a copy of '{name_found}', "
-                      f"not of '{self.dataset_name}'. It will be ignored.")
+            # The name is what is checked, not the path: the same dataset reached
+            # through another mount is still the same dataset, and must reuse the
+            # copy rather than make a second one. A name that does not match means
+            # the folder was renamed by hand, or that two different datasets are
+            # called the same thing. Either way, reading it would quietly return
+            # the measurements of another experiment.
+            if name_found != self.dataset_name:
+                if not self.cache_warning_issued:
+                    print(f"Warning: {self.local_root} holds a copy of '{name_found}', "
+                          f"not of '{self.dataset_name}'. It will be ignored.")
+                    self.cache_warning_issued = True
+                return False
+
+            if path_found != self.root_signature and not self.cache_warning_issued:
+                print(f"Note: the local copy of '{self.dataset_name}' was made from "
+                      f"'{path_found}', which is another way of reaching the same data.")
                 self.cache_warning_issued = True
-            return False
 
-        if path_found != self.root_signature and not self.cache_warning_issued:
-            print(f"Note: the local copy of '{self.dataset_name}' was made from "
-                  f"'{path_found}', which is another way of reaching the same data.")
-            self.cache_warning_issued = True
-
-        return True
+            return True
 
     @staticmethod
     def read_marker(marker_path):
@@ -302,20 +310,18 @@ class DataFiles:
                 self.register_metadata_extraction_method(method)
 
         self.register_metadata_extraction_method(self.extract_properties_from_patterns)
-
+        self.register_metadata_extraction_method(self.extract_extended_properties_from_path)
 
         threads = []
         queue = deque()
         copy_queue = deque()
 
-        if self.has_valid_local_copy:
-            print(f"Delete {self.local_root / self.valid_marker} to avoid cache")
+        # if self.has_valid_local_copy:
+        #     print(f"Delete {self.local_root / self.valid_marker} to avoid cache")
 
-        threads.append(Thread(target=self.run_safely,
-                              args=(self.get_data_file_paths, (queue, copy_queue)),
-                              kwargs={'sentinels': (queue, copy_queue)}))
-        threads.append(Thread(target=self.run_safely, args=(self.get_files_metadata, queue, True)))
-        threads.append(Thread(target=self.run_safely, args=(self.get_files_metadata, queue, False)))
+        threads.append(Thread(target=self.get_data_file_paths, args=( (queue, copy_queue), ) ))
+        threads.append(Thread(target=self.get_files_metadata, args=(queue, True)))
+        threads.append(Thread(target=self.get_files_metadata, args=(queue, False)))
 
         start_time = time.time()
         for t in threads:
@@ -368,29 +374,6 @@ class DataFiles:
         return self
 
 
-    def run_safely(self, target, *args, sentinels=()):
-        """
-        Runs one task, and makes sure a failure cannot leave the others waiting.
-
-        A task that raises simply stops. Nobody sees the error, because it
-        happened in another line of execution, and worse: the task that walks
-        the folders is the one that announces the end of the work by dropping a
-        None into each waiting line. If it dies before doing so, the tasks
-        reading from those lines wait for a signal that will never come, and
-        the program hangs where it should have complained.
-
-        So the error is put aside for initialize() to raise once every task has
-        stopped, and the end-of-work signal is sent anyway.
-
-        sentinels : the waiting lines that must be closed whatever happens.
-        """
-        try:
-            target(*args)
-        except Exception as error:
-            self.errors.append(error)
-            for queue in sentinels:
-                queue.append(None)
-
     def finalize(self, methods):
         """
         Applies a series of corrections to the table once it is built.
@@ -427,33 +410,43 @@ class DataFiles:
 
         next_time = time.time() + self.progress_delay
         files = 0
-        while True:
-            try:
-                element = queue.popleft()
-            except IndexError:
-                time.sleep(0.01)
-                continue
 
-            if element is not None:
-                absolute_path, relative_path = element
-            else:
-                break
+        try:
+            while True:
+                try:
+                    element = queue.popleft()
+                except IndexError:
+                    time.sleep(0.01)
+                    continue
 
-            dest_path = self.local_root / relative_path
-            files +=  1
-            if dest_path.exists() and dest_path.stat().st_size == absolute_path.stat().st_size:
-                continue
+                if element is not None:
+                    absolute_path, relative_path = element
+                else:
+                    break
 
-            if not dest_path.parent.exists():
-                dest_path.parent.mkdir(parents=True, exist_ok=True)
+                dest_path = self.local_root / relative_path
+                files +=  1
+                if dest_path.exists() and dest_path.stat().st_size == absolute_path.stat().st_size:
+                    continue
 
-            shutil.copy2(absolute_path, dest_path)             # copy2 preserves the modification dates
+                if not dest_path.parent.exists():
+                    dest_path.parent.mkdir(parents=True, exist_ok=True)
 
-            if time.time() > next_time:
-                next_time = time.time() + self.progress_delay
-                print(f"Copying {files} so far")
+                shutil.copy2(absolute_path, dest_path)         # copy2 preserves the modification dates
 
-        self.mark_local_copy_as_valid()
+                if time.time() > next_time:
+                    next_time = time.time() + self.progress_delay
+                    print(f"Copying {files} so far")
+
+            # Only once every file went through, and only if nothing went
+            # wrong: a copy that gave up halfway must not be declared complete.
+            self.mark_local_copy_as_valid()
+
+        except Exception as error:
+            # This task runs on its own, so raising here would tell nobody.
+            # The copy stays unmarked, which is what we want: it will simply be
+            # made again next time rather than being trusted as it stands.
+            self.errors.append(error)
 
     def extract_properties_from_patterns(self, root, file_relative_path):
         """
@@ -537,6 +530,26 @@ class DataFiles:
 
         return properties
 
+    def extract_extended_properties_from_path(self, root, file_relative_path):
+        """
+        Get more information about the file_path, but slow.
+        Returns a dictionary with the properties
+        """
+        extended_properties = {}
+
+        file_path = str(Path(root) / Path(file_relative_path))
+
+        # Fetch file_path stats (slow)
+        try:
+            file_info = Path(file_path).stat()
+            
+            extended_properties['size_in_bytes'] = file_info.st_size
+            # Others possible
+        except Exception as e:
+            pass # We just give up if unable to do it
+
+        return extended_properties
+
 
     def get_files_metadata(self, queue, progress):
         """
@@ -558,37 +571,45 @@ class DataFiles:
         """
         next_time = time.time() + self.progress_delay
 
-        root = self.root
-        if self.has_valid_local_copy:
-            root = self.local_root
+        try:
+            root = self.root
+            if self.has_valid_local_copy:
+                root = self.local_root
 
-        while True:
-            try:
-                element = queue.popleft()
-            except IndexError:
-                time.sleep(0.01)
-                continue
+            while True:
+                try:
+                    element = queue.popleft()
+                except IndexError:
+                    time.sleep(0.01)
+                    continue
 
-            if element is not None:
-                absolute_path, relative_path = element
+                if element is not None:
+                    absolute_path, relative_path = element
 
-                properties = {"file":relative_path,"absolute_path":absolute_path}
+                    properties = {"file":relative_path,"absolute_path":absolute_path}
 
-                for method in self.metadata_methods:
-                    properties.update(method(root, relative_path))
+                    for method in self.metadata_methods:
+                        properties.update(method(root, relative_path))
 
 
-                with self._data_files_lock:
-                    self._properties.append(properties)
+                    with self._data_files_lock:
+                        self._properties.append(properties)
 
-                    if progress and time.time() > next_time:
-                        print(f"Metadata from {len(self._properties)} files read")
-                        next_time = time.time() + self.progress_delay
+                        if progress and time.time() > next_time:
+                            print(f"Metadata from {len(self._properties)} files read")
+                            next_time = time.time() + self.progress_delay
 
-            else:
-                queue.appendleft(None) # Put back for other tasks
-                break
-    
+                else:
+                    queue.appendleft(None) # Put back for other tasks
+                    break
+
+        except Exception as error:
+            # This task runs on its own, so raising here would tell nobody.
+            # The error is put aside for initialize() to raise afterwards, and
+            # the None is put back so that the other readers still stop.
+            self.errors.append(error)
+            queue.append(None)
+
     def get_data_file_paths(self, queues, invisible_files=False, progress=False):
         """
         Walks the directories and announces every data file it finds.
@@ -605,53 +626,64 @@ class DataFiles:
         characters in a way (the letter and the accent stored separately) that
         other tools do not always recognize.
 
+        Whatever happens, the None is dropped: the try below makes sure of it.
+        This task runs on its own, so an error here would otherwise be seen by
+        nobody, and the tasks reading from the queues would wait for a signal
+        that never comes. The error is put aside instead, for initialize() to
+        raise once every task has stopped.
+
         queues          : the waiting lines to feed.
         invisible_files : whether to include hidden files (those starting
                           with a dot).
         progress        : whether to print a dot every two seconds.
         """
-        
+        try:
+            if self.has_valid_local_copy:
+                root = self.local_root
+            else:
+                root = self.root
 
-        if self.has_valid_local_copy:
-            root = self.local_root
-        else:
-            root = self.root
+            if not Path(root).exists():
+                raise ValueError(f"The path {root} does not exist")
 
-        if not Path(root).exists():
-            raise ValueError(f"The path {root} does not exist")
+            next_progress_print = time.time() + 2
+            for dirpath, dirs, files in os.walk(root):
+                for name in files:
+                    absolute_path = unicodedata.normalize('NFC', os.path.join(dirpath, name))
+                    if Path(absolute_path).suffix not in self.extensions:
+                        continue
 
-        next_progress_print = time.time() + 2
-        for dirpath, dirs, files in os.walk(root):
-            for name in files:
-                absolute_path = unicodedata.normalize('NFC', os.path.join(dirpath, name))
-                if Path(absolute_path).suffix not in self.extensions:
-                    continue
+                    # Hidden files, and anything inside a hidden folder. Testing
+                    # every part of the path works on Windows too, where the
+                    # separator is a backslash.
+                    relative_parts = Path(absolute_path).relative_to(root).parts
+                    if not invisible_files and any(part.startswith(".") for part in relative_parts):
+                        continue
 
-                # Hidden files, and anything inside a hidden folder. Testing
-                # every part of the path works on Windows too, where the
-                # separator is a backslash.
-                relative_parts = Path(absolute_path).relative_to(root).parts
-                if not invisible_files and any(part.startswith(".") for part in relative_parts):
-                    continue
+                    # Files that belong to the machinery, not to the experiment:
+                    # our own path cache, and the metadata companions that macOS
+                    # scatters over network drives. They are not spectra, and
+                    # they would show up as a row of missing values.
+                    if name.startswith("._") :
+                        continue
 
-                # Files that belong to the machinery, not to the experiment:
-                # our own path cache, and the metadata companions that macOS
-                # scatters over network drives. They are not spectra, and
-                # they would show up as a row of missing values.
-                if name.startswith("._") :
-                    continue
+                    if progress and time.time() > next_progress_print:
+                        print(".", end = "", flush=True)
+                        next_progress_print = time.time() + 2
 
-                if progress and time.time() > next_progress_print:
-                    print(".", end = "", flush=True)
-                    next_progress_print = time.time() + 2
+                    file_relative_path = str(Path(absolute_path).relative_to(root))
 
-                file_relative_path = str(Path(absolute_path).relative_to(root))
+                    for queue in queues:
+                        queue.append((Path(absolute_path), Path(file_relative_path)))
 
-                for queue in queues:
-                    queue.append((Path(absolute_path), Path(file_relative_path)))
+        except Exception as error:
+            self.errors.append(error)
 
-        for queue in queues:            
-            queue.append(None)
+        finally:
+            # In the finally, not after the loop: the tasks waiting on these
+            # queues must be released even when the walk gave up halfway.
+            for queue in queues:
+                queue.append(None)
 
     def validate_unique_metadata(self, ignore=("absolute_path",),
                                  ignore_prefixes=("Spectrum:",), verbose=True):
@@ -726,11 +758,12 @@ class DataFiles:
         a table of hundreds of points, and putting a whole table inside a
         single cell of another table breaks almost everything you would want to
         do afterwards: saving to Excel, filtering, grouping. The dataframe
-        stays a table of metadata, small and fast.
+        stays a table of metadata, small and fast. If the data file are images,
+        it is even worse.
 
         Instead, this returns a dictionary whose keys are the index labels of
-        self.dataframe. The two therefore line up: the content of row 42 is
-        found at spectra[42], and any mask you used to select rows still
+        self.dataframe. The two therefore line up: the content of file 'file' is
+        found at spectra['file'], and any mask you used to select rows still
         applies.
 
         reader_method : the function that reads one file and returns its
@@ -755,8 +788,6 @@ class DataFiles:
                 next_time = time.time() + self.progress_delay
 
         return files_data
-
-
 
 
 
