@@ -1099,6 +1099,13 @@ class TestRamanData(unittest.TestCase):
         self.assertEqual(sorted(mean.meta['n_averaged']), [1, 5, 5, 5, 5])
         self.assertEqual(int(mean.meta.loc[mean.meta['zone'].isna(), 'n_averaged'].iloc[0]), 1)
 
+        # A column that holds a missing value goes through a grouping on its way
+        # here, which is where a whole number quietly turns into a decimal. Zone
+        # 1 must still be written 'zone=1' and not 'zone=1.0', in the label and
+        # in the exported table alike.
+        self.assertEqual(mean.meta['zone'].dtype, raman.meta['zone'].dtype)
+        self.assertIn("zone=1 ", " ".join(mean.meta.index) + " ")
+
     def test_038_the_average_is_the_average_of_the_right_rows(self):
         """
         The same check as test_021, on the averaged table: each spectrum was
