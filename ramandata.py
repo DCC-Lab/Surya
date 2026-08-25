@@ -843,6 +843,11 @@ class TestRamanData(unittest.TestCase):
         self.assertEqual(int(mean.meta['n_averaged'].sum()), len(raman))
         self.assertTrue(mean.meta['zone'].isna().any())
 
+        # Not just the total: the count has to sit on its own row. The lonely
+        # file is the only group of one, and the four zones keep their five.
+        self.assertEqual(sorted(mean.meta['n_averaged']), [1, 5, 5, 5, 5])
+        self.assertEqual(int(mean.meta.loc[mean.meta['zone'].isna(), 'n_averaged'].iloc[0]), 1)
+
     def test_038_the_average_is_the_average_of_the_right_rows(self):
         """
         The same check as test_021, on the averaged table: each spectrum was
@@ -935,6 +940,43 @@ class TestRamanData(unittest.TestCase):
         self.assertTrue(np.array_equal(again.X, mean.X))
         self.assertEqual(list(again.meta.index), list(mean.meta.index))
         self.assertEqual(list(again.meta['n_averaged']), list(mean.meta['n_averaged']))
+
+    def test_03j_a_true_or_false_column_the_group_disagrees_on(self):
+        """
+        A column of true or false is the one kind that cannot simply be emptied,
+        since there is no missing value between the two. The real data is full
+        of them ('is_dark', 'is_verre', ...), so a group that does not agree on
+        one must come out empty rather than raise or keep one file's answer.
+        """
+        folder = Path(self.temporary.name) / "booleans"
+        for number in range(4):
+            word = "dark" if number < 2 else "lit"
+            write_spectrum_file(folder / f"sample1_zone1_{word}{number}.txt",
+                                points=self.POINTS)
+
+        files = DataFiles(folder, metadata_patterns=self.PATTERNS + [r"(?P<is_dark>dark)"])
+        raman = RamanData(files.initialize()).initialize(verbose=False)
+        mean = raman.averaged(on=['sample', 'zone'], verbose=False)
+
+        self.assertEqual(len(mean), 1)
+        self.assertEqual(int(mean.meta['n_averaged'].iloc[0]), 4)
+        self.assertTrue(mean.meta['is_dark'].isna().all())
+
+    def test_03k_an_average_goes_straight_to_scikit_learn(self):
+        """
+        Averaging and then training is the whole point, so the table that comes
+        out has to still work with the two methods meant for that. The columns
+        pass through a grouping on the way, which is where a type quietly turns
+        into something scikit-learn refuses.
+        """
+        raman = self.initialized()
+        mean = raman.averaged(on=['sample', 'zone'], verbose=False)
+
+        X, y = mean.training_set('dose')
+        self.assertEqual(X.shape, (4, self.POINTS))
+        self.assertEqual(y.dtype, np.float64)
+        self.assertEqual(sorted(y), [0.0, 0.0, 45.0, 45.0])
+        self.assertEqual(sorted(mean.groups('sample')), [1, 1, 2, 2])
 
     # ---- writing and reading back ---------------------------------------
 
