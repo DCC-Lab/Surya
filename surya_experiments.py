@@ -309,7 +309,19 @@ class TestSuryaDataset(unittest.TestCase):
         self.assertEqual(y.dtype, np.float64)
 
 
+
 if __name__ == "__main__":
-    unittest.main()
+    # unittest.main()
 
+    from datafiles import DataFiles
+    from ramandata import RamanData
 
+    root = helper_find_root_directory()
+
+    surya_files = DataFiles(root, metadata_patterns=METADATA_PATH_PATTERNS).initialize()
+    surya_files.finalize([add_additional_experimental_info,
+                         fix_acquisition_errors,
+                         delete_test_data])
+
+    raman = RamanData(surya_files).initialize(verbose=False)
+    counts = raman.report()
