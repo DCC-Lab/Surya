@@ -12,6 +12,8 @@ import unicodedata
 import shutil
 import unittest
 import tempfile
+import io
+from contextlib import redirect_stdout
 import warnings
 from platformdirs import user_cache_path
 
@@ -727,60 +729,233 @@ class DataFiles:
             for queue in queues:
                 queue.append(None)
 
-    def validate_unique_metadata(self, ignore=("absolute_path",),
-                                 ignore_prefixes=("Spectrum:",), verbose=True):
+    def column_roles(self, mask=None, verbose=True):
+        r"""
+        Says what each column is worth, here, for telling one file from another.
+
+        The same table describes several experiments, and a column that carries
+        the whole meaning in one of them is often empty in the next: exp 1
+        numbers its repetitions with 'indice2', which exp 2 and 3 never write at
+        all. Before deciding what identifies a measurement, it is worth looking
+        at what the names actually say in the part being worked on:
+
+            files.column_roles(mask=files.get_mask({'exp': 1}))
+
+        Two things are counted for every column, and they are facts rather than
+        opinions:
+
+          filled   : how many files say something about it
+          distinct : how many different answers there are, an empty answer
+                     counting as one of them
+
+        Their ratio is what matters. A column with as many answers as there are
+        files -- the size of the file, the millisecond it was recorded -- can
+        name a file but can never put two of them together: those belong in the
+        `ignore` list of RamanData.averaged(). A column with a single answer
+        says nothing here at all and can be left out of any fingerprint without
+        changing a thing. What is left in between is what describes the
+        measurements.
+
+        The table comes back sorted with the most changeable column first, which
+        is the order in which it reads best: the accidents at the top, what
+        describes the experiment at the bottom.
+
+        mask : an optional filter, as returned by get_mask(), to look at one
+               part of the data. Without it, the whole table is described.
         """
-        Checks that the metadata of each file is unique.
+        df = self.dataframe if mask is None else self.dataframe[mask]
 
-        For every row, we gather the metadata into a dictionary, remove the
-        columns that are always different, then check that the signature left
-        over appears only once. Two files carrying exactly the same metadata
-        cannot be told apart afterwards, which usually means one acquisition
-        was named after another by mistake.
+        if len(df) == 0:
+            raise ValueError("No file is selected: there is nothing to describe")
 
-        ignore          : column names to leave out of the signature.
-                          'absolute_path' is left out by default: it is not
-                          metadata, it is where the file happens to sit on this
-                          machine, and it differs for every row, so leaving it
-                          in would hide every duplicate there is.
-        ignore_prefixes : whole families of columns to leave out. Instruments
-                          add one column per setting they record, all sharing a
-                          prefix, and those describe the measurement rather than
-                          identifying the sample.
-
-        Returns a dictionary {signature: [list of files]} for the signatures
-        that appear more than once, that is, the duplicates.
-        """
-
-        df = self.dataframe
-
-        colonnes = [c for c in df.columns
-                    if c not in ignore and not c.startswith(tuple(ignore_prefixes))]
-
-        signatures = {}
-        for i, row in df[colonnes].iterrows():
-            # The metadata of this row, without the missing values
-            metadata = {k: v for k, v in row.items() if pd.notna(v)}
-            # A dict is not hashable: we turn it into a sorted tuple for the key
-            signature = tuple(sorted(metadata.items(), key=lambda kv: str(kv[0])))
-            signatures.setdefault(signature, []).append(i)
-
-        doublons = {sig: idx for sig, idx in signatures.items() if len(idx) > 1}
+        roles = pd.DataFrame({
+            'filled': df.notna().sum(),
+            'missing': df.isna().sum(),
+            'distinct': df.nunique(dropna=False),
+        })
+        roles['per_file'] = (roles['distinct'] / len(df)).round(3)
+        roles['says_nothing'] = roles['distinct'] <= 1
+        roles = roles.sort_values('per_file', ascending=False)
+        roles.index.name = 'column'
 
         if verbose:
-            n_doublons = sum(len(idx) for idx in doublons.values())
-            if not doublons:
-                print_debug(f"Metadata is unique ({len(df)} fichiers, colonnes: {colonnes})")
-            else:
-                print(f"{len(doublons)} signatures non-uniques touchant {n_doublons} fichiers:")
-                for signature, indices in doublons.items():
-                    if len(indices) % 5 != 0:
-                        print(f"\n #{len(indices)} {dict(signature)}")
-                        for i in indices:
-                            print(f"    {i}")
+            print(f"{len(df)} files, {len(roles)} columns")
+            print(roles.to_string())
 
-        # The index labels are the file names, which is what is useful here
-        return {sig: list(idx) for sig, idx in doublons.items()}
+            silent = list(roles[roles['says_nothing']].index)
+            if silent:
+                print(f"\n    {silent}")
+                print(f"    say nothing here -- one answer or none -- and can be left out of "
+                      f"a fingerprint without changing anything")
+
+            names_a_file = list(roles[roles['distinct'] == len(df)].index)
+            if names_a_file:
+                print(f"\n    {names_a_file}")
+                print(f"    hold a different answer for every single file: they can name a "
+                      f"file but can never put two of them together")
+
+        return roles
+
+    def validate_unique_metadata(self, columns=None, mask=None, ignore=("absolute_path",),
+                                 ignore_prefixes=("Spectrum:",), verbose=True, show=5):
+        r"""
+        Checks that a set of columns tells every file apart, and says what is
+        missing when it does not.
+
+        Two files carrying exactly the same metadata cannot be told apart
+        afterwards. Called with nothing, this asks the question of the whole
+        table and of all its columns, which is the acquisition check: a
+        duplicate there usually means one measurement was named after another
+        by mistake.
+
+        Called with a set of columns, it asks a different and more useful
+        question: do these columns identify a measurement? That is the question
+        to answer before averaging anything, because whatever they fail to
+        separate will be averaged together:
+
+            files.validate_unique_metadata(
+                columns=['petri', 'souris', 'zone', 'dose', 'indice1'],
+                mask=files.get_mask({'exp': 2}))
+
+        When some files are left indistinguishable, the report does not stop at
+        saying so. It looks at those files alone and lists the other columns
+        that DO differ between them, with the number of groups each one would
+        separate. That list is the answer to "what is my identifier missing":
+
+            680 of 1620 files are not told apart (340 groups)
+                fixation     2 answers    330 groups
+                is_adn       2 answers     10 groups
+
+        Two kinds of failure are told apart, because they call for two very
+        different things. A column that differs inside the groups is a column
+        the identifier forgot: add it and the files separate. A column of the
+        identifier that is empty for every one of those files is a name that
+        never said it: nothing in the metadata can separate them, and it is the
+        file names, or the choice of what to average, that has to change.
+
+        columns         : the columns that are supposed to identify a file.
+                          Without it, every column is used except those left
+                          out below.
+        mask            : an optional filter, as returned by get_mask(), to ask
+                          the question of one part of the data. The three
+                          experiments do not name themselves the same way and
+                          are worth asking about separately.
+        ignore          : column names to leave out. 'absolute_path' is left
+                          out by default: it is not metadata, it is where the
+                          file happens to sit on this machine, and since it
+                          differs for every row it would hide every duplicate
+                          there is -- and top every list of what differs
+                          without ever saying anything.
+        ignore_prefixes : whole families of columns to leave out. Instruments
+                          add one column per setting they record, all sharing a
+                          prefix, and those describe the measurement rather
+                          than identifying the sample.
+        show            : how many example groups to print.
+
+        Returns a dictionary {signature: [list of files]} for the signatures
+        that appear more than once, that is, the duplicates. An empty dictionary
+        means the columns identify every file.
+        """
+        df = self.dataframe if mask is None else self.dataframe[mask]
+
+        if len(df) == 0:
+            raise ValueError("No file is selected: there is nothing to check")
+
+        left_out = set(ignore)
+        prefixes = tuple(ignore_prefixes)
+
+        if columns is None:
+            chosen = [c for c in df.columns
+                      if c not in left_out and not c.startswith(prefixes)]
+        else:
+            unknown = [c for c in columns if c not in df.columns]
+            if unknown:
+                raise ValueError(f"No such column: {unknown}. The columns available are: "
+                                 f"{list(df.columns)}")
+            chosen = list(columns)
+
+        if not chosen:
+            raise ValueError("No column is left to identify a file with")
+
+        # dropna=False: a missing value is an answer like any other here. Two
+        # files that both fail to say which mouse they come from are not thereby
+        # different, they are exactly the pair this method exists to report.
+        grouped = df.groupby(chosen, dropna=False, sort=False)
+
+        duplicates = {}
+        readable = {}
+        for key, rows in grouped:
+            if len(rows) < 2:
+                continue
+            if not isinstance(key, tuple):
+                key = (key,)
+            # The missing answers are left out of the signature that is returned,
+            # so that it holds what the names actually said. They are kept in the
+            # line that gets printed, written as a dash, because a column that
+            # said nothing is most of the reason two files look alike.
+            signature = tuple(sorted(((c, v) for c, v in zip(chosen, key) if pd.notna(v)),
+                                     key=lambda pair: str(pair[0])))
+            duplicates[signature] = list(rows.index)
+            readable[signature] = " ".join(f"{c}={'-' if pd.isna(v) else v}"
+                                           for c, v in zip(chosen, key))
+
+        if not verbose:
+            return duplicates
+
+        if not duplicates:
+            print(f"{len(chosen)} columns tell all {len(df)} files apart")
+            return duplicates
+
+        ambiguous = df.loc[[name for names in duplicates.values() for name in names]]
+        print(f"{len(ambiguous)} of {len(df)} files are not told apart by {chosen} "
+              f"({len(duplicates)} groups)")
+
+        # What differs between files the chosen columns cannot separate is
+        # exactly what the identifier is missing. Counting the groups each
+        # column would separate ranks them by how much they would help.
+        in_groups = ambiguous.groupby(chosen, dropna=False, sort=False)
+        elsewhere = [c for c in df.columns
+                     if c not in chosen and c not in left_out and not c.startswith(prefixes)]
+
+        would_separate = {}
+        for column in elsewhere:
+            groups = int((in_groups[column].nunique(dropna=False) > 1).sum())
+            if groups:
+                would_separate[column] = (groups, int(ambiguous[column].nunique(dropna=False)))
+
+        if would_separate:
+            print(f"\n    what differs between those files, and how many of the "
+                  f"{len(duplicates)} groups it would separate:")
+            for column, (groups, answers) in sorted(would_separate.items(),
+                                                    key=lambda item: -item[1][0]):
+                # A column with about as many answers as there are files is an
+                # accident of the recording rather than a description of it: it
+                # separates everything and means nothing.
+                hint = "   <- nearly one answer per file" if answers > len(ambiguous) / 2 else ""
+                print(f"        {column:<20s} {answers:6d} answers   "
+                      f"{groups:6d} groups{hint}")
+
+        never_said = {c: int(ambiguous[c].isna().sum()) for c in chosen}
+        never_said = {c: n for c, n in never_said.items() if n}
+        if never_said:
+            print(f"\n    columns of the identifier that those files never said:")
+            for column, how_many in sorted(never_said.items(), key=lambda item: -item[1]):
+                print(f"        {column:<20s} empty for {how_many} of {len(ambiguous)}")
+            print(f"    where a column is empty there is nothing left to separate the files "
+                  f"with. That is not a missing column, it is a missing name: either the "
+                  f"files are renamed, or they are left out of the averaging.")
+
+        print(f"\n    for instance:")
+        for signature, names in list(duplicates.items())[:show]:
+            print(f"        {len(names)} files share  {readable[signature]}")
+            for name in names[:3]:
+                print(f"            {name}")
+            if len(names) > 3:
+                print(f"            ... and {len(names) - 3} more")
+        if len(duplicates) > show:
+            print(f"        ... and {len(duplicates) - show} more groups")
+
+        return duplicates
 
     def get_mask(self, mask_as_dict):
         df = self.dataframe
@@ -1125,6 +1300,131 @@ class TestDataFiles(unittest.TestCase):
         files = self.made().initialize()
         with self.assertRaises(ValueError):
             files.finalize([forgets_to_return])
+
+    # ---- what each column is worth ------------------------------------------
+
+    def report_of(self, method, *args, **kwargs):
+        """Runs a method for what it prints rather than for what it returns."""
+        printed = io.StringIO()
+        with redirect_stdout(printed):
+            method(*args, **kwargs)
+        return printed.getvalue()
+
+    def test_060_one_row_per_column(self):
+        files = self.made().initialize()
+        roles = files.column_roles(verbose=False)
+
+        self.assertEqual(sorted(roles.index), sorted(files.dataframe.columns))
+        self.assertEqual(int(roles.loc['sample', 'filled']), self.expected_files)
+        self.assertEqual(int(roles.loc['sample', 'distinct']), 2)
+
+    def test_061_a_column_with_one_answer_says_nothing(self):
+        """Every file here was written in mode alpha, so the column is useless."""
+        files = self.made().initialize()
+        roles = files.column_roles(verbose=False)
+
+        self.assertTrue(roles.loc['mode', 'says_nothing'])
+        self.assertFalse(roles.loc['zone', 'says_nothing'])
+
+    def test_062_a_column_that_names_a_file_can_group_nothing(self):
+        files = self.made().initialize()
+        roles = files.column_roles(verbose=False)
+
+        self.assertEqual(int(roles.loc['absolute_path', 'distinct']), self.expected_files)
+        self.assertEqual(roles.loc['absolute_path', 'per_file'], 1.0)
+
+    def test_063_the_most_changeable_column_comes_first(self):
+        files = self.made().initialize()
+        roles = files.column_roles(verbose=False)
+
+        self.assertEqual(roles.index[0], 'absolute_path')
+        self.assertTrue(roles['per_file'].is_monotonic_decreasing)
+
+    def test_064_a_column_can_say_nothing_in_one_part_only(self):
+        """
+        The whole point of the mask: what a column is worth depends on where you
+        look. 'sample' tells the files apart, until you look at one sample.
+        """
+        files = self.made().initialize()
+
+        self.assertFalse(files.column_roles(verbose=False).loc['sample', 'says_nothing'])
+        one = files.column_roles(mask=files.get_mask({'sample': 1}), verbose=False)
+        self.assertTrue(one.loc['sample', 'says_nothing'])
+        self.assertEqual(int(one['filled'].max()), self.expected_files // 2)
+
+    def test_065_describing_nothing_at_all(self):
+        files = self.made().initialize()
+        with self.assertRaises(ValueError):
+            files.column_roles(mask=files.get_mask({'sample': 99}), verbose=False)
+
+    # ---- is this what identifies a file? ------------------------------------
+
+    def test_066_a_chosen_set_of_columns_that_is_not_enough(self):
+        """The three repetitions of a zone are alike until 'number' is added."""
+        files = self.made().initialize()
+
+        duplicates = files.validate_unique_metadata(columns=['sample', 'zone'], verbose=False)
+        self.assertEqual(len(duplicates), 4)                 # 2 samples x 2 zones
+        self.assertTrue(all(len(names) == 3 for names in duplicates.values()))
+
+        enough = files.validate_unique_metadata(columns=['sample', 'zone', 'number'],
+                                                verbose=False)
+        self.assertEqual(enough, {})
+
+    def test_067_the_report_names_the_missing_column(self):
+        """
+        What the tool is for: not 'these files look alike', but 'here is the
+        column that would tell them apart'.
+        """
+        files = self.made().initialize()
+        report = self.report_of(files.validate_unique_metadata, columns=['sample', 'zone'])
+
+        self.assertIn("what differs", report)
+        self.assertIn("number", report)
+        self.assertNotIn("absolute_path", report)
+
+    def test_068_the_report_names_a_column_the_names_never_said(self):
+        """
+        The other kind of failure: nothing is missing from the identifier, the
+        files themselves never said which zone they came from. No column can be
+        added to fix that.
+        """
+        write_data_file(self.root / "alpha" / "sample1_dose45_0.txt")
+        write_data_file(self.root / "alpha" / "aside" / "sample1_dose45_0.txt")
+
+        files = self.made().initialize()
+        report = self.report_of(files.validate_unique_metadata,
+                                columns=['sample', 'zone', 'number'])
+
+        self.assertIn("never said", report)
+        self.assertIn("zone", report)
+
+    def test_069_the_question_can_be_asked_of_one_part_only(self):
+        files = self.made().initialize()
+        duplicates = files.validate_unique_metadata(columns=['sample', 'zone'],
+                                                    mask=files.get_mask({'sample': 1}),
+                                                    verbose=False)
+        self.assertEqual(len(duplicates), 2)                 # the two zones of sample 1
+
+    def test_06a_a_misspelled_column_is_refused(self):
+        files = self.made().initialize()
+        with self.assertRaises(ValueError):
+            files.validate_unique_metadata(columns=['sample', 'zonne'], verbose=False)
+
+    def test_06b_asking_about_nothing_at_all(self):
+        files = self.made().initialize()
+        with self.assertRaises(ValueError):
+            files.validate_unique_metadata(mask=files.get_mask({'sample': 99}), verbose=False)
+        with self.assertRaises(ValueError):
+            files.validate_unique_metadata(columns=[], verbose=False)
+
+    def test_06c_the_signature_holds_what_the_names_said(self):
+        """The values that were missing are left out of the signature."""
+        files = self.made().initialize()
+        duplicates = files.validate_unique_metadata(columns=['sample', 'zone'], verbose=False)
+
+        signature = next(iter(duplicates))
+        self.assertEqual(sorted(key for key, _ in signature), ['sample', 'zone'])
 
     # ---- reading the contents ---------------------------------------------
 
