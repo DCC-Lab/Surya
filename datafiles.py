@@ -748,13 +748,21 @@ class DataFiles:
           distinct : how many different answers there are, an empty answer
                      counting as one of them
 
-        Their ratio is what matters. A column with as many answers as there are
-        files -- the size of the file, the millisecond it was recorded -- can
-        name a file but can never put two of them together: those belong in the
-        `ignore` list of RamanData.averaged(). A column with a single answer
-        says nothing here at all and can be left out of any fingerprint without
-        changing a thing. What is left in between is what describes the
+        Their ratio is what matters. A column with about as many answers as
+        there are files -- the size of the file, the millisecond it was recorded
+        -- can name a file but can never put two of them together: those belong
+        in the `ignore` list of RamanData.averaged(). A column with a single
+        answer says nothing here at all and can be left out of any fingerprint
+        without changing a thing. What is left in between is what describes the
         measurements.
+
+        Saying nothing comes about in two ways, which `filled` tells apart and
+        which are worth different reactions. A column filled everywhere with the
+        same answer is a question this part of the study did not vary: exp 2 is
+        all raman, so 'modalite' says nothing there. A column filled nowhere is
+        a question it never asked at all: exp 2 numbers nothing with 'indice2'.
+        The first is a fact about the experiment, the second usually means the
+        way files are named changed between experiments.
 
         The table comes back sorted with the most changeable column first, which
         is the order in which it reads best: the accidents at the top, what
@@ -788,10 +796,14 @@ class DataFiles:
                 print(f"    say nothing here -- one answer or none -- and can be left out of "
                       f"a fingerprint without changing anything")
 
-            names_a_file = list(roles[roles['distinct'] == len(df)].index)
+            # Not only the columns with exactly one answer per file: a column
+            # with an answer for most of them is just as unusable, and those
+            # are the ones that quietly wreck a fingerprint. The same rule is
+            # used in validate_unique_metadata(), so the two reports agree.
+            names_a_file = list(roles[roles['distinct'] > len(df) / 2].index)
             if names_a_file:
                 print(f"\n    {names_a_file}")
-                print(f"    hold a different answer for every single file: they can name a "
+                print(f"    hold a different answer for nearly every file: they can name a "
                       f"file but can never put two of them together")
 
         return roles
@@ -1332,6 +1344,23 @@ class TestDataFiles(unittest.TestCase):
 
         self.assertEqual(int(roles.loc['absolute_path', 'distinct']), self.expected_files)
         self.assertEqual(roles.loc['absolute_path', 'per_file'], 1.0)
+
+    def test_062a_a_column_that_names_nearly_every_file_is_named_too(self):
+        """
+        Not only the columns with exactly one answer per file. A column with an
+        answer for most of them is just as unable to group anything, and those
+        are the ones that quietly ruin a fingerprint.
+        """
+        for number in range(self.expected_files):
+            write_data_file(self.root / "alpha" / f"sample3_dose45_zone1_{number}.txt",
+                            lines=tuple(f"{i}.0 {i}.0" for i in range(number + 1)))
+
+        files = self.made().initialize()
+        report = self.report_of(files.column_roles)
+
+        self.assertIn("nearly every file", report)
+        hint = report[report.index("nearly every file") - 400:report.index("nearly every file")]
+        self.assertIn("size_in_bytes", hint)
 
     def test_063_the_most_changeable_column_comes_first(self):
         files = self.made().initialize()
