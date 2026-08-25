@@ -15,6 +15,44 @@ import tempfile
 import warnings
 from platformdirs import user_cache_path
 
+def is_directory_usable(path, timeout=5):
+    """
+    Says whether a directory can really be read right now.
+
+    Path.exists() is not enough for a network share. The system remembers what
+    it was told about a folder, and keeps answering from memory long after the
+    share stopped responding: exists() says yes, is_dir() says yes, and the
+    first attempt to actually read something fails. Worse, a share that hangs
+    rather than fails makes the reading block for as long as the mount decides,
+    which can be minutes.
+
+    So this asks for the first entry of the directory, which is the cheapest
+    request that has to reach the other end, and it does so in a task of its
+    own with a time limit. Whatever happens -- a missing folder, a share that
+    answers with an error, a share that does not answer at all -- the answer
+    comes back within `timeout` seconds and it is false.
+
+    The task is left running if it never comes back: there is no way to
+    interrupt a read stuck in the system, but being a background task it does
+    not keep the program from ending.
+    """
+    answer = []
+
+    def look():
+        try:
+            with os.scandir(path) as entries:
+                next(iter(entries), None)      # empty is fine: it answered
+            answer.append(True)
+        except OSError:
+            answer.append(False)
+
+    thread = Thread(target=look, daemon=True)
+    thread.start()
+    thread.join(timeout)
+
+    return bool(answer) and answer[0]
+
+
 class DataFiles:
     r"""
     Collects the metadata of every data file in a directory into one table.
@@ -643,8 +681,12 @@ class DataFiles:
             else:
                 root = self.root
 
-            if not Path(root).exists():
-                raise ValueError(f"The path {root} does not exist")
+            # Not exists(): a network share that stopped answering still looks
+            # perfectly present, and the walk below would either return nothing
+            # at all or hang for minutes. Better to say so here.
+            if not is_directory_usable(root):
+                raise ValueError(f"The path {root} cannot be read. It may not exist, "
+                                 f"or it may be a network share that stopped answering.")
 
             next_progress_print = time.time() + 2
             for dirpath, dirs, files in os.walk(root):
@@ -917,6 +959,50 @@ class TestDataFiles(unittest.TestCase):
         missing = DataFiles(Path(self.temporary.name) / "nowhere")
         with self.assertRaises(Exception):
             missing.initialize()
+
+    def test_016_a_root_that_cannot_be_read(self):
+        """
+        A folder that is there but refuses to open is not a usable root.
+
+        This is what a network share looks like once it stops answering: the
+        system keeps saying the folder is there, because it remembers, and only
+        an attempt to read finds out otherwise.
+        """
+        forbidden = Path(self.temporary.name) / "forbidden"
+        forbidden.mkdir()
+        write_data_file(forbidden / "inside.txt")
+        os.chmod(forbidden, 0o000)
+        try:
+            self.assertTrue(forbidden.exists())          # it looks fine
+            self.assertFalse(is_directory_usable(forbidden))
+
+            with self.assertRaises(Exception):
+                DataFiles(forbidden).initialize()
+        finally:
+            os.chmod(forbidden, 0o755)
+
+    def test_017_a_directory_that_never_answers(self):
+        """
+        A share that hangs instead of failing must not hang the program.
+
+        There is no way to interrupt a read stuck in the system, so the check
+        gives up after a while and says no rather than waiting for a mount that
+        may take minutes to decide.
+        """
+        class NeverAnswers:
+            def __fspath__(self):
+                time.sleep(3600)
+                return "/"
+
+        start = time.time()
+        self.assertFalse(is_directory_usable(NeverAnswers(), timeout=0.5))
+        self.assertLess(time.time() - start, 5)
+
+    def test_018_an_empty_directory_is_usable(self):
+        """Having nothing in it is not the same as being unreachable."""
+        empty = Path(self.temporary.name) / "empty"
+        empty.mkdir()
+        self.assertTrue(is_directory_usable(empty))
 
     # ---- reading the names -----------------------------------------------
 
