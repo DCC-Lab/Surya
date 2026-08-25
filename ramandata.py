@@ -275,6 +275,123 @@ class RamanData:
 
         return self.meta[column].to_numpy()
 
+    def select(self, mask=None, **criteria):
+        r"""
+        Keeps only some of the spectra, and hands them back as a new RamanData.
+
+        The three experiments do not describe themselves in the same words: what
+        numbers a repetition in one is empty in another, a zone is named in one
+        and not in the other. Rather than teaching every method to work on part
+        of the data, the part is taken out once and everything that follows --
+        averaging, training, grouping -- happens on it as if it were the whole:
+
+            exp1 = raman.select(exp=1)
+            mean = exp1.averaged(ignore=['indice1', 'indice2', 'dizaine'])
+            X, y = mean.training_set('dose')
+            groups = mean.groups('souris')
+
+        A selection is written as the values the metadata must have. Several of
+        them must all be true at once, and a list offers a choice:
+
+            raman.select(exp=1, is_test=False)
+            raman.select(souris=[48, 39])
+            raman.select(zone=None)          # the files whose name says no zone
+
+        A mask made elsewhere is accepted too, which is how a selection built by
+        DataFiles is used here:
+
+            raman.select(mask=files.get_mask({'exp': 1}))
+
+        Such a mask describes every file that was found, including those that
+        never became a row of X -- an empty file, a spectrum of another length.
+        It is lined up on the spectra actually present rather than assumed to
+        match them.
+
+        Nothing is selected by guesswork: a column name that does not exist is
+        refused instead of being skipped, because a skipped criterion silently
+        returns everything, and a selection that matches nothing is refused as
+        well, because an empty dataset only fails much later and says nothing
+        about why.
+
+        This one is left untouched, so a table can be sliced several ways
+        without being read again:
+
+            for exp in (1, 2, 3):
+                raman.select(exp=exp).averaged(ignore=repetition_of[exp])
+
+        The result no longer carries its DataFiles: reading again would undo the
+        selection without saying so. Everything else -- averaging, training,
+        grouping, saving -- works exactly as before.
+
+        mask     : an optional boolean mask, either a pandas Series labelled by
+                   file (as DataFiles.get_mask() returns) or a plain array with
+                   one entry per spectrum.
+        criteria : one keyword per column, holding the value that column must
+                   have, a list of acceptable values, or None for the spectra
+                   where that column is empty. A column actually named 'mask'
+                   can only be selected through the mask argument.
+        """
+        if self.X is None:
+            raise ValueError("Nothing has been read yet: call initialize() first")
+
+        def matching(values, wanted):
+            """The rows where `values` holds `wanted`, or one of `wanted`."""
+            if isinstance(wanted, (list, tuple, set, frozenset, np.ndarray, pd.Series)):
+                wanted = list(wanted)
+            else:
+                wanted = [wanted]
+
+            # A missing value is a value here: 'the files whose name says no
+            # zone' is a real question, and isin() cannot answer it -- nothing
+            # is ever equal to a missing value, not even another one.
+            present = [value for value in wanted if not pd.isna(value)]
+            keep = values.isin(present)
+            if len(present) < len(wanted):
+                keep = keep | values.isna()
+
+            return keep
+
+        keep = pd.Series(True, index=self.meta.index)
+
+        if mask is not None:
+            if isinstance(mask, pd.Series):
+                aligned = mask.reindex(self.meta.index)
+                keep &= aligned.fillna(False).astype(bool)
+            else:
+                mask = np.asarray(mask)
+                if mask.shape != (len(self.meta),):
+                    raise ValueError(f"The mask holds {mask.size} entries, but there are "
+                                     f"{len(self.meta)} spectra to say yes or no about")
+                keep &= pd.Series(mask.astype(bool), index=self.meta.index)
+
+        unknown = [column for column in criteria if column not in self.meta.columns]
+        if unknown:
+            raise ValueError(f"No such column: {unknown}. A criterion on a column that does "
+                             f"not exist would quietly select everything instead of failing, "
+                             f"so it is refused here. The columns available are: "
+                             f"{list(self.meta.columns)}")
+
+        for column, wanted in criteria.items():
+            keep &= matching(self.meta[column], wanted)
+
+        chosen = keep.to_numpy()
+        if not chosen.any():
+            asked = dict(criteria)
+            raise ValueError(f"Nothing matches {asked if asked else 'the given mask'}: the "
+                             f"selection is empty. An empty dataset gives no error until much "
+                             f"later, and then says nothing about where it came from.")
+
+        result = RamanData()
+        result.X = self.X[chosen]
+        result.axis = self.axis
+        result.meta = self.meta[chosen]
+        result.expected_length = self.expected_length
+        result.files_offered = int(chosen.sum())
+
+        assert result.X.shape[0] == len(result.meta), "X and meta must describe the same spectra"
+
+        return result
+
     def averaged(self, ignore=(), on=None, verbose=True):
         r"""
         Averages together the spectra that describe the same measurement.
@@ -811,6 +928,140 @@ class TestRamanData(unittest.TestCase):
     def test_035_groups_before_initializing(self):
         with self.assertRaises(ValueError):
             RamanData(self.datafiles).groups('sample')
+
+    # ---- taking a part of the data --------------------------------------
+
+    def test_050_select_one_value(self):
+        raman = self.initialized()
+        part = raman.select(sample=1)
+
+        self.assertEqual(len(part), 10)
+        self.assertTrue((part.meta['sample'] == 1).all())
+        self.assertEqual(part.shape, (10, self.POINTS))
+
+    def test_051_several_criteria_must_all_be_true(self):
+        raman = self.initialized()
+        part = raman.select(sample=1, zone=2)
+
+        self.assertEqual(len(part), 5)
+        self.assertTrue((part.meta['zone'] == 2).all())
+
+    def test_052_a_list_offers_a_choice(self):
+        raman = self.initialized()
+
+        self.assertEqual(len(raman.select(zone=[1, 2])), self.expected_spectra)
+        self.assertEqual(len(raman.select(sample=[2])), 10)
+
+    def test_053_selecting_the_rows_where_a_column_is_empty(self):
+        """
+        'The files whose name says no zone' is a real question, and the usual
+        comparison cannot answer it: nothing is ever equal to a missing value.
+        """
+        write_spectrum_file(self.root / "sample1_dose0_elsewhere.txt", points=self.POINTS)
+        raman = self.initialized()
+
+        lonely = raman.select(zone=None)
+        self.assertEqual(len(lonely), 1)
+        self.assertTrue(lonely.meta['zone'].isna().all())
+
+        self.assertEqual(len(raman.select(zone=[1, 2, None])), self.expected_spectra + 1)
+
+    def test_054_a_mask_made_by_datafiles(self):
+        """
+        The mask describes every file that was found; the spectra are only those
+        that could be read. The two are lined up rather than assumed to match.
+        """
+        self.datafiles.initialize()
+        raman = RamanData(self.datafiles).initialize(verbose=False)
+        part = raman.select(mask=self.datafiles.get_mask({'sample': 2}))
+
+        self.assertEqual(len(part), 10)
+        self.assertTrue((part.meta['sample'] == 2).all())
+
+    def test_055_a_plain_array_as_a_mask(self):
+        raman = self.initialized()
+        every_other = np.arange(len(raman)) % 2 == 0
+        part = raman.select(mask=every_other)
+
+        self.assertEqual(len(part), self.expected_spectra // 2)
+        self.assertTrue(np.array_equal(part.X, raman.X[every_other]))
+
+    def test_056_a_mask_of_the_wrong_size(self):
+        raman = self.initialized()
+        with self.assertRaises(ValueError):
+            raman.select(mask=np.ones(3, dtype=bool))
+
+    def test_057_a_misspelled_column_is_refused(self):
+        """A skipped criterion would silently return everything."""
+        raman = self.initialized()
+        with self.assertRaises(ValueError):
+            raman.select(samlpe=1)
+
+    def test_058_a_selection_that_matches_nothing_is_refused(self):
+        raman = self.initialized()
+        with self.assertRaises(ValueError):
+            raman.select(sample=99)
+
+    def test_059_selecting_before_initializing(self):
+        with self.assertRaises(ValueError):
+            RamanData(self.datafiles).select(sample=1)
+
+    def test_05a_every_row_keeps_its_own_metadata(self):
+        """
+        The point of returning a new object rather than a mask: X and meta are
+        cut in the same movement, so they cannot come apart. Each spectrum here
+        holds a value that depends on its sample, which is what proves it.
+        """
+        raman = self.initialized()
+        part = raman.select(sample=2)
+
+        for row, (index, metadata) in enumerate(part.meta.iterrows()):
+            expected = 1000.0 + 100 * int(metadata['sample'])
+            self.assertAlmostEqual(part.X[row, 0], expected,
+                                   msg=f"row {row} does not hold the spectrum of {index}")
+
+    def test_05b_the_original_is_left_untouched(self):
+        raman = self.initialized()
+        before = raman.X.copy()
+        raman.select(sample=1)
+
+        self.assertEqual(len(raman), self.expected_spectra)
+        self.assertTrue(np.array_equal(raman.X, before))
+
+    def test_05c_a_selection_can_be_selected_again(self):
+        raman = self.initialized()
+        self.assertEqual(len(raman.select(sample=1).select(zone=2)), 5)
+
+    def test_05d_the_selection_is_averaged_trained_and_grouped(self):
+        """
+        What select() is for: a part of the data behaves like the whole for
+        everything that comes afterwards.
+        """
+        raman = self.initialized()
+        part = raman.select(sample=2)
+        mean = part.averaged(on=['sample', 'zone'], verbose=False)
+
+        self.assertEqual(len(mean), 2)
+        self.assertTrue((mean.meta['n_averaged'] == 5).all())
+
+        X, y = mean.training_set('dose')
+        self.assertEqual(X.shape, (2, self.POINTS))
+        self.assertEqual(list(y), [45.0, 45.0])
+        self.assertEqual(list(mean.groups('sample')), [2, 2])
+
+    def test_05e_reading_again_is_refused_rather_than_undoing_the_selection(self):
+        raman = self.initialized()
+        with self.assertRaises(ValueError):
+            raman.select(sample=1).initialize()
+
+    def test_05f_a_selection_can_be_saved_and_read_back(self):
+        raman = self.initialized()
+        part = raman.select(sample=1)
+        path = part.save(Path(self.temporary.name) / "sample1")
+
+        again = RamanData.read(path)
+        self.assertTrue(np.array_equal(again.X, part.X))
+        self.assertEqual(list(again.meta.index), list(part.meta.index))
 
     # ---- averaging the repetitions --------------------------------------
 
