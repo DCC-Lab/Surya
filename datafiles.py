@@ -17,6 +17,7 @@ from contextlib import redirect_stdout
 import warnings
 from platformdirs import user_cache_path
 
+
 def is_directory_usable(path, timeout=5):
     """
     Says whether a directory can really be read right now.
@@ -43,7 +44,7 @@ def is_directory_usable(path, timeout=5):
     def look():
         try:
             with os.scandir(path) as entries:
-                next(iter(entries), None)      # empty is fine: it answered
+                next(iter(entries), None)  # empty is fine: it answered
             answer.append(True)
         except OSError:
             answer.append(False)
@@ -108,7 +109,9 @@ class DataFiles:
     valid_marker = Path("local-copy-valid")
     progress_delay = 3
 
-    def __init__(self, root = None, extensions = ['.txt'], methods = None, metadata_patterns = None):
+    def __init__(
+        self, root=None, extensions=[".txt"], methods=None, metadata_patterns=None
+    ):
         """
         Sets up the object without reading anything from disk yet.
 
@@ -117,7 +120,7 @@ class DataFiles:
                      Every other kind is ignored.
         methods    : the functions that know how to extract metadata. Each one
                      receives (root, relative_path) and returns a dictionary.
-                     Two methods are already always included: 
+                     Two methods are already always included:
                         - extract_properties_from_patterns, using named regex (see the function)
                         - extract_extended_properties_from_path, file size, etc..
 
@@ -127,7 +130,9 @@ class DataFiles:
         self.extensions = extensions
 
         self.metadata_methods = methods if methods is not None else []
-        self.metadata_patterns = metadata_patterns if metadata_patterns is not None else []
+        self.metadata_patterns = (
+            metadata_patterns if metadata_patterns is not None else []
+        )
 
         self.data_files_paths = Queue()
         self._data_files_lock = Lock()
@@ -165,14 +170,18 @@ class DataFiles:
             # the measurements of another experiment.
             if name_found != self.dataset_name:
                 if not self.cache_warning_issued:
-                    print(f"Warning: {self.local_root} holds a copy of '{name_found}', "
-                          f"not of '{self.dataset_name}'. It will be ignored.")
+                    print(
+                        f"Warning: {self.local_root} holds a copy of '{name_found}', "
+                        f"not of '{self.dataset_name}'. It will be ignored."
+                    )
                     self.cache_warning_issued = True
                 return False
 
             if path_found != self.root_signature and not self.cache_warning_issued:
-                print(f"Note: the local copy of '{self.dataset_name}' was made from "
-                      f"'{path_found}', which is another way of reaching the same data.")
+                print(
+                    f"Note: the local copy of '{self.dataset_name}' was made from "
+                    f"'{path_found}', which is another way of reaching the same data."
+                )
                 self.cache_warning_issued = True
 
             return True
@@ -215,7 +224,7 @@ class DataFiles:
         try:
             root = self.root.resolve()
         except OSError:
-            root = self.root.absolute()      # the drive may be unreachable: do not block
+            root = self.root.absolute()  # the drive may be unreachable: do not block
 
         return root.name.lower() or "root"
 
@@ -247,7 +256,7 @@ class DataFiles:
         try:
             root = self.root.resolve()
         except OSError:
-            root = self.root.absolute()      # the drive may be unreachable: do not block
+            root = self.root.absolute()  # the drive may be unreachable: do not block
 
         return os.path.normcase(str(root)).lower()
 
@@ -327,7 +336,7 @@ class DataFiles:
         if method not in self.metadata_methods:
             self.metadata_methods.append(method)
 
-    def initialize(self, methods = None, create_local_copy = False):
+    def initialize(self, methods=None, create_local_copy=False):
         """
         Does all the work: walks the files and fills self.dataframe.
 
@@ -350,7 +359,9 @@ class DataFiles:
                 self.register_metadata_extraction_method(method)
 
         self.register_metadata_extraction_method(self.extract_properties_from_patterns)
-        self.register_metadata_extraction_method(self.extract_extended_properties_from_path)
+        self.register_metadata_extraction_method(
+            self.extract_extended_properties_from_path
+        )
 
         threads = []
         queue = deque()
@@ -359,7 +370,9 @@ class DataFiles:
         # if self.has_valid_local_copy:
         #     print(f"Delete {self.local_root / self.valid_marker} to avoid cache")
 
-        threads.append(Thread(target=self.get_data_file_paths, args=( (queue, copy_queue), ) ))
+        threads.append(
+            Thread(target=self.get_data_file_paths, args=((queue, copy_queue),))
+        )
         threads.append(Thread(target=self.get_files_metadata, args=(queue, True)))
         threads.append(Thread(target=self.get_files_metadata, args=(queue, False)))
 
@@ -378,8 +391,8 @@ class DataFiles:
             raise self.errors[0]
 
         if time.time() - start_time > 10 and not self.has_valid_local_copy:
-            copy_thread = Thread(target=self.copy_files_locally, args=(copy_queue, ))
-            copy_thread.start() # Attempt to copy in the background
+            copy_thread = Thread(target=self.copy_files_locally, args=(copy_queue,))
+            copy_thread.start()  # Attempt to copy in the background
 
         self.dataframe = pd.DataFrame(self._properties)
 
@@ -387,8 +400,8 @@ class DataFiles:
         # are built by several tasks at once, so the order they end up in is
         # different every run: a plain row number would designate a different
         # file each time the program is started. The file name does not move.
-        assert self.dataframe['file'].is_unique, "Two rows describe the same file"
-        self.dataframe = self.dataframe.set_index('file')
+        assert self.dataframe["file"].is_unique, "Two rows describe the same file"
+        self.dataframe = self.dataframe.set_index("file")
 
         # A column of whole numbers that holds a single missing value is turned
         # into decimals by pandas: sample 39 is then shown as 39.0, which is
@@ -413,7 +426,6 @@ class DataFiles:
 
         return self
 
-
     def finalize(self, methods):
         """
         Applies a series of corrections to the table once it is built.
@@ -430,7 +442,9 @@ class DataFiles:
             if isinstance(ret, pd.DataFrame):
                 self.dataframe = ret
             else:
-                raise ValueError("The finalize method()s must return the final dataframe")
+                raise ValueError(
+                    "The finalize method()s must return the final dataframe"
+                )
 
     def copy_files_locally(self, queue):
         """
@@ -465,14 +479,19 @@ class DataFiles:
                     break
 
                 dest_path = self.local_root / relative_path
-                files +=  1
-                if dest_path.exists() and dest_path.stat().st_size == absolute_path.stat().st_size:
+                files += 1
+                if (
+                    dest_path.exists()
+                    and dest_path.stat().st_size == absolute_path.stat().st_size
+                ):
                     continue
 
                 if not dest_path.parent.exists():
                     dest_path.parent.mkdir(parents=True, exist_ok=True)
 
-                shutil.copy2(absolute_path, dest_path)         # copy2 preserves the modification dates
+                shutil.copy2(
+                    absolute_path, dest_path
+                )  # copy2 preserves the modification dates
 
                 if time.time() > next_time:
                     next_time = time.time() + self.progress_delay
@@ -532,7 +551,9 @@ class DataFiles:
                     # float() only understands a dot, so a number written the
                     # French way has to be rewritten before being converted:
                     # the grouping spaces go away, the comma becomes a dot.
-                    properties[key] = float(re.sub(r"[\u00a0 ]", "", value).replace(",", "."))
+                    properties[key] = float(
+                        re.sub(r"[\u00a0 ]", "", value).replace(",", ".")
+                    )
                 else:
                     # Anything that is not a number is a word, and the same word
                     # is written 'Raman' in one folder and 'raman' in the next.
@@ -542,17 +563,18 @@ class DataFiles:
 
             return properties
 
-
         file_path = str(Path(root) / Path(file_relative_path))
 
         # Every 'is_' group of every pattern starts out false, so that a word
         # which is simply not there gives false rather than nothing at all. The
         # names are read from the patterns themselves, which is what keeps this
         # method from having to know which words anyone is looking for.
-        properties = {name: False
-                      for pattern in self.metadata_patterns
-                      for name in re.compile(pattern).groupindex
-                      if name.startswith("is_")}
+        properties = {
+            name: False
+            for pattern in self.metadata_patterns
+            for name in re.compile(pattern).groupindex
+            if name.startswith("is_")
+        }
 
         for pattern in self.metadata_patterns:
             match = re.search(pattern, file_path, re.IGNORECASE)
@@ -560,13 +582,15 @@ class DataFiles:
                 properties.update(_to_normalized_values(match.groupdict()))
 
         # A time is spread over four groups that only mean something together.
-        if properties.get('heure') is not None:
-            properties['time'] = datetime.time(hour=properties['heure'],
-                                               minute=properties['minutes'],
-                                               second=properties['s'],
-                                               microsecond=properties['ms'] * 1000)
+        if properties.get("heure") is not None:
+            properties["time"] = datetime.time(
+                hour=properties["heure"],
+                minute=properties["minutes"],
+                second=properties["s"],
+                microsecond=properties["ms"] * 1000,
+            )
 
-        properties['file'] = str(file_relative_path)
+        properties["file"] = str(file_relative_path)
 
         return properties
 
@@ -582,14 +606,13 @@ class DataFiles:
         # Fetch file_path stats (slow)
         try:
             file_info = Path(file_path).stat()
-            
-            extended_properties['size_in_bytes'] = file_info.st_size
+
+            extended_properties["size_in_bytes"] = file_info.st_size
             # Others possible
         except Exception as e:
-            pass # We just give up if unable to do it
+            pass  # We just give up if unable to do it
 
         return extended_properties
-
 
     def get_files_metadata(self, queue, progress):
         """
@@ -626,11 +649,10 @@ class DataFiles:
                 if element is not None:
                     absolute_path, relative_path = element
 
-                    properties = {"file":relative_path,"absolute_path":absolute_path}
+                    properties = {"file": relative_path, "absolute_path": absolute_path}
 
                     for method in self.metadata_methods:
                         properties.update(method(root, relative_path))
-
 
                     with self._data_files_lock:
                         self._properties.append(properties)
@@ -640,7 +662,7 @@ class DataFiles:
                             next_time = time.time() + self.progress_delay
 
                 else:
-                    queue.appendleft(None) # Put back for other tasks
+                    queue.appendleft(None)  # Put back for other tasks
                     break
 
         except Exception as error:
@@ -687,13 +709,17 @@ class DataFiles:
             # perfectly present, and the walk below would either return nothing
             # at all or hang for minutes. Better to say so here.
             if not is_directory_usable(root):
-                raise ValueError(f"The path {root} cannot be read. It may not exist, "
-                                 f"or it may be a network share that stopped answering.")
+                raise ValueError(
+                    f"The path {root} cannot be read. It may not exist, "
+                    f"or it may be a network share that stopped answering."
+                )
 
             next_progress_print = time.time() + 2
             for dirpath, dirs, files in os.walk(root):
                 for name in files:
-                    absolute_path = unicodedata.normalize('NFC', os.path.join(dirpath, name))
+                    absolute_path = unicodedata.normalize(
+                        "NFC", os.path.join(dirpath, name)
+                    )
                     if Path(absolute_path).suffix not in self.extensions:
                         continue
 
@@ -701,18 +727,20 @@ class DataFiles:
                     # every part of the path works on Windows too, where the
                     # separator is a backslash.
                     relative_parts = Path(absolute_path).relative_to(root).parts
-                    if not invisible_files and any(part.startswith(".") for part in relative_parts):
+                    if not invisible_files and any(
+                        part.startswith(".") for part in relative_parts
+                    ):
                         continue
 
                     # Files that belong to the machinery, not to the experiment:
                     # our own path cache, and the metadata companions that macOS
                     # scatters over network drives. They are not spectra, and
                     # they would show up as a row of missing values.
-                    if name.startswith("._") :
+                    if name.startswith("._"):
                         continue
 
                     if progress and time.time() > next_progress_print:
-                        print(".", end = "", flush=True)
+                        print(".", end="", flush=True)
                         next_progress_print = time.time() + 2
 
                     file_relative_path = str(Path(absolute_path).relative_to(root))
@@ -776,40 +804,53 @@ class DataFiles:
         if len(df) == 0:
             raise ValueError("No file is selected: there is nothing to describe")
 
-        roles = pd.DataFrame({
-            'filled': df.notna().sum(),
-            'missing': df.isna().sum(),
-            'distinct': df.nunique(dropna=False),
-        })
-        roles['per_file'] = (roles['distinct'] / len(df)).round(3)
-        roles['says_nothing'] = roles['distinct'] <= 1
-        roles = roles.sort_values('per_file', ascending=False)
-        roles.index.name = 'column'
+        roles = pd.DataFrame(
+            {
+                "filled": df.notna().sum(),
+                "missing": df.isna().sum(),
+                "distinct": df.nunique(dropna=False),
+            }
+        )
+        roles["per_file"] = (roles["distinct"] / len(df)).round(3)
+        roles["says_nothing"] = roles["distinct"] <= 1
+        roles = roles.sort_values("per_file", ascending=False)
+        roles.index.name = "column"
 
         if verbose:
             print(f"{len(df)} files, {len(roles)} columns")
             print(roles.to_string())
 
-            silent = list(roles[roles['says_nothing']].index)
+            silent = list(roles[roles["says_nothing"]].index)
             if silent:
                 print(f"\n    {silent}")
-                print(f"    say nothing here -- one answer or none -- and can be left out of "
-                      f"a fingerprint without changing anything")
+                print(
+                    f"    say nothing here -- one answer or none -- and can be left out of "
+                    f"a fingerprint without changing anything"
+                )
 
             # Not only the columns with exactly one answer per file: a column
             # with an answer for most of them is just as unusable, and those
             # are the ones that quietly wreck a fingerprint. The same rule is
             # used in validate_unique_metadata(), so the two reports agree.
-            names_a_file = list(roles[roles['distinct'] > len(df) / 2].index)
+            names_a_file = list(roles[roles["distinct"] > len(df) / 2].index)
             if names_a_file:
                 print(f"\n    {names_a_file}")
-                print(f"    hold a different answer for nearly every file: they can name a "
-                      f"file but can never put two of them together")
+                print(
+                    f"    hold a different answer for nearly every file: they can name a "
+                    f"file but can never put two of them together"
+                )
 
         return roles
 
-    def validate_unique_metadata(self, columns=None, mask=None, ignore=("absolute_path",),
-                                 ignore_prefixes=("Spectrum:",), verbose=True, show=5):
+    def validate_unique_metadata(
+        self,
+        columns=None,
+        mask=None,
+        ignore=("absolute_path",),
+        ignore_prefixes=("Spectrum:",),
+        verbose=True,
+        show=5,
+    ):
         r"""
         Checks that a set of columns tells every file apart, and says what is
         missing when it does not.
@@ -877,13 +918,18 @@ class DataFiles:
         prefixes = tuple(ignore_prefixes)
 
         if columns is None:
-            chosen = [c for c in df.columns
-                      if c not in left_out and not c.startswith(prefixes)]
+            chosen = [
+                c
+                for c in df.columns
+                if c not in left_out and not c.startswith(prefixes)
+            ]
         else:
             unknown = [c for c in columns if c not in df.columns]
             if unknown:
-                raise ValueError(f"No such column: {unknown}. The columns available are: "
-                                 f"{list(df.columns)}")
+                raise ValueError(
+                    f"No such column: {unknown}. The columns available are: "
+                    f"{list(df.columns)}"
+                )
             chosen = list(columns)
 
         if not chosen:
@@ -905,11 +951,16 @@ class DataFiles:
             # so that it holds what the names actually said. They are kept in the
             # line that gets printed, written as a dash, because a column that
             # said nothing is most of the reason two files look alike.
-            signature = tuple(sorted(((c, v) for c, v in zip(chosen, key) if pd.notna(v)),
-                                     key=lambda pair: str(pair[0])))
+            signature = tuple(
+                sorted(
+                    ((c, v) for c, v in zip(chosen, key) if pd.notna(v)),
+                    key=lambda pair: str(pair[0]),
+                )
+            )
             duplicates[signature] = list(rows.index)
-            readable[signature] = " ".join(f"{c}={'-' if pd.isna(v) else v}"
-                                           for c, v in zip(chosen, key))
+            readable[signature] = " ".join(
+                f"{c}={'-' if pd.isna(v) else v}" for c, v in zip(chosen, key)
+            )
 
         if not verbose:
             return duplicates
@@ -919,43 +970,64 @@ class DataFiles:
             return duplicates
 
         ambiguous = df.loc[[name for names in duplicates.values() for name in names]]
-        print(f"{len(ambiguous)} of {len(df)} files are not told apart by {chosen} "
-              f"({len(duplicates)} groups)")
+        print(
+            f"{len(ambiguous)} of {len(df)} files are not told apart by {chosen} "
+            f"({len(duplicates)} groups)"
+        )
 
         # What differs between files the chosen columns cannot separate is
         # exactly what the identifier is missing. Counting the groups each
         # column would separate ranks them by how much they would help.
         in_groups = ambiguous.groupby(chosen, dropna=False, sort=False)
-        elsewhere = [c for c in df.columns
-                     if c not in chosen and c not in left_out and not c.startswith(prefixes)]
+        elsewhere = [
+            c
+            for c in df.columns
+            if c not in chosen and c not in left_out and not c.startswith(prefixes)
+        ]
 
         would_separate = {}
         for column in elsewhere:
             groups = int((in_groups[column].nunique(dropna=False) > 1).sum())
             if groups:
-                would_separate[column] = (groups, int(ambiguous[column].nunique(dropna=False)))
+                would_separate[column] = (
+                    groups,
+                    int(ambiguous[column].nunique(dropna=False)),
+                )
 
         if would_separate:
-            print(f"\n    what differs between those files, and how many of the "
-                  f"{len(duplicates)} groups it would separate:")
-            for column, (groups, answers) in sorted(would_separate.items(),
-                                                    key=lambda item: -item[1][0]):
+            print(
+                f"\n    what differs between those files, and how many of the "
+                f"{len(duplicates)} groups it would separate:"
+            )
+            for column, (groups, answers) in sorted(
+                would_separate.items(), key=lambda item: -item[1][0]
+            ):
                 # A column with about as many answers as there are files is an
                 # accident of the recording rather than a description of it: it
                 # separates everything and means nothing.
-                hint = "   <- nearly one answer per file" if answers > len(ambiguous) / 2 else ""
-                print(f"        {column:<20s} {answers:6d} answers   "
-                      f"{groups:6d} groups{hint}")
+                hint = (
+                    "   <- nearly one answer per file"
+                    if answers > len(ambiguous) / 2
+                    else ""
+                )
+                print(
+                    f"        {column:<20s} {answers:6d} answers   "
+                    f"{groups:6d} groups{hint}"
+                )
 
         never_said = {c: int(ambiguous[c].isna().sum()) for c in chosen}
         never_said = {c: n for c, n in never_said.items() if n}
         if never_said:
             print(f"\n    columns of the identifier that those files never said:")
-            for column, how_many in sorted(never_said.items(), key=lambda item: -item[1]):
+            for column, how_many in sorted(
+                never_said.items(), key=lambda item: -item[1]
+            ):
                 print(f"        {column:<20s} empty for {how_many} of {len(ambiguous)}")
-            print(f"    where a column is empty there is nothing left to separate the files "
-                  f"with. That is not a missing column, it is a missing name: either the "
-                  f"files are renamed, or they are left out of the averaging.")
+            print(
+                f"    where a column is empty there is nothing left to separate the files "
+                f"with. That is not a missing column, it is a missing name: either the "
+                f"files are renamed, or they are left out of the averaging."
+            )
 
         print(f"\n    for instance:")
         for signature, names in list(duplicates.items())[:show]:
@@ -975,11 +1047,11 @@ class DataFiles:
         for key, value in mask_as_dict.items():
             if key not in df.columns:
                 continue
-            mask &= (df[key].notna() & (df[key] == value))
+            mask &= df[key].notna() & (df[key] == value)
 
         return mask
 
-    def read_data_files(self, reader_method, mask = None):
+    def read_data_files(self, reader_method, mask=None):
         """
         Reads the actual content of the data files, for instance the spectra.
 
@@ -1006,19 +1078,19 @@ class DataFiles:
             df = self.dataframe[mask]
 
         if not df.index.is_unique:
-            raise ValueError("The dataframe index has duplicates: it cannot be used to match the files to their content")
+            raise ValueError(
+                "The dataframe index has duplicates: it cannot be used to match the files to their content"
+            )
 
         files_data = {}
         next_time = time.time() + self.progress_delay
-        for index, absolute_path in df['absolute_path'].items():
+        for index, absolute_path in df["absolute_path"].items():
             files_data[index] = reader_method(absolute_path)
             if time.time() > next_time:
                 print(f"{len(files_data)} of {len(df)} files read")
                 next_time = time.time() + self.progress_delay
 
         return files_data
-
-
 
 
 def write_data_file(path, lines=("1.0 10.0", "2.0 20.0")):
@@ -1077,7 +1149,9 @@ class TestDataFiles(unittest.TestCase):
             for zone in (1, 2):
                 folder = self.root / "alpha" / f"sample{sample}" / f"zone{zone}"
                 for number in range(3):
-                    write_data_file(folder / f"sample{sample}_dose45_zone{zone}_{number}.txt")
+                    write_data_file(
+                        folder / f"sample{sample}_dose45_zone{zone}_{number}.txt"
+                    )
                     self.expected_files += 1
 
         # The cache is shared by every instance, so it is moved aside for the
@@ -1117,10 +1191,12 @@ class TestDataFiles(unittest.TestCase):
         """
         files = self.made().initialize()
 
-        self.assertEqual(files.dataframe.index.name, 'file')
+        self.assertEqual(files.dataframe.index.name, "file")
         self.assertTrue(files.dataframe.index.is_unique)
-        self.assertIn('sample1/zone1/sample1_dose45_zone1_0.txt',
-                      {str(Path(i).relative_to('alpha')) for i in files.dataframe.index})
+        self.assertIn(
+            "sample1/zone1/sample1_dose45_zone1_0.txt",
+            {str(Path(i).relative_to("alpha")) for i in files.dataframe.index},
+        )
 
     def test_012_only_the_wanted_extensions(self):
         write_data_file(self.root / "alpha" / "notes.md")
@@ -1132,7 +1208,7 @@ class TestDataFiles(unittest.TestCase):
     def test_013_several_extensions_at_once(self):
         write_data_file(self.root / "alpha" / "table.csv")
 
-        files = self.made(extensions=['.txt', '.csv']).initialize()
+        files = self.made(extensions=[".txt", ".csv"]).initialize()
         self.assertEqual(len(files.dataframe), self.expected_files + 1)
 
     def test_014_hidden_files_and_folders_are_left_out(self):
@@ -1160,7 +1236,7 @@ class TestDataFiles(unittest.TestCase):
         write_data_file(forbidden / "inside.txt")
         os.chmod(forbidden, 0o000)
         try:
-            self.assertTrue(forbidden.exists())          # it looks fine
+            self.assertTrue(forbidden.exists())  # it looks fine
             self.assertFalse(is_directory_usable(forbidden))
 
             with self.assertRaises(Exception):
@@ -1176,6 +1252,7 @@ class TestDataFiles(unittest.TestCase):
         gives up after a while and says no rather than waiting for a mount that
         may take minutes to decide.
         """
+
         class NeverAnswers:
             def __fspath__(self):
                 time.sleep(3600)
@@ -1197,20 +1274,20 @@ class TestDataFiles(unittest.TestCase):
         files = self.made().initialize()
         row = files.dataframe.iloc[0]
 
-        self.assertIn(row['sample'], (1, 2))
-        self.assertEqual(row['dose'], 45)
-        self.assertEqual(row['mode'], 'alpha')
+        self.assertIn(row["sample"], (1, 2))
+        self.assertEqual(row["dose"], 45)
+        self.assertEqual(row["mode"], "alpha")
 
     def test_021_a_whole_number_stays_a_whole_number(self):
         """45 must not become 45.0: it exports badly and reads worse."""
         files = self.made().initialize()
-        self.assertIsInstance(files.dataframe.iloc[0]['sample'], (int, np.integer))
+        self.assertIsInstance(files.dataframe.iloc[0]["sample"], (int, np.integer))
 
     def test_022_leading_zeros_are_still_numbers(self):
         write_data_file(self.root / "alpha" / "sample007_dose45_zone1_0.txt")
 
         files = self.made().initialize()
-        samples = set(files.dataframe['sample'].dropna())
+        samples = set(files.dataframe["sample"].dropna())
         self.assertIn(7, samples)
 
     def test_023_a_decimal_written_the_french_way(self):
@@ -1218,7 +1295,7 @@ class TestDataFiles(unittest.TestCase):
         write_data_file(self.root / "alpha" / "sample3_dose2,5_zone1_0.txt")
 
         files = self.made().initialize()
-        doses = set(files.dataframe['dose'].dropna())
+        doses = set(files.dataframe["dose"].dropna())
         self.assertIn(2.5, doses)
 
     def test_024_words_are_lowercased(self):
@@ -1226,7 +1303,7 @@ class TestDataFiles(unittest.TestCase):
         write_data_file(self.root / "BETA" / "sample9_dose45_zone1_0.txt")
 
         files = self.made().initialize()
-        self.assertEqual(set(files.dataframe['mode'].dropna()), {'alpha', 'beta'})
+        self.assertEqual(set(files.dataframe["mode"].dropna()), {"alpha", "beta"})
 
     def test_025_presence_groups_are_true_or_false(self):
         write_data_file(self.root / "alpha" / "test" / "sample8_dose45_zone1_0.txt")
@@ -1234,8 +1311,8 @@ class TestDataFiles(unittest.TestCase):
         files = self.made().initialize()
         df = files.dataframe
 
-        self.assertEqual(df['is_test'].dtype, bool)
-        self.assertEqual(int(df['is_test'].sum()), 1)
+        self.assertEqual(df["is_test"].dtype, bool)
+        self.assertEqual(int(df["is_test"].sum()), 1)
 
     def test_026_a_presence_group_is_never_missing(self):
         """
@@ -1246,15 +1323,15 @@ class TestDataFiles(unittest.TestCase):
         files = self.made().initialize()
         df = files.dataframe
 
-        self.assertEqual(int(df['is_reference'].isna().sum()), 0)
-        self.assertEqual(int(df['is_reference'].sum()), 0)
+        self.assertEqual(int(df["is_reference"].isna().sum()), 0)
+        self.assertEqual(int(df["is_reference"].sum()), 0)
 
     def test_027_extraction_methods_are_merged_in(self):
         def extra(root, relative_path):
-            return {'extra': 'yes'}
+            return {"extra": "yes"}
 
         files = self.made(methods=[extra]).initialize()
-        self.assertTrue((files.dataframe['extra'] == 'yes').all())
+        self.assertTrue((files.dataframe["extra"] == "yes").all())
 
     def test_028_a_method_is_never_registered_twice(self):
         def extra(root, relative_path):
@@ -1273,15 +1350,16 @@ class TestDataFiles(unittest.TestCase):
 
     def test_030_get_mask(self):
         files = self.made().initialize()
-        mask = files.get_mask({'sample': 1})
+        mask = files.get_mask({"sample": 1})
 
         self.assertEqual(int(mask.sum()), 6)
-        self.assertTrue((files.dataframe[mask]['sample'] == 1).all())
+        self.assertTrue((files.dataframe[mask]["sample"] == 1).all())
 
     def test_031_get_mask_ignores_unknown_columns(self):
         files = self.made().initialize()
-        self.assertEqual(int(files.get_mask({'nonexistent': 3}).sum()),
-                         self.expected_files)
+        self.assertEqual(
+            int(files.get_mask({"nonexistent": 3}).sum()), self.expected_files
+        )
 
     def test_032_validate_finds_nothing_when_names_differ(self):
         files = self.made().initialize()
@@ -1289,7 +1367,9 @@ class TestDataFiles(unittest.TestCase):
 
     def test_033_validate_finds_two_files_that_say_the_same(self):
         """Two names that carry the same metadata are an acquisition mistake."""
-        write_data_file(self.root / "alpha" / "elsewhere" / "sample1_dose45_zone1_0.txt")
+        write_data_file(
+            self.root / "alpha" / "elsewhere" / "sample1_dose45_zone1_0.txt"
+        )
 
         files = self.made().initialize()
         duplicates = files.validate_unique_metadata(verbose=False)
@@ -1299,7 +1379,7 @@ class TestDataFiles(unittest.TestCase):
 
     def test_034_finalize_applies_the_corrections(self):
         def keep_first_sample(df):
-            return df[df['sample'] == 1]
+            return df[df["sample"] == 1]
 
         files = self.made().initialize()
         files.finalize([keep_first_sample])
@@ -1307,7 +1387,7 @@ class TestDataFiles(unittest.TestCase):
 
     def test_035_finalize_refuses_a_method_that_returns_nothing(self):
         def forgets_to_return(df):
-            df['new'] = 1
+            df["new"] = 1
 
         files = self.made().initialize()
         with self.assertRaises(ValueError):
@@ -1327,23 +1407,25 @@ class TestDataFiles(unittest.TestCase):
         roles = files.column_roles(verbose=False)
 
         self.assertEqual(sorted(roles.index), sorted(files.dataframe.columns))
-        self.assertEqual(int(roles.loc['sample', 'filled']), self.expected_files)
-        self.assertEqual(int(roles.loc['sample', 'distinct']), 2)
+        self.assertEqual(int(roles.loc["sample", "filled"]), self.expected_files)
+        self.assertEqual(int(roles.loc["sample", "distinct"]), 2)
 
     def test_061_a_column_with_one_answer_says_nothing(self):
         """Every file here was written in mode alpha, so the column is useless."""
         files = self.made().initialize()
         roles = files.column_roles(verbose=False)
 
-        self.assertTrue(roles.loc['mode', 'says_nothing'])
-        self.assertFalse(roles.loc['zone', 'says_nothing'])
+        self.assertTrue(roles.loc["mode", "says_nothing"])
+        self.assertFalse(roles.loc["zone", "says_nothing"])
 
     def test_062_a_column_that_names_a_file_can_group_nothing(self):
         files = self.made().initialize()
         roles = files.column_roles(verbose=False)
 
-        self.assertEqual(int(roles.loc['absolute_path', 'distinct']), self.expected_files)
-        self.assertEqual(roles.loc['absolute_path', 'per_file'], 1.0)
+        self.assertEqual(
+            int(roles.loc["absolute_path", "distinct"]), self.expected_files
+        )
+        self.assertEqual(roles.loc["absolute_path", "per_file"], 1.0)
 
     def test_062a_a_column_that_names_nearly_every_file_is_named_too(self):
         """
@@ -1352,22 +1434,26 @@ class TestDataFiles(unittest.TestCase):
         are the ones that quietly ruin a fingerprint.
         """
         for number in range(self.expected_files):
-            write_data_file(self.root / "alpha" / f"sample3_dose45_zone1_{number}.txt",
-                            lines=tuple(f"{i}.0 {i}.0" for i in range(number + 1)))
+            write_data_file(
+                self.root / "alpha" / f"sample3_dose45_zone1_{number}.txt",
+                lines=tuple(f"{i}.0 {i}.0" for i in range(number + 1)),
+            )
 
         files = self.made().initialize()
         report = self.report_of(files.column_roles)
 
         self.assertIn("nearly every file", report)
-        hint = report[report.index("nearly every file") - 400:report.index("nearly every file")]
+        hint = report[
+            report.index("nearly every file") - 400 : report.index("nearly every file")
+        ]
         self.assertIn("size_in_bytes", hint)
 
     def test_063_the_most_changeable_column_comes_first(self):
         files = self.made().initialize()
         roles = files.column_roles(verbose=False)
 
-        self.assertEqual(roles.index[0], 'absolute_path')
-        self.assertTrue(roles['per_file'].is_monotonic_decreasing)
+        self.assertEqual(roles.index[0], "absolute_path")
+        self.assertTrue(roles["per_file"].is_monotonic_decreasing)
 
     def test_064_a_column_can_say_nothing_in_one_part_only(self):
         """
@@ -1376,15 +1462,17 @@ class TestDataFiles(unittest.TestCase):
         """
         files = self.made().initialize()
 
-        self.assertFalse(files.column_roles(verbose=False).loc['sample', 'says_nothing'])
-        one = files.column_roles(mask=files.get_mask({'sample': 1}), verbose=False)
-        self.assertTrue(one.loc['sample', 'says_nothing'])
-        self.assertEqual(int(one['filled'].max()), self.expected_files // 2)
+        self.assertFalse(
+            files.column_roles(verbose=False).loc["sample", "says_nothing"]
+        )
+        one = files.column_roles(mask=files.get_mask({"sample": 1}), verbose=False)
+        self.assertTrue(one.loc["sample", "says_nothing"])
+        self.assertEqual(int(one["filled"].max()), self.expected_files // 2)
 
     def test_065_describing_nothing_at_all(self):
         files = self.made().initialize()
         with self.assertRaises(ValueError):
-            files.column_roles(mask=files.get_mask({'sample': 99}), verbose=False)
+            files.column_roles(mask=files.get_mask({"sample": 99}), verbose=False)
 
     # ---- is this what identifies a file? ------------------------------------
 
@@ -1392,12 +1480,15 @@ class TestDataFiles(unittest.TestCase):
         """The three repetitions of a zone are alike until 'number' is added."""
         files = self.made().initialize()
 
-        duplicates = files.validate_unique_metadata(columns=['sample', 'zone'], verbose=False)
-        self.assertEqual(len(duplicates), 4)                 # 2 samples x 2 zones
+        duplicates = files.validate_unique_metadata(
+            columns=["sample", "zone"], verbose=False
+        )
+        self.assertEqual(len(duplicates), 4)  # 2 samples x 2 zones
         self.assertTrue(all(len(names) == 3 for names in duplicates.values()))
 
-        enough = files.validate_unique_metadata(columns=['sample', 'zone', 'number'],
-                                                verbose=False)
+        enough = files.validate_unique_metadata(
+            columns=["sample", "zone", "number"], verbose=False
+        )
         self.assertEqual(enough, {})
 
     def test_067_the_report_names_the_missing_column(self):
@@ -1406,7 +1497,9 @@ class TestDataFiles(unittest.TestCase):
         column that would tell them apart'.
         """
         files = self.made().initialize()
-        report = self.report_of(files.validate_unique_metadata, columns=['sample', 'zone'])
+        report = self.report_of(
+            files.validate_unique_metadata, columns=["sample", "zone"]
+        )
 
         self.assertIn("what differs", report)
         self.assertIn("number", report)
@@ -1422,51 +1515,60 @@ class TestDataFiles(unittest.TestCase):
         write_data_file(self.root / "alpha" / "aside" / "sample1_dose45_0.txt")
 
         files = self.made().initialize()
-        report = self.report_of(files.validate_unique_metadata,
-                                columns=['sample', 'zone', 'number'])
+        report = self.report_of(
+            files.validate_unique_metadata, columns=["sample", "zone", "number"]
+        )
 
         self.assertIn("never said", report)
         self.assertIn("zone", report)
 
     def test_069_the_question_can_be_asked_of_one_part_only(self):
         files = self.made().initialize()
-        duplicates = files.validate_unique_metadata(columns=['sample', 'zone'],
-                                                    mask=files.get_mask({'sample': 1}),
-                                                    verbose=False)
-        self.assertEqual(len(duplicates), 2)                 # the two zones of sample 1
+        duplicates = files.validate_unique_metadata(
+            columns=["sample", "zone"],
+            mask=files.get_mask({"sample": 1}),
+            verbose=False,
+        )
+        self.assertEqual(len(duplicates), 2)  # the two zones of sample 1
 
     def test_06a_a_misspelled_column_is_refused(self):
         files = self.made().initialize()
         with self.assertRaises(ValueError):
-            files.validate_unique_metadata(columns=['sample', 'zonne'], verbose=False)
+            files.validate_unique_metadata(columns=["sample", "zonne"], verbose=False)
 
     def test_06b_asking_about_nothing_at_all(self):
         files = self.made().initialize()
         with self.assertRaises(ValueError):
-            files.validate_unique_metadata(mask=files.get_mask({'sample': 99}), verbose=False)
+            files.validate_unique_metadata(
+                mask=files.get_mask({"sample": 99}), verbose=False
+            )
         with self.assertRaises(ValueError):
             files.validate_unique_metadata(columns=[], verbose=False)
 
     def test_06c_the_signature_holds_what_the_names_said(self):
         """The values that were missing are left out of the signature."""
         files = self.made().initialize()
-        duplicates = files.validate_unique_metadata(columns=['sample', 'zone'], verbose=False)
+        duplicates = files.validate_unique_metadata(
+            columns=["sample", "zone"], verbose=False
+        )
 
         signature = next(iter(duplicates))
-        self.assertEqual(sorted(key for key, _ in signature), ['sample', 'zone'])
+        self.assertEqual(sorted(key for key, _ in signature), ["sample", "zone"])
 
     # ---- reading the contents ---------------------------------------------
 
     def test_040_read_data_files(self):
         files = self.made().initialize()
-        contents = files.read_data_files(reader_method=lambda path: Path(path).read_text())
+        contents = files.read_data_files(
+            reader_method=lambda path: Path(path).read_text()
+        )
 
         self.assertEqual(len(contents), self.expected_files)
         self.assertEqual(set(contents), set(files.dataframe.index))
 
     def test_041_read_only_a_part(self):
         files = self.made().initialize()
-        mask = files.get_mask({'sample': 2})
+        mask = files.get_mask({"sample": 2})
         contents = files.read_data_files(reader_method=lambda path: None, mask=mask)
 
         self.assertEqual(len(contents), 6)
@@ -1477,8 +1579,8 @@ class TestDataFiles(unittest.TestCase):
         self.assertFalse(self.made().has_valid_local_copy)
 
     def test_051_the_dataset_is_named_after_the_last_folder(self):
-        self.assertEqual(self.made().dataset_name, 'data')
-        self.assertEqual(self.made().local_root.name, 'data')
+        self.assertEqual(self.made().dataset_name, "data")
+        self.assertEqual(self.made().local_root.name, "data")
 
     def test_052_the_same_data_reached_two_ways_shares_one_copy(self):
         """
@@ -1521,7 +1623,9 @@ class TestDataFiles(unittest.TestCase):
         """
         files = self.made()
         files.local_root.mkdir(parents=True)
-        (files.local_root / files.valid_marker).write_text("something_else\n/elsewhere\n")
+        (files.local_root / files.valid_marker).write_text(
+            "something_else\n/elsewhere\n"
+        )
 
         self.assertFalse(files.has_valid_local_copy)
 
@@ -1530,7 +1634,7 @@ class TestDataFiles(unittest.TestCase):
         files.mark_local_copy_as_valid()
 
         name, path = DataFiles.read_marker(files.local_root / files.valid_marker)
-        self.assertEqual(name, 'data')
+        self.assertEqual(name, "data")
         self.assertEqual(path, files.root_signature)
 
     def test_058_copying_and_reading_the_copy(self):
@@ -1552,7 +1656,7 @@ class TestDataFiles(unittest.TestCase):
         copies = DataFiles.local_copies()
         self.assertEqual(len(copies), 1)
         folder, root, complete = copies[0]
-        self.assertEqual(folder.name, 'data')
+        self.assertEqual(folder.name, "data")
         self.assertEqual(root, files.root_signature)
         self.assertTrue(complete)
 
